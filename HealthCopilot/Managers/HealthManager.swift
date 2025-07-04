@@ -140,5 +140,44 @@ class HealthManager: ObservableObject {
         healthStore.execute(query)
     }
 
+    
+    func fetchGPTSummary(prompt: String, completion: @escaping (String?) -> Void) {
+        let apiKey = ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? ""
+        let url = URL(string: "https://api.openai.com/v1/chat/completions")!
+
+        let headers = [
+            "Authorization": "Bearer \(apiKey)",
+            "Content-Type": "application/json"
+        ]
+
+        let body: [String: Any] = [
+            "model": "gpt-3.5-turbo",  // Or use "gpt-4o" if you prefer
+            "messages": [
+                ["role": "system", "content": "You are a friendly health coach who gives short, helpful advice based on sleep data."],
+                ["role": "user", "content": prompt]
+            ],
+            "temperature": 0.7
+        ]
+
+        let jsonData = try! JSONSerialization.data(withJSONObject: body)
+
+        var request = URLRequest(url: url)
+        request.allHTTPHeaderFields = headers
+        request.httpMethod = "POST"
+        request.httpBody = jsonData
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            guard let data = data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let choices = json["choices"] as? [[String: Any]],
+                  let message = choices.first?["message"] as? [String: Any],
+                  let content = message["content"] as? String else {
+                completion(nil)
+                return
+            }
+            completion(content)
+        }.resume()
+    }
+
 
 }

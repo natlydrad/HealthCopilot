@@ -88,6 +88,18 @@ struct ContentView: View {
                     }
                 }
             }
+            
+            Button("Get Sleep Summary with GPT") {
+                healthManager.fetchWeeklySleepData { summary in
+                    let prompt = "\(summary)\n\nBased on this sleep data, write a friendly 2-sentence summary and suggest one way to improve sleep."
+
+                    healthManager.fetchGPTSummary(prompt: prompt) { gptResponse in
+                        DispatchQueue.main.async {
+                            self.sleepSummary = gptResponse ?? "No response from AI."
+                        }
+                    }
+                }
+            }
         }
         .onAppear {
             healthManager.fetchWeeklySleepData { summary in
@@ -97,4 +109,6 @@ struct ContentView: View {
             }
         }
     }
+    
+    
 }
