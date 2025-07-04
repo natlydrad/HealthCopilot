@@ -7,7 +7,7 @@ struct HealthCopilotApp: App {
 
     var body: some Scene {
         WindowGroup {
-            DashboardView()  // Or whichever view you want to test
+            ContentView()  // Or whichever view you want to test
                 .environmentObject(healthManager)
         }
     }

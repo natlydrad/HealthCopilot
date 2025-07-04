@@ -89,6 +89,38 @@ class HealthManager: ObservableObject {
         healthStore.execute(query)
     }
     
+    func fetchWeeklySleepData(completion: @escaping (String) -> Void) {
+        guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else { return }
+
+        let startDate = Calendar.current.date(byAdding: .day, value: -7, to: Date())
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: Date(), options: .strictStartDate)
+
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
+        let query = HKSampleQuery(sampleType: sleepType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sortDescriptor]) { query, samples, error in
+
+            var sleepByDay: [String: Double] = [:]
+
+            for sample in samples as? [HKCategorySample] ?? [] {
+                if sample.value != HKCategoryValueSleepAnalysis.inBed.rawValue {
+                    let sleepTime = sample.endDate.timeIntervalSince(sample.startDate)
+                    let dateKey = DateFormatter.localizedString(from: sample.startDate, dateStyle: .short, timeStyle: .none)
+                    sleepByDay[dateKey, default: 0.0] += sleepTime
+                }
+            }
+
+            var summary = "Your sleep over the past 7 days:\n"
+            for (date, seconds) in sleepByDay.sorted(by: { $0.key < $1.key }) {
+                let hours = seconds / 3600.0
+                summary += "\(date): \(String(format: "%.1f", hours)) hours\n"
+            }
+
+            completion(summary)
+        }
+
+        healthStore.execute(query)
+    }
+
+    
     func fetchExerciseData() {
         guard let exerciseType = HKQuantityType.quantityType(forIdentifier: .appleExerciseTime) else { return }
         
