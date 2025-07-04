@@ -1,17 +1,14 @@
-//
-//  HealthCopilotApp.swift
-//  HealthCopilot
-//
-//  Created by Natalie Radu on 7/3/25.
-//
 
 import SwiftUI
 
 @main
 struct HealthCopilotApp: App {
+    @StateObject var healthManager = HealthManager()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            DashboardView()  // Or whichever view you want to test
+                .environmentObject(healthManager)
         }
     }
 }
