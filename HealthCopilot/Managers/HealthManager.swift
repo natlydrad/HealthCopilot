@@ -321,8 +321,8 @@ class HealthManager: ObservableObject {
         return (calories, protein, carbs, fat)
     }
     
-    func saveNutritionToHealthKit(calories: Double, protein: Double, carbs: Double, fat: Double) {
-        let now = Date()
+    func saveNutritionToHealthKit(calories: Double, protein: Double, carbs: Double, fat: Double, date: Date) {
+        //let now = Date()
         
         guard
             let energyType = HKObjectType.quantityType(forIdentifier: .dietaryEnergyConsumed),
@@ -337,10 +337,10 @@ class HealthManager: ObservableObject {
         let fatQuantity = HKQuantity(unit: .gram(), doubleValue: fat)
         
         let samples: [HKQuantitySample] = [
-            HKQuantitySample(type: energyType, quantity: energyQuantity, start: now, end: now),
-            HKQuantitySample(type: proteinType, quantity: proteinQuantity, start: now, end: now),
-            HKQuantitySample(type: carbType, quantity: carbQuantity, start: now, end: now),
-            HKQuantitySample(type: fatType, quantity: fatQuantity, start: now, end: now)
+            HKQuantitySample(type: energyType, quantity: energyQuantity, start: date, end: date),
+            HKQuantitySample(type: proteinType, quantity: proteinQuantity, start: date, end: date),
+            HKQuantitySample(type: carbType, quantity: carbQuantity, start: date, end: date),
+            HKQuantitySample(type: fatType, quantity: fatQuantity, start: date, end: date)
         ]
         
         healthStore.save(samples) { success, error in

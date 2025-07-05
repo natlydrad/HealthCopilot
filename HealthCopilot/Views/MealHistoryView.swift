@@ -21,6 +21,8 @@ struct MealHistoryView: View {
                             .font(.headline)
                         Text(meal.date, style: .date)
                             .font(.subheadline)
+                        Text(meal.date, style: .time)
+                            .font(.subheadline)
                         Text("Calories: \(Int(meal.calories)) kcal")
                             .font(.subheadline)
                     }

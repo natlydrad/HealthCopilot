@@ -9,15 +9,19 @@ import SwiftUI
 
 struct NutritionView: View {
     @StateObject var healthManager = HealthManager()
+    @StateObject var mealLogManager = MealLogManager()
     @State private var foodInput = ""
     @State private var gptResponse = "Nutrition breakdown will appear here."
-    @StateObject var mealLogManager = MealLogManager()
+    @State private var mealDate = Date()
 
 
     var body: some View {
         VStack(spacing: 20) {
             Text("What did you eat?")
                 .font(.headline)
+            
+            DatePicker("Meal Time", selection: $mealDate, displayedComponents: [.date, .hourAndMinute])
+                .padding()
             
             TextField("e.g., 2 eggs and toast", text: $foodInput)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -61,13 +65,19 @@ struct NutritionView: View {
                 if let response = response,
                    let nutrition = healthManager.parseNutrition(from: response) {
                     
+                    let formatter = DateFormatter()
+                    formatter.dateStyle = .short
+                    formatter.timeStyle = .short
+
+                    print("🕒 About to save with time: \(formatter.string(from: mealDate))")
+                    
                     healthManager.saveNutritionToHealthKit(calories: nutrition.calories,
                                                            protein: nutrition.protein,
                                                            carbs: nutrition.carbs,
-                                                           fat: nutrition.fat)
+                                                           fat: nutrition.fat, date: mealDate)
                     
                     let meal = MealLog(description: self.foodInput,
-                                                   date: Date(),
+                                                   date: mealDate,
                                                    calories: nutrition.calories,
                                                    protein: nutrition.protein,
                                                    carbs: nutrition.carbs,
