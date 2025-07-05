@@ -298,7 +298,60 @@ class HealthManager: ObservableObject {
         
     }
     
+    func parseNutrition(from response: String) -> (calories: Double, protein: Double, carbs: Double, fat: Double)? {
+        var calories: Double = 0
+        var protein: Double = 0
+        var carbs: Double = 0
+        var fat: Double = 0
+
+        let lines = response.components(separatedBy: .newlines)
+        
+        for line in lines {
+            if line.lowercased().contains("calories") {
+                calories = Double(line.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()) ?? 0
+            } else if line.lowercased().contains("protein") {
+                protein = Double(line.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()) ?? 0
+            } else if line.lowercased().contains("carb") {
+                carbs = Double(line.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()) ?? 0
+            } else if line.lowercased().contains("fat") {
+                fat = Double(line.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()) ?? 0
+            }
+        }
+
+        return (calories, protein, carbs, fat)
+    }
     
+    func saveNutritionToHealthKit(calories: Double, protein: Double, carbs: Double, fat: Double) {
+        let now = Date()
+
+        guard
+            let energyType = HKObjectType.quantityType(forIdentifier: .dietaryEnergyConsumed),
+            let proteinType = HKObjectType.quantityType(forIdentifier: .dietaryProtein),
+            let carbType = HKObjectType.quantityType(forIdentifier: .dietaryCarbohydrates),
+            let fatType = HKObjectType.quantityType(forIdentifier: .dietaryFatTotal)
+        else { return }
+
+        let energyQuantity = HKQuantity(unit: .kilocalorie(), doubleValue: calories)
+        let proteinQuantity = HKQuantity(unit: .gram(), doubleValue: protein)
+        let carbQuantity = HKQuantity(unit: .gram(), doubleValue: carbs)
+        let fatQuantity = HKQuantity(unit: .gram(), doubleValue: fat)
+
+        let samples: [HKQuantitySample] = [
+            HKQuantitySample(type: energyType, quantity: energyQuantity, start: now, end: now),
+            HKQuantitySample(type: proteinType, quantity: proteinQuantity, start: now, end: now),
+            HKQuantitySample(type: carbType, quantity: carbQuantity, start: now, end: now),
+            HKQuantitySample(type: fatType, quantity: fatQuantity, start: now, end: now)
+        ]
+
+        healthStore.save(samples) { success, error in
+            if success {
+                print("✅ Nutrition data saved to HealthKit")
+            } else if let error = error {
+                print("❌ Error saving to HealthKit: \(error.localizedDescription)")
+            }
+        }
+    }
+
 
 
 }

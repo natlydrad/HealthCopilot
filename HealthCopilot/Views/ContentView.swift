@@ -158,7 +158,7 @@ struct ContentView: View {
 
 import SwiftUI
 
-struct ContentView: View {
+struct ContentView: View { //arguabuly should be "NutritionView"
     @StateObject var healthManager = HealthManager()
     @State private var foodInput = ""
     @State private var gptResponse = "Nutrition breakdown will appear here."
@@ -192,19 +192,25 @@ struct ContentView: View {
         Protein (g)
         Carbs (g)
         Fat (g)
-
+        
         Reply only like this:
         Calories: X kcal
         Protein: Y g
         Carbs: Z g
         Fat: W g
         """
-
+        
         healthManager.fetchGPTSummary(prompt: prompt) { response in
             DispatchQueue.main.async {
                 self.gptResponse = response ?? "No response."
-
-                // Optional: Parse values and save to HealthKit here
+                
+                if let response = response,
+                   let nutrition = healthManager.parseNutrition(from: response) {
+                    healthManager.saveNutritionToHealthKit(calories: nutrition.calories,
+                                                           protein: nutrition.protein,
+                                                           carbs: nutrition.carbs,
+                                                           fat: nutrition.fat)
+                }
             }
         }
     }
