@@ -162,6 +162,8 @@ struct ContentView: View { //arguabuly should be "NutritionView"
     @StateObject var healthManager = HealthManager()
     @State private var foodInput = ""
     @State private var gptResponse = "Nutrition breakdown will appear here."
+    @StateObject var mealLogManager = MealLogManager()
+
 
     var body: some View {
         VStack(spacing: 20) {
@@ -182,6 +184,9 @@ struct ContentView: View { //arguabuly should be "NutritionView"
                 .multilineTextAlignment(.leading)
         }
         .padding()
+        .onAppear {
+            print("🔄 Loaded meals on startup: \(mealLogManager.meals.count)")
+        }
     }
 
     func analyzeAndSaveFood() {
@@ -206,10 +211,22 @@ struct ContentView: View { //arguabuly should be "NutritionView"
                 
                 if let response = response,
                    let nutrition = healthManager.parseNutrition(from: response) {
+                    
                     healthManager.saveNutritionToHealthKit(calories: nutrition.calories,
                                                            protein: nutrition.protein,
                                                            carbs: nutrition.carbs,
                                                            fat: nutrition.fat)
+                    
+                    let meal = MealLog(description: self.foodInput,
+                                                   date: Date(),
+                                                   calories: nutrition.calories,
+                                                   protein: nutrition.protein,
+                                                   carbs: nutrition.carbs,
+                                                   fat: nutrition.fat)
+
+                    mealLogManager.addMeal(meal)
+                    print("✅ Meal saved: \(meal.description) at \(meal.date)")
+                    print("📋 Total meals stored: \(mealLogManager.meals.count)")
                 }
             }
         }
