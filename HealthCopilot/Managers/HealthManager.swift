@@ -351,5 +351,42 @@ class HealthManager: ObservableObject {
             }
         }
     }
+    
+    func deleteNutritionData(for date: Date) {
+        let types: [HKQuantityTypeIdentifier] = [
+            .dietaryEnergyConsumed,
+            .dietaryProtein,
+            .dietaryCarbohydrates,
+            .dietaryFatTotal
+        ]
+
+        // Tight window: meal timestamp ± 1 second
+        let start = date.addingTimeInterval(-1)
+        let end = date.addingTimeInterval(1)
+
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+
+        for typeIdentifier in types {
+            guard let type = HKObjectType.quantityType(forIdentifier: typeIdentifier) else { continue }
+
+            let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { query, samples, error in
+                guard let samples = samples, !samples.isEmpty else {
+                    print("❌ No samples found for deletion for type: \(typeIdentifier.rawValue)")
+                    return
+                }
+
+                self.healthStore.delete(samples) { success, error in
+                    if success {
+                        print("✅ Deleted \(samples.count) samples for \(typeIdentifier.rawValue)")
+                    } else {
+                        print("❌ Deletion failed for \(typeIdentifier.rawValue): \(error?.localizedDescription ?? "Unknown error")")
+                    }
+                }
+            }
+
+            healthStore.execute(query)
+        }
+    }
+
 }
 

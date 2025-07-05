@@ -7,9 +7,11 @@
 
 import SwiftUI
 
+
 struct MealHistoryView: View {
     @StateObject var mealLogManager = MealLogManager()
-
+    @StateObject var healthManager = HealthManager()
+    
     var body: some View {
         NavigationView {
             List {
@@ -23,7 +25,16 @@ struct MealHistoryView: View {
                             .font(.subheadline)
                     }
                 }
-                .onDelete(perform: mealLogManager.deleteMeal)
+                .onDelete { offsets in
+                    for index in offsets {
+                        if index < mealLogManager.meals.count {
+                            let meal = mealLogManager.meals[index]
+                            healthManager.deleteNutritionData(for: meal.date)  // ✅ Delete from HealthKit first
+                        }
+                    }
+
+                    mealLogManager.deleteMeal(at: offsets)  // ✅ Then delete locally
+                }
             }
             .navigationTitle("Meal History")
         }
