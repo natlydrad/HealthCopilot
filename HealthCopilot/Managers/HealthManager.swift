@@ -139,12 +139,121 @@ class HealthManager: ObservableObject {
         
         healthStore.execute(query)
     }
+    
+    func fetchSleepDataForToday(completion: @escaping (Double) -> Void) {
+        guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else { return }
+
+        let startDate = Calendar.current.date(byAdding: .hour, value: -24, to: Date()) ?? Date()
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: Date(), options: .strictStartDate)
+
+        let query = HKSampleQuery(sampleType: sleepType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { query, samples, error in
+
+            var totalSleep = 0.0
+
+            for sample in samples as? [HKCategorySample] ?? [] {
+                if sample.value != HKCategoryValueSleepAnalysis.inBed.rawValue {
+                    let sleepTime = sample.endDate.timeIntervalSince(sample.startDate)
+                    totalSleep += sleepTime
+                }
+            }
+
+            let hours = totalSleep / 3600.0
+            completion(hours)
+        }
+
+        healthStore.execute(query)
+    }
+
+    func fetchExerciseDataForToday(completion: @escaping (Double) -> Void) {
+        guard let exerciseType = HKQuantityType.quantityType(forIdentifier: .appleExerciseTime) else { return }
+
+        let startDate = Calendar.current.startOfDay(for: Date())
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: Date(), options: .strictStartDate)
+
+        let query = HKStatisticsQuery(quantityType: exerciseType, quantitySamplePredicate: predicate, options: .cumulativeSum) { query, result, error in
+
+            guard let sum = result?.sumQuantity() else {
+                completion(0.0)
+                return
+            }
+
+            let minutes = sum.doubleValue(for: HKUnit.minute())
+            completion(minutes)
+        }
+
+        healthStore.execute(query)
+    }
+
+    func fetchHeartRateData(completion: @escaping (Double) -> Void) {
+        guard let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate) else { return }
+
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
+        let query = HKSampleQuery(sampleType: heartRateType, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { query, samples, error in
+
+            guard let sample = samples?.first as? HKQuantitySample else {
+                completion(0.0)
+                return
+            }
+
+            let bpm = sample.quantity.doubleValue(for: HKUnit(from: "count/min"))
+            completion(bpm)
+        }
+
+        healthStore.execute(query)
+    }
+
+    
+    func fetchDailyHealthSummary(completion: @escaping (String) -> Void) {
+        var sleepHours: Double?
+        var exerciseMinutes: Double?
+        var heartRate: Double?
+
+        let group = DispatchGroup()
+
+        // Fetch Sleep
+        group.enter()
+        fetchSleepDataForToday { hours in
+            sleepHours = hours
+            group.leave()
+        }
+
+        // Fetch Exercise
+        group.enter()
+        fetchExerciseDataForToday { minutes in
+            exerciseMinutes = minutes
+            group.leave()
+        }
+
+        // Fetch Heart Rate
+        group.enter()
+        fetchHeartRateData { bpm in
+            heartRate = bpm
+            group.leave()
+        }
+
+        group.notify(queue: .main) {
+            let sleepStr = sleepHours != nil ? String(format: "%.1f hours", sleepHours!) : "no sleep data"
+            let exerciseStr = exerciseMinutes != nil ? String(format: "%.0f minutes", exerciseMinutes!) : "no exercise data"
+            let heartRateStr = heartRate != nil ? String(format: "%.0f bpm", heartRate!) : "no heart rate data"
+
+            let summary = """
+            Today:
+            Sleep: \(sleepStr)
+            Exercise: \(exerciseStr)
+            Heart Rate: \(heartRateStr)
+            """
+
+            completion(summary)
+        }
+    }
+
 
     
     func fetchGPTSummary(prompt: String, completion: @escaping (String?) -> Void) {
+        
         let apiKey = ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? ""
         let url = URL(string: "https://api.openai.com/v1/chat/completions")!
-
+                
         let headers = [
             "Authorization": "Bearer \(apiKey)",
             "Content-Type": "application/json"
@@ -177,6 +286,7 @@ class HealthManager: ObservableObject {
             }
             completion(content)
         }.resume()
+        
     }
 
 

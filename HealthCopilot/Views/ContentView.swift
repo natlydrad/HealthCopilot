@@ -66,9 +66,9 @@ struct ContentView: View {
          }
      }
  }
- */
 
 
+///////////////////////////////////////////////////////////
 
 import SwiftUI
 
@@ -112,3 +112,47 @@ struct ContentView: View {
     
     
 }
+
+ */
+
+import SwiftUI
+
+struct ContentView: View {
+    @StateObject var healthManager = HealthManager()
+    @State private var dailySummary = "Loading..."
+    @State private var gptSummary = "GPT summary will appear here."
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Text(dailySummary)
+                .padding()
+                .multilineTextAlignment(.leading)
+            
+            Button("Get Daily Health Summary") {
+                healthManager.fetchDailyHealthSummary { summary in
+                    DispatchQueue.main.async {
+                        self.dailySummary = summary
+                    }
+                    
+                    let prompt = """
+                    \(summary)
+
+                    Write a friendly 2-sentence summary of this user's overall health today and give one gentle suggestion for improvement.
+                    """
+
+                    healthManager.fetchGPTSummary(prompt: prompt) { gptResponse in
+                        DispatchQueue.main.async {
+                            self.gptSummary = gptResponse ?? "No AI response."
+                        }
+                    }
+                }
+            }
+            
+            Text(gptSummary)
+                .padding()
+                .multilineTextAlignment(.leading)
+        }
+        .padding()
+    }
+}
+
