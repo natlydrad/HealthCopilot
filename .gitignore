@@ -1,0 +1,5 @@
+# Ignore Xcode user-specific data
+*.xcuserdatad/
+*.xcscheme
+*.xcworkspace/
+DerivedData/
