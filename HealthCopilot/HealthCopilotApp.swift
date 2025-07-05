@@ -21,6 +21,11 @@ struct HealthCopilotApp: App {
                     .tabItem {
                         Label("History", systemImage: "list.bullet")
                     }
+                
+                GlucoseScreen()
+                    .tabItem {
+                        Label("Glucose", systemImage: "waveform.path.ecg")
+                    }
             }
         }
     }

@@ -24,6 +24,7 @@ class HealthManager: ObservableObject {
             HKObjectType.quantityType(forIdentifier: .heartRate)!,
             HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!,
             HKObjectType.quantityType(forIdentifier: .appleExerciseTime)!,
+            HKObjectType.quantityType(forIdentifier: .bloodGlucose)!
         ]
         
         let writeTypes: Set = [
@@ -388,5 +389,32 @@ class HealthManager: ObservableObject {
         }
     }
 
+    func fetchGlucoseData(startDate: Date, endDate: Date, completion: @escaping ([GlucoseSample]) -> Void) {
+        guard let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose) else {
+            completion([])
+            return
+        }
+
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
+
+        let query = HKSampleQuery(sampleType: glucoseType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { query, samples, error in
+
+            var glucoseData: [GlucoseSample] = []
+
+            for sample in samples as? [HKQuantitySample] ?? [] {
+                let value = sample.quantity.doubleValue(for: HKUnit(from: "mg/dL"))
+                let glucoseSample = GlucoseSample(date: sample.startDate, value: value)
+                glucoseData.append(glucoseSample)
+            }
+
+            DispatchQueue.main.async {
+                completion(glucoseData.sorted { $0.date < $1.date })
+            }
+        }
+
+        healthStore.execute(query)
+    }
+
+    
 }
 
