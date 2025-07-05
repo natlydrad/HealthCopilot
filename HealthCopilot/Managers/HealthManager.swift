@@ -26,7 +26,15 @@ class HealthManager: ObservableObject {
             HKObjectType.quantityType(forIdentifier: .appleExerciseTime)!
         ]
         
-        healthStore.requestAuthorization(toShare: [], read: readTypes) { success, error in
+        let writeTypes: Set = [
+            HKObjectType.quantityType(forIdentifier: .dietaryEnergyConsumed)!,
+            HKObjectType.quantityType(forIdentifier: .dietaryProtein)!,
+            HKObjectType.quantityType(forIdentifier: .dietaryCarbohydrates)!,
+            HKObjectType.quantityType(forIdentifier: .dietaryFatTotal)!
+        ]
+        
+        
+        healthStore.requestAuthorization(toShare: writeTypes, read: readTypes) { success, error in
             if success {
                 DispatchQueue.main.async {
                     self.fetchAllHealthData()
@@ -262,7 +270,8 @@ class HealthManager: ObservableObject {
         let body: [String: Any] = [
             "model": "gpt-3.5-turbo",  // Or use "gpt-4o" if you prefer
             "messages": [
-                ["role": "system", "content": "You are a friendly health coach who gives short, helpful advice based on sleep data."],
+                //["role": "system", "content": "You are a friendly health coach who gives short, helpful advice based on sleep data."],
+                ["role": "system", "content": "You are a helpful nutrition assistant. Based on the user's food description, estimate total Calories (kcal), Protein (g), Carbs (g), and Fat (g). Respond ONLY with these values in the following format: \nCalories: X kcal\nProtein: Y g\nCarbs: Z g\nFat: W g"],
                 ["role": "user", "content": prompt]
             ],
             "temperature": 0.7
@@ -288,6 +297,8 @@ class HealthManager: ObservableObject {
         }.resume()
         
     }
+    
+    
 
 
 }

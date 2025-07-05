@@ -113,7 +113,6 @@ struct ContentView: View {
     
 }
 
- */
 
 import SwiftUI
 
@@ -155,4 +154,60 @@ struct ContentView: View {
         .padding()
     }
 }
+*/
+
+import SwiftUI
+
+struct ContentView: View {
+    @StateObject var healthManager = HealthManager()
+    @State private var foodInput = ""
+    @State private var gptResponse = "Nutrition breakdown will appear here."
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("What did you eat?")
+                .font(.headline)
+            
+            TextField("e.g., 2 eggs and toast", text: $foodInput)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .padding()
+
+            Button("Analyze & Save to Health") {
+                analyzeAndSaveFood()
+            }
+            .padding()
+
+            Text(gptResponse)
+                .padding()
+                .multilineTextAlignment(.leading)
+        }
+        .padding()
+    }
+
+    func analyzeAndSaveFood() {
+        let prompt = """
+        I ate: \(foodInput)
+        Please provide approximate totals:
+        Calories (kcal)
+        Protein (g)
+        Carbs (g)
+        Fat (g)
+
+        Reply only like this:
+        Calories: X kcal
+        Protein: Y g
+        Carbs: Z g
+        Fat: W g
+        """
+
+        healthManager.fetchGPTSummary(prompt: prompt) { response in
+            DispatchQueue.main.async {
+                self.gptResponse = response ?? "No response."
+
+                // Optional: Parse values and save to HealthKit here
+            }
+        }
+    }
+}
+
 
