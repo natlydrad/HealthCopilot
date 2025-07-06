@@ -17,33 +17,31 @@ struct MealHistoryView: View {
             List {
                 
                 ForEach(mealLogManager.meals, id: \.id) { meal in
-                    let fakeInsight = InsightGenerator.generateTags(
-                        for: meal.spikeValue ?? 0,
-                        recoveryMinutes: Int(meal.recoveryTime ?? 90),
-                        percentile: 50
-                    )
+                    // ✅ Use real insight if available, fallback to placeholder
+                    let insight = mealLogManager.mealInsights[meal.id] ?? InsightGenerator.generateTags(for: 0, recoveryMinutes: 90, percentile: 50)
                     
-                    //let averageSpike = 15
-
                     NavigationLink(
                         destination: MealInsightView(
                             meal: meal,
-                            insight: fakeInsight,
+                            insight: insight,
                             averageSpike: 15
                         )
                     ) {
-                        VStack(alignment: .leading) {
-                            Text(meal.description)
-                                .font(.headline)
-                            Text(meal.date, style: .date)
-                                .font(.subheadline)
-                            Text(meal.date, style: .time)
-                                .font(.subheadline)
-                            Text("Calories: \(Int(meal.calories)) kcal")
-                                .font(.subheadline)
+                        
+                        MealRowView(meal: meal, insight: insight)
                         }
+                    .onAppear {
+                        mealLogManager.generateInsight(for: meal, using: healthManager)
                     }
-                }
+
+                    }
+                
+            }
+            
+        }
+    }
+}
+
 
                 
                 
@@ -93,8 +91,4 @@ struct MealHistoryView: View {
                  }
                  }
                  .navigationTitle("Meal History")*/
-            }
-            
-        }
-    }
-}
+     

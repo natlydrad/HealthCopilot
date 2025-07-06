@@ -9,6 +9,8 @@ import Foundation
 
 class MealLogManager: ObservableObject {
     @Published var meals: [MealLog] = []
+    @Published var mealInsights: [UUID: MealInsight] = [:]
+
     
     private let storageKey = "MealLogs"
     
@@ -53,5 +55,37 @@ class MealLogManager: ObservableObject {
                 meals = decoded
             }
         }
+    
+    func generateInsight(for meal: MealLog, using healthManager: HealthManager) {
+        guard mealInsights[meal.id] == nil else { return }  // Already has insight
+
+        let now = Date()
+        let mealReadyTime = meal.date.addingTimeInterval(2 * 60 * 60)
+        guard now >= mealReadyTime else {
+            print("⏳ Meal is too recent—insight not ready yet for \(meal.description)")
+            return
+        }
+
+        let mealStart = meal.date
+        let mealEnd = Calendar.current.date(byAdding: .hour, value: 2, to: mealStart)!
+
+        healthManager.fetchGlucoseData(startDate: mealStart.addingTimeInterval(-2 * 60 * 60), endDate: mealEnd) { glucoseSamples in
+            if let spike = healthManager.analyzeGlucoseImpact(for: meal, glucoseData: glucoseSamples) {
+                let recoveryMinutes = 75  // TODO: real recovery time
+                let percentile = 50.0      // TODO: real percentile
+
+                let insight = InsightGenerator.generateTags(for: spike, recoveryMinutes: recoveryMinutes, percentile: percentile)
+
+                DispatchQueue.main.async {
+                    self.mealInsights[meal.id] = insight
+                }
+            } else {
+                DispatchQueue.main.async {
+                    self.mealInsights[meal.id] = InsightGenerator.generateTags(for: 0, recoveryMinutes: 90, percentile: 50)
+                }
+            }
+        }
     }
+
+}
 
