@@ -414,7 +414,25 @@ class HealthManager: ObservableObject {
 
         healthStore.execute(query)
     }
+    
+    func analyzeGlucoseImpact(for meal: MealLog, glucoseData: [GlucoseSample]) -> Double? {
+        let mealTime = meal.date
+        let windowEnd = Calendar.current.date(byAdding: .hour, value: 2, to: mealTime)!
 
+        // Filter glucose samples within the 0-2 hour window after meal
+        let windowSamples = glucoseData.filter { $0.date >= mealTime && $0.date <= windowEnd }
+
+        // Find the most recent glucose BEFORE the meal
+        guard let mealGlucose = glucoseData.last(where: { $0.date <= mealTime })?.value,
+              let maxGlucose = windowSamples.map({ $0.value }).max() else {
+            return nil
+        }
+
+        let spike = maxGlucose - mealGlucose
+        return spike > 0 ? spike : 0
+    }
+
+    
     
 }
 

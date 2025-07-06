@@ -15,30 +15,86 @@ struct MealHistoryView: View {
     var body: some View {
         NavigationView {
             List {
-                ForEach(mealLogManager.meals) { meal in
-                    VStack(alignment: .leading) {
-                        Text(meal.description)
-                            .font(.headline)
-                        Text(meal.date, style: .date)
-                            .font(.subheadline)
-                        Text(meal.date, style: .time)
-                            .font(.subheadline)
-                        Text("Calories: \(Int(meal.calories)) kcal")
-                            .font(.subheadline)
-                    }
-                }
-                .onDelete { offsets in
-                    for index in offsets {
-                        if index < mealLogManager.meals.count {
-                            let meal = mealLogManager.meals[index]
-                            healthManager.deleteNutritionData(for: meal.date)  // ✅ Delete from HealthKit first
+                
+                ForEach(mealLogManager.meals, id: \.id) { meal in
+                    let fakeInsight = InsightGenerator.generateTags(
+                        for: meal.spikeValue ?? 0,
+                        recoveryMinutes: Int(meal.recoveryTime ?? 90),
+                        percentile: 50
+                    )
+                    
+                    //let averageSpike = 15
+
+                    NavigationLink(
+                        destination: MealInsightView(
+                            meal: meal,
+                            insight: fakeInsight,
+                            averageSpike: 15
+                        )
+                    ) {
+                        VStack(alignment: .leading) {
+                            Text(meal.description)
+                                .font(.headline)
+                            Text(meal.date, style: .date)
+                                .font(.subheadline)
+                            Text(meal.date, style: .time)
+                                .font(.subheadline)
+                            Text("Calories: \(Int(meal.calories)) kcal")
+                                .font(.subheadline)
                         }
                     }
-
-                    mealLogManager.deleteMeal(at: offsets)  // ✅ Then delete locally
                 }
+
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                /*
+                 ForEach(mealLogManager.meals) { meal in
+                 NavigationLink(
+                 destination: MealInsightView(
+                 meal: meal,
+                 insight: InsightGenerator.generateTags(
+                 for: meal.spikeValue ?? 0,
+                 recoveryMinutes: Int(meal.recoveryTime ?? 90),
+                 percentile: 50  // ✅ TEMP: Replace with real value later
+                 ),
+                 averageSpike: 15  // Fake 7-day average for now (you can replace this later)
+                 //averageSpike: calculateSevenDayAverage(meals: mealLogManager.meals)
+                 )
+                 ) {
+                 VStack(alignment: .leading) {
+                 Text(meal.description)
+                 .font(.headline)
+                 Text(meal.date, style: .date)
+                 .font(.subheadline)
+                 Text(meal.date, style: .time)
+                 .font(.subheadline)
+                 Text("Calories: \(Int(meal.calories)) kcal")
+                 .font(.subheadline)
+                 }
+                 }
+                 }
+                 .onDelete { offsets in
+                 for index in offsets {
+                 if index < mealLogManager.meals.count {
+                 let meal = mealLogManager.meals[index]
+                 healthManager.deleteNutritionData(for: meal.date)
+                 }
+                 }
+                 mealLogManager.deleteMeal(at: offsets)
+                 }
+                 }
+                 .navigationTitle("Meal History")*/
             }
-            .navigationTitle("Meal History")
+            
         }
     }
 }

@@ -15,5 +15,10 @@ struct MealLog: Identifiable, Codable {
     var protein: Double
     var carbs: Double
     var fat: Double
+    
+    var spikeValue: Double?
+    var recoveryTime: Double? 
 }
+
+
 
