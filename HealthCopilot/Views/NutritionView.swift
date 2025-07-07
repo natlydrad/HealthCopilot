@@ -8,8 +8,8 @@
 import SwiftUI
 
 struct NutritionView: View {
-    @StateObject var healthManager = HealthManager()
-    @StateObject var mealLogManager = MealLogManager()
+    @EnvironmentObject var mealLogManager: MealLogManager
+    @EnvironmentObject var healthManager: HealthManager
     @State private var foodInput = ""
     @State private var gptResponse = "Nutrition breakdown will appear here."
     @State private var mealDate = Date()

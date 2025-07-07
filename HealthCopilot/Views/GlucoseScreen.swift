@@ -8,8 +8,8 @@
 import SwiftUI
 
 struct GlucoseScreen: View {
-    @StateObject var healthManager = HealthManager()
-    @StateObject var mealLogManager = MealLogManager()
+    @EnvironmentObject var mealLogManager: MealLogManager
+    @EnvironmentObject var healthManager: HealthManager
     @State private var glucoseData: [GlucoseSample] = []
 
     @State private var startDate: Date = Calendar.current.date(byAdding: .day, value: -1, to: Date())!

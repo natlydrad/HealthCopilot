@@ -34,7 +34,9 @@ class MealLogManager: ObservableObject {
     }
         
         func addMeal(_ meal: MealLog) {
-            meals.append(meal)
+            var updatedMeals = meals
+            updatedMeals.append(meal)
+            meals = updatedMeals  // triggers SwiftUI update
             saveMeals()
         }
         

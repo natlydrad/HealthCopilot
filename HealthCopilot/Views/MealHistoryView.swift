@@ -9,8 +9,8 @@ import SwiftUI
 
 
 struct MealHistoryView: View {
-    @StateObject var mealLogManager = MealLogManager()
-    @StateObject var healthManager = HealthManager()
+    @EnvironmentObject var mealLogManager: MealLogManager
+    @EnvironmentObject var healthManager: HealthManager
     
     var body: some View {
         NavigationView {
