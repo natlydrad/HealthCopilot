@@ -58,28 +58,3 @@ struct GlucoseScreen: View {
         }
     }
 }
-
-/*
- Button("Load Glucose (Last 24h)") {
- let end = Date()
- let start = Calendar.current.date(byAdding: .hour, value: -24, to: end)!
- 
- healthManager.fetchGlucoseData(startDate: start, endDate: end) { samples in
- self.glucoseData = samples
- }
- 
- Button("Analyze Meal Spike") {
- guard let testMeal = mealLogManager.meals.first else {
- print("⚠️ No meals found.")
- return
- }
- 
- let spike = healthManager.analyzeGlucoseImpact(for: testMeal, glucoseData: glucoseData)
- 
- if let spike = spike {
- print("🍽️ Meal '\(testMeal.description)' caused a spike of +\(Int(spike)) mg/dL")
- } else {
- print("⚠️ Not enough glucose data to calculate spike.")
- }
- }
- */
