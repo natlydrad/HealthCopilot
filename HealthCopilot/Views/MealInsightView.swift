@@ -31,8 +31,8 @@ struct MealInsightView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
 
-                Text("📊 Spike \(insight.personalComparisonTag) (Your 7-day average: +\(Int(averageSpike)) mg/dL)")
-                    .font(.subheadline)
+                /*Text("📊 Spike \(insight.personalComparisonTag) (Your 7-day average: +\(Int(averageSpike)) mg/dL)")
+                    .font(.subheadline)*/
 
                 Text("🏥 \(insight.healthyRangeTag) (≤30 mg/dL)")
                     .font(.subheadline)

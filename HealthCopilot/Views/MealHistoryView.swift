@@ -29,15 +29,24 @@ struct MealHistoryView: View {
                     ) {
                         
                         MealRowView(meal: meal, insight: insight)
-                        }
+                    }
                     .onAppear {
                         mealLogManager.generateInsight(for: meal, using: healthManager)
                     }
-
+                    
+                }
+                .onDelete { offsets in
+                    for index in offsets {
+                        if index < mealLogManager.meals.count {
+                            let meal = mealLogManager.meals[index]
+                            healthManager.deleteNutritionData(for: meal.date)  // optional: remove from HealthKit too
+                        }
                     }
+                    mealLogManager.deleteMeal(at: offsets)
+                }
+            .navigationTitle("Meal History")
                 
             }
-            
         }
     }
 }
