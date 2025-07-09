@@ -92,12 +92,16 @@ class MealLogManager: ObservableObject {
 
             
         func generateInsight(for meal: MealLog, using healthManager: HealthManager) {
-            guard mealInsights[meal.id] == nil else { return }  // Already has insight
-
             let now = Date()
             let mealReadyTime = meal.date.addingTimeInterval(2 * 60 * 60)
+            
             guard now >= mealReadyTime else {
                 print("⏳ Meal is too recent—insight not ready yet for \(meal.description)")
+                return
+            }
+            
+            if let existing = mealInsights[meal.id], existing.spikeValue != 0 {
+                // 🛑 Skip recomputation if we already have a good spike
                 return
             }
 
