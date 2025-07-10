@@ -76,19 +76,37 @@ class MealLogManager: ObservableObject {
             let baselineHigh = preMealGlucose + recoveryThreshold
 
             let mealTime = meal.date
-            let endTime = nextMeal?.date ?? mealTime.addingTimeInterval(3 * 60 * 60)
+            let endTime = nextMeal?.date ?? mealTime.addingTimeInterval(4 * 60 * 60)  // ⏳ Extend window to 4h
 
-            let postMealGlucose = glucoseData.filter { $0.date > mealTime && $0.date <= endTime }
+            let postMealGlucose = glucoseData
+                .filter { $0.date > mealTime && $0.date <= endTime }
+                .sorted { $0.date < $1.date }
+
+            var consecutiveInRangeCount = 0
+            let requiredConsecutive = 3  // e.g., need 3 in-range readings in a row
+            var firstRecoveryTime: Date?
 
             for sample in postMealGlucose {
                 if sample.value >= baselineLow && sample.value <= baselineHigh {
-                    let recoveryMinutes = sample.date.timeIntervalSince(mealTime) / 60
-                    return recoveryMinutes
+                    consecutiveInRangeCount += 1
+                    if consecutiveInRangeCount == 1 {
+                        firstRecoveryTime = sample.date
+                    }
+
+                    if consecutiveInRangeCount >= requiredConsecutive, let recoveryDate = firstRecoveryTime {
+                        let recoveryMinutes = recoveryDate.timeIntervalSince(mealTime) / 60
+                        let minimumRecoveryMinutes = max(recoveryMinutes, 45)  // ⏳ Enforce minimum recovery time
+                        return minimumRecoveryMinutes
+                    }
+                } else {
+                    consecutiveInRangeCount = 0
+                    firstRecoveryTime = nil
                 }
             }
 
-            return nil  // No recovery detected
+            return nil  // No stable recovery detected
         }
+
 
             
         func generateInsight(for meal: MealLog, using healthManager: HealthManager) {
@@ -104,17 +122,17 @@ class MealLogManager: ObservableObject {
                 // 🛑 Skip recomputation if we already have a good spike
                 return
             }
-
+            
             let mealStart = meal.date
             let nextMeal = findNextMeal(after: meal)  // ✅ NEW: find the next meal
             let mealEnd = nextMeal?.date ?? Calendar.current.date(byAdding: .hour, value: 3, to: mealStart)!
-
+            
             print("🔍 Generating insight for: \(meal.description) at \(mealStart)")
-               if let next = nextMeal {
-                   print("➡️ Next meal: \(next.description) at \(next.date)")
-               } else {
-                   print("➡️ No next meal—using default 3h window")
-               }
+            if let next = nextMeal {
+                print("➡️ Next meal: \(next.description) at \(next.date)")
+            } else {
+                print("➡️ No next meal—using default 3h window")
+            }
             
             healthManager.fetchGlucoseData(startDate: mealStart.addingTimeInterval(-2 * 60 * 60), endDate: mealEnd) { glucoseSamples in
                 
@@ -125,19 +143,48 @@ class MealLogManager: ObservableObject {
                     }
                     return
                 }
-
+                
                 let recoveryMinutes = self.calculateRecoveryTime(for: meal, glucoseData: glucoseSamples, nextMeal: nextMeal) ?? 999  // ✅ NEW: real recovery time or placeholder
                 print("✅ Spike: \(spike) mg/dL — Recovery: \(recoveryMinutes) min")
-
+                
                 let percentile = 50.0  // ✅ We’re skipping this for now
-
+                
                 let insight = InsightGenerator.generateTags(for: spike, recoveryMinutes: Int(recoveryMinutes), percentile: percentile)
-
+                
                 DispatchQueue.main.async {
                     self.mealInsights[meal.id] = insight
                 }
             }
         }
+        
+        func loadTestMeals() {
+            print("🌱 Loading test meals...")
 
+            let testMeals: [MealLog] = [
+                MealLog(
+                    description: "1 rye bread, 2 eggs, 1/2 tbsp olive oil, 1/2 avocado, 1/4 cup georgian tomato sauce, 1 medium peach",
+                    date: Calendar.current.date(from: DateComponents(year: 2025, month: 7, day: 7, hour: 8, minute: 25))!,
+                    calories: 810,
+                    protein: 35,
+                    carbs: 60,
+                    fat: 45
+                ),
+                MealLog(
+                    description: "1 cup penne pasta, 60g white cabbage, 1 cup pork thighs, 120g chickpeas, 100g tomato sauce, 1 cup red grapes",
+                    date: Calendar.current.date(from: DateComponents(year: 2025, month: 7, day: 7, hour: 14, minute: 50))!,
+                    calories: 1178,
+                    protein: 60,
+                    carbs: 110,
+                    fat: 50
+                )
+            ]
+
+            meals.append(contentsOf: testMeals)
+            saveMeals()
+        }
+
+        
     }
+    
+    
 

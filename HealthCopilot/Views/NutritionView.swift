@@ -17,6 +17,7 @@ struct NutritionView: View {
 
     var body: some View {
         VStack(spacing: 20) {
+            
             Text("What did you eat?")
                 .font(.headline)
             
@@ -35,6 +36,13 @@ struct NutritionView: View {
             Text(gptResponse)
                 .padding()
                 .multilineTextAlignment(.leading)
+            
+            Button("📥 Load Test Meals") {
+                mealLogManager.loadTestMeals()
+            }
+            .padding()
+            
+
         }
         .padding()
         .onAppear {
