@@ -431,6 +431,86 @@ class HealthManager: ObservableObject {
         let spike = maxGlucose - mealGlucose
         return spike > 0 ? spike : 0
     }
+    
+    func detectGlucoseEvents(from samples: [GlucoseSample]) -> [GlucoseEvent] {
+        guard samples.count > 1 else { return [] }
+
+        var events: [GlucoseEvent] = []
+        var i = 0
+
+        while i < samples.count - 1 {
+            let baseline = samples[i].value
+            let startIdx = i
+
+            // Look for a rise of 15 mg/dL
+            while i < samples.count && samples[i].value - baseline < 15 {
+                i += 1
+            }
+            if i >= samples.count { break }
+
+            let eventStart = samples[startIdx].date
+            var eventEnd = samples[i].date
+            var peakValue = samples[i].value
+            var auc = 0.0
+            var recovered = false
+
+            var j = i + 1
+            while j < samples.count {
+                let currentValue = samples[j].value
+                let previousValue = samples[j - 1].value
+
+                // AUC: trapezoid method
+                let timeDiff = samples[j].date.timeIntervalSince(samples[j - 1].date) / 60.0
+                auc += ((currentValue + previousValue) / 2 - baseline) * timeDiff
+
+                if currentValue > peakValue {
+                    peakValue = currentValue
+                }
+
+                if abs(currentValue - baseline) < 10 {
+                    recovered = true
+                    eventEnd = samples[j].date
+                    break
+                }
+
+                if samples[j].date.timeIntervalSince(samples[startIdx].date) > 3 * 3600 {
+                    eventEnd = samples[j].date
+                    break
+                }
+
+                j += 1
+            }
+
+            let peakDelta = peakValue - baseline
+
+            let color: GlucoseColor
+            switch (auc, peakDelta) {
+            case let (a, p) where a < 500 && p < 25:
+                color = .green
+            case let (a, p) where a < 1000 && p < 40:
+                color = .white
+            case let (a, p) where a < 1500 && p < 60:
+                color = .yellow
+            default:
+                color = .red
+            }
+
+            let event = GlucoseEvent(
+                startTime: eventStart,
+                endTime: eventEnd,
+                peakDelta: peakDelta,
+                auc: auc,
+                recovered: recovered,
+                color: color
+            )
+
+            events.append(event)
+            i = j
+        }
+
+        return events
+    }
+
 
     
     
