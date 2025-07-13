@@ -15,6 +15,7 @@ struct HealthCopilotApp: App {
     var body: some Scene {
         WindowGroup {
             TabView {
+                /*
                 NutritionView()
                     .environmentObject(mealLogManager)
                     .environmentObject(healthManager)
@@ -28,7 +29,7 @@ struct HealthCopilotApp: App {
                     .tabItem {
                         Label("History", systemImage: "list.bullet")
                     }
-                
+                */
                 GlucoseScreen()
                     .environmentObject(mealLogManager)
                     .environmentObject(healthManager)

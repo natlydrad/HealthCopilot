@@ -439,11 +439,11 @@ class HealthManager: ObservableObject {
         var i = 0
 
         while i < samples.count - 1 {
-            let baseline = samples[i].value
+            let startVal = samples[i].value
             let startIdx = i
 
             // Look for a rise of 15 mg/dL
-            while i < samples.count && samples[i].value - baseline < 15 {
+            while i < samples.count && samples[i].value - startVal < 15 {
                 i += 1
             }
             if i >= samples.count { break }
@@ -461,13 +461,13 @@ class HealthManager: ObservableObject {
 
                 // AUC: trapezoid method
                 let timeDiff = samples[j].date.timeIntervalSince(samples[j - 1].date) / 60.0
-                auc += ((currentValue + previousValue) / 2 - baseline) * timeDiff
+                auc += ((currentValue + previousValue) / 2 - startVal) * timeDiff
 
                 if currentValue > peakValue {
                     peakValue = currentValue
                 }
 
-                if abs(currentValue - baseline) < 10 {
+                if abs(currentValue - startVal) < 10 {
                     recovered = true
                     eventEnd = samples[j].date
                     break
@@ -481,7 +481,7 @@ class HealthManager: ObservableObject {
                 j += 1
             }
 
-            let peakDelta = peakValue - baseline
+            let peakDelta = peakValue - startVal
 
             let color: GlucoseColor
             switch (auc, peakDelta) {

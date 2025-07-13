@@ -13,16 +13,24 @@ struct GlucoseScreen: View {
     @State private var glucoseData: [GlucoseSample] = []
     @State private var glucoseEvents: [GlucoseEvent] = []
     
-    @State private var startDate: Date = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
-    @State private var endDate: Date = Date()
+    // Use one selected day
+    @State private var selectedDay: Date = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
+    
+    // Computed start/end dates aligned to 6 AM
+    var adjustedStartDate: Date {
+        Calendar.current.date(bySettingHour: 6, minute: 0, second: 0, of: selectedDay)!
+    }
+
+    var adjustedEndDate: Date {
+        Calendar.current.date(byAdding: .hour, value: 24, to: adjustedStartDate)!
+    }
     
     var body: some View {
         VStack {
-            DatePicker("Start", selection: $startDate, displayedComponents: .date)
-            DatePicker("End", selection: $endDate, displayedComponents: .date)
+            DatePicker("Day", selection: $selectedDay, displayedComponents: .date)
             
             Button("Load Glucose") {
-                healthManager.fetchGlucoseData(startDate: startDate, endDate: endDate) { samples in
+                healthManager.fetchGlucoseData(startDate: adjustedStartDate, endDate: adjustedEndDate) { samples in
                     self.glucoseData = samples
                     self.glucoseEvents = healthManager.detectGlucoseEvents(from: samples)
                     print("📊 Detected \(glucoseEvents.count) events.")
@@ -30,10 +38,14 @@ struct GlucoseScreen: View {
                         print("Event: \(event.startTime) → \(event.endTime) | AUC: \(event.auc), Peak: \(event.peakDelta), Color: \(event.color)")
                     }
                 }
-                    
             }
-            GlucoseGraphView(glucoseData: glucoseData, mealData: mealLogManager.meals, startDate: startDate, endDate: endDate)
             
+            GlucoseGraphView(
+                glucoseData: glucoseData,
+                mealData: mealLogManager.meals,
+                startDate: adjustedStartDate,
+                endDate: adjustedEndDate
+            )
             .frame(height: 300)
             .padding()
         }
