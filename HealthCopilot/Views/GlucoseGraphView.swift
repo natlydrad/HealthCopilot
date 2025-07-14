@@ -13,6 +13,7 @@ struct GlucoseGraphView: View {
     var mealData: [MealLog]
     var startDate: Date
     var endDate: Date
+    var glucoseEvents: [GlucoseEvent]
 
     var body: some View {
         // Filtered data to avoid weird spikes
@@ -22,6 +23,17 @@ struct GlucoseGraphView: View {
 
         ScrollView(.horizontal) {
             Chart {
+                ForEach(glucoseEvents) { event in
+                    RectangleMark(
+                        xStart: .value("Start", event.startTime),
+                        xEnd: .value("End", event.endTime),
+                        yStart: .value("Low", 0),
+                        yEnd: .value("High", 250)  // Adjust to your graph scale
+                    )
+                    .foregroundStyle(colorForEvent(event.color).opacity(0.2))
+                }
+
+                
                 // Glucose line
                 ForEach(filteredGlucose) { sample in
                     LineMark(
@@ -62,3 +74,15 @@ struct GlucoseGraphView: View {
     }
 }
 
+func colorForEvent(_ color: GlucoseColor) -> Color {
+    switch color {
+    case .green:
+        return .green
+    case .white:
+        return .gray
+    case .yellow:
+        return .yellow
+    case .red:
+        return .red
+    }
+}

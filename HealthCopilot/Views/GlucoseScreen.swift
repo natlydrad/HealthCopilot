@@ -44,7 +44,8 @@ struct GlucoseScreen: View {
                 glucoseData: glucoseData,
                 mealData: mealLogManager.meals,
                 startDate: adjustedStartDate,
-                endDate: adjustedEndDate
+                endDate: adjustedEndDate,
+                glucoseEvents: glucoseEvents
             )
             .frame(height: 300)
             .padding()
