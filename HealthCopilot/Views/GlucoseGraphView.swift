@@ -24,11 +24,14 @@ struct GlucoseGraphView: View {
         ScrollView(.horizontal) {
             Chart {
                 ForEach(glucoseEvents) { event in
+                    let adjustedStart = event.startTime.addingTimeInterval(4 * 3600)
+                    let adjustedEnd = event.endTime.addingTimeInterval(4 * 3600)
+                    
                     RectangleMark(
-                        xStart: .value("Start", event.startTime),
-                        xEnd: .value("End", event.endTime),
+                        xStart: .value("Start", adjustedStart),
+                        xEnd: .value("End", adjustedEnd),
                         yStart: .value("Low", 0),
-                        yEnd: .value("High", 250)  // Adjust to your graph scale
+                        yEnd: .value("High", 250)
                     )
                     .foregroundStyle(colorForEvent(event.color).opacity(0.2))
                 }

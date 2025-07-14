@@ -360,22 +360,22 @@ class HealthManager: ObservableObject {
             .dietaryCarbohydrates,
             .dietaryFatTotal
         ]
-
+        
         // Tight window: meal timestamp ± 1 second
         let start = date.addingTimeInterval(-1)
         let end = date.addingTimeInterval(1)
-
+        
         let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
-
+        
         for typeIdentifier in types {
             guard let type = HKObjectType.quantityType(forIdentifier: typeIdentifier) else { continue }
-
+            
             let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { query, samples, error in
                 guard let samples = samples, !samples.isEmpty else {
                     print("❌ No samples found for deletion for type: \(typeIdentifier.rawValue)")
                     return
                 }
-
+                
                 self.healthStore.delete(samples) { success, error in
                     if success {
                         print("✅ Deleted \(samples.count) samples for \(typeIdentifier.rawValue)")
@@ -384,65 +384,83 @@ class HealthManager: ObservableObject {
                     }
                 }
             }
-
+            
             healthStore.execute(query)
         }
     }
-
+    
     func fetchGlucoseData(startDate: Date, endDate: Date, completion: @escaping ([GlucoseSample]) -> Void) {
         guard let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose) else {
             completion([])
             return
         }
-
+        
         let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
-
+        
         let query = HKSampleQuery(sampleType: glucoseType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { query, samples, error in
-
+            
             var glucoseData: [GlucoseSample] = []
-
+            
             for sample in samples as? [HKQuantitySample] ?? [] {
                 let value = sample.quantity.doubleValue(for: HKUnit(from: "mg/dL"))
                 let glucoseSample = GlucoseSample(date: sample.startDate, value: value)
                 glucoseData.append(glucoseSample)
             }
-
+            
             DispatchQueue.main.async {
                 completion(glucoseData.sorted { $0.date < $1.date })
             }
         }
-
+        
         healthStore.execute(query)
     }
     
     func analyzeGlucoseImpact(for meal: MealLog, glucoseData: [GlucoseSample]) -> Double? {
         let mealTime = meal.date
         let windowEnd = Calendar.current.date(byAdding: .hour, value: 2, to: mealTime)!
-
+        
         // Filter glucose samples within the 0-2 hour window after meal
         let windowSamples = glucoseData.filter { $0.date >= mealTime && $0.date <= windowEnd }
-
+        
         // Find the most recent glucose BEFORE the meal
         guard let mealGlucose = glucoseData.last(where: { $0.date <= mealTime })?.value,
               let maxGlucose = windowSamples.map({ $0.value }).max() else {
             return nil
         }
-
+        
         let spike = maxGlucose - mealGlucose
         return spike > 0 ? spike : 0
     }
     
     func detectGlucoseEvents(from samples: [GlucoseSample]) -> [GlucoseEvent] {
-        guard samples.count > 1 else { return [] }
+        guard samples.count > 2 else { return [] }
 
+        let aucBaseline = 70.0
         var events: [GlucoseEvent] = []
         var i = 0
 
-        while i < samples.count - 1 {
-            let startVal = samples[i].value
-            let startIdx = i
+        while i < samples.count - 2 {
+            // Step 1: Find local min (valley)
+            var foundMin = false
+            while i < samples.count - 2 {
+                let v0 = samples[i].value
+                let v1 = samples[i + 1].value
+                let v2 = samples[i + 2].value
 
-            // Look for a rise of 15 mg/dL
+                if v1 <= v0 && v1 <= v2 {
+                    foundMin = true
+                    break
+                }
+                i += 1
+            }
+
+            if !foundMin { break }
+
+            let startIdx = i + 1
+            let startVal = samples[startIdx].value
+            i = startIdx + 1
+
+            // Step 2: Look for a ≥15 mg/dL rise
             while i < samples.count && samples[i].value - startVal < 15 {
                 i += 1
             }
@@ -453,58 +471,92 @@ class HealthManager: ObservableObject {
             var peakValue = samples[i].value
             var auc = 0.0
             var recovered = false
-
             var j = i + 1
+
             while j < samples.count {
-                let currentValue = samples[j].value
-                let previousValue = samples[j - 1].value
+                let current = samples[j]
+                let previous = samples[j - 1]
+                let timeDiff = current.date.timeIntervalSince(previous.date) / 60.0  // minutes
 
-                // AUC: trapezoid method
-                let timeDiff = samples[j].date.timeIntervalSince(samples[j - 1].date) / 60.0
-                auc += ((currentValue + previousValue) / 2 - startVal) * timeDiff
+                // AUC relative to fixed baseline (70)
+                let avg = (current.value + previous.value) / 2
+                let delta = max(0, avg - aucBaseline)
+                auc += delta * timeDiff
 
-                if currentValue > peakValue {
-                    peakValue = currentValue
+                if current.value > peakValue {
+                    peakValue = current.value
                 }
 
-                if abs(currentValue - startVal) < 10 {
-                    recovered = true
-                    eventEnd = samples[j].date
+                // Recovery: back to within 10 mg/dL of start
+                if abs(current.value - startVal) < 10 {
+                    let lookaheadEnd = current.date.addingTimeInterval(30 * 60)
+                    var resumed = false
+                    var k = j + 1
+                    while k < samples.count && samples[k].date <= lookaheadEnd {
+                        if samples[k].value - current.value > 10 {
+                            resumed = true
+                            break
+                        }
+                        k += 1
+                    }
+
+                    if resumed {
+                        j += 1
+                        continue
+                    } else {
+                        recovered = true
+                        eventEnd = current.date
+                        break
+                    }
+                }
+
+                // Timeout after 3 hours
+                if current.date.timeIntervalSince(eventStart) > 3 * 3600 {
+                    eventEnd = current.date
                     break
                 }
 
-                if samples[j].date.timeIntervalSince(samples[startIdx].date) > 3 * 3600 {
-                    eventEnd = samples[j].date
-                    break
+                // New spike mid-event
+                if j >= 2 {
+                    let prev2 = samples[j - 2].value
+                    let prev1 = samples[j - 1].value
+                    let curr = samples[j].value
+
+                    if prev1 < prev2 && prev1 < curr && curr - prev1 > 15 {
+                        eventEnd = samples[j - 1].date
+                        break
+                    }
                 }
 
                 j += 1
             }
 
             let peakDelta = peakValue - startVal
+            let durationMinutes = eventEnd.timeIntervalSince(eventStart) / 60.0
+            let intensity = durationMinutes > 0 ? auc / durationMinutes : 0
 
+            // Color grading based on intensity (average elevation above 70)
             let color: GlucoseColor
-            switch (auc, peakDelta) {
-            case let (a, p) where a < 500 && p < 25:
+            switch intensity {
+            case 0..<5:
                 color = .green
-            case let (a, p) where a < 1000 && p < 40:
+            case 5..<10:
                 color = .white
-            case let (a, p) where a < 1500 && p < 60:
+            case 10..<20:
                 color = .yellow
             default:
                 color = .red
             }
 
-            let event = GlucoseEvent(
+            events.append(GlucoseEvent(
                 startTime: eventStart,
                 endTime: eventEnd,
                 peakDelta: peakDelta,
                 auc: auc,
                 recovered: recovered,
                 color: color
-            )
+            ))
 
-            events.append(event)
             i = j
         }
 
@@ -512,7 +564,5 @@ class HealthManager: ObservableObject {
     }
 
 
-    
-    
-}
 
+}
