@@ -481,46 +481,65 @@ class HealthManager: ObservableObject {
         return results.sorted { $0.date < $1.date }
     }
     
-    func generateFastingGlucoseInsight(from results: [FastingGlucoseResult]) -> [GlucoseInsight] {
-        let reliableResults = results
+    func generateFastingGlucoseInsight(from results: [FastingGlucoseResult], days: Int) -> [GlucoseInsight] {
+        let calendar = Calendar.current
+        guard let cutoffDate = calendar.date(byAdding: .day, value: -days, to: Date()) else {
+            return []
+        }
+
+        let filteredResults = results
+            .filter { $0.date >= cutoffDate }
             .filter { $0.quality == .reliable }
             .sorted { $0.date < $1.date }
-            .suffix(3)
-        
-        guard reliableResults.count == 3 else { return [] }
-        
-        let values = reliableResults.compactMap { $0.value }
-        //let avg = values.reduce(0, +) / Double(values.count)
-        
+
+        guard filteredResults.count >= 2 else {
+            return []
+        }
+
+        let values = filteredResults.compactMap { $0.value }
         let change = values.last! - values.first!
-        let today = reliableResults.last!.date
-        
-        let summary: String
-        let detail: String?
-        let importance: InsightImportance
-        
+        let today = filteredResults.last!.date
+
+        var summary: String
+        var detail: String?
+        var importance: InsightImportance = .low
+
+        let startValue = Int(values.first!)
+        let endValue = Int(values.last!)
+
         if change <= -5 {
             summary = "Fasting glucose dropped"
-            detail = "Your fasting glucose dropped by \(abs(Int(change))) mg/dL over the last 3 days — a sign of improving liver insulin sensitivity."
+            detail = "Your fasting glucose dropped by \(abs(Int(change))) mg/dL over the past \(days) days. Started at \(startValue) mg/dL, ended at \(endValue) mg/dL."
             importance = .high
         } else if change >= 5 {
             summary = "Fasting glucose increased"
-            detail = "Your fasting glucose rose by \(Int(change)) mg/dL in 3 days — possible stress, poor sleep, or food-related liver stress."
+            detail = "Your fasting glucose rose by \(Int(change)) mg/dL in \(days) days. Started at \(startValue) mg/dL, ended at \(endValue) mg/dL."
             importance = .high
         } else {
             summary = "Fasting glucose stable"
-            detail = "No significant change in fasting glucose over the past 3 days."
+            detail = "No significant change over the past \(days) days. Started at \(startValue) mg/dL, ended at \(endValue) mg/dL."
             importance = .low
         }
         
-        return [GlucoseInsight(
-            date: today,
-            category: .fastingGlucose,
-            summary: summary,
-            detail: detail,
-            importance: importance
-        )]
+        print("Days: \(days) | Count: \(filteredResults.count)")
+        if let startDate = filteredResults.first?.date,
+           let endDate = filteredResults.last?.date {
+            print("Start: \(startDate) | End: \(endDate)")
+        }
+        print("Values: \(filteredResults.compactMap { $0.value }.map { Int($0) })")
+
+
+        return [
+            GlucoseInsight(
+                date: today,
+                category: .fastingGlucose,
+                summary: summary,
+                detail: detail,
+                importance: importance
+            )
+        ]
     }
+
     
     
     

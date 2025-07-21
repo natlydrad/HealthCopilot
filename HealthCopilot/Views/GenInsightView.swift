@@ -40,22 +40,26 @@ struct GenInsightView: View {
             
             .onAppear {
                 let end = Date()
-                let start = Calendar.current.date(byAdding: .day, value: -3, to: end)!
+                let start = Calendar.current.date(byAdding: .day, value: -100, to: end)!
 
                 healthManager.fetchGlucoseData(startDate: start, endDate: end) { samples in
-                    print("✅ Retrieved \(samples.count) CGM samples")
-
                     let fastingResults = healthManager.getFastingGlucose(from: samples)
-                    let insights = healthManager.generateFastingGlucoseInsight(from: fastingResults)
+
+                    let insights = [
+                        healthManager.generateFastingGlucoseInsight(from: fastingResults, days: 3),
+                        healthManager.generateFastingGlucoseInsight(from: fastingResults, days: 7),
+                        healthManager.generateFastingGlucoseInsight(from: fastingResults, days: 14),
+                        healthManager.generateFastingGlucoseInsight(from: fastingResults, days: 90)
+                    ].flatMap { $0 }
 
                     DispatchQueue.main.async {
                         healthManager.insights = insights
-                        print("🧠 Generated \(insights.count) insights")
+                    }
+                }
+
                     }
                 }
             }
 
         }
-    }
-}
 
