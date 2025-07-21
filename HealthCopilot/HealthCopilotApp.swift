@@ -30,6 +30,15 @@ struct HealthCopilotApp: App {
                         Label("History", systemImage: "list.bullet")
                     }
                 */
+                
+                GenInsightView()
+                    .environmentObject(mealLogManager)
+                    .environmentObject(healthManager)
+                    .tabItem {
+                        Label("Insights", systemImage: "plus.circle")
+                    }
+                
+                
                 GlucoseScreen()
                     .environmentObject(mealLogManager)
                     .environmentObject(healthManager)

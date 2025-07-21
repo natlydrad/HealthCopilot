@@ -23,6 +23,43 @@ struct GlucoseEvent: Identifiable {
     let color: GlucoseColor
 }
 
+struct FastingGlucoseResult {
+    let id = UUID()
+    let date: Date
+    let value: Double?
+    let quality: QualityFlag
+}
+
+struct GlucoseInsight: Identifiable {
+    let id = UUID()
+    let date: Date
+    let category: InsightCategory
+    let summary: String
+    let detail: String?
+    let importance: InsightImportance
+}
+
+enum InsightCategory {
+    case fastingGlucose
+    case auc
+    case recovery
+    case variability
+    case general
+}
+
+enum InsightImportance {
+    case low, medium, high
+}
+
 enum GlucoseColor {
     case green, white, yellow, red
 }
+
+
+enum QualityFlag {
+    case reliable
+    case questionable
+    case unreliable
+}
+
+

@@ -14,6 +14,8 @@ class HealthManager: ObservableObject {
     @Published var totalSleepHours: Double = 0.0
     @Published var exerciseMinutes: Double = 0.0
     @Published var latestHeartRate: Double = 0.0
+    @Published var insights: [GlucoseInsight] = []
+
     
     init() {
         requestAuthorization()
@@ -360,22 +362,22 @@ class HealthManager: ObservableObject {
             .dietaryCarbohydrates,
             .dietaryFatTotal
         ]
-
+        
         // Tight window: meal timestamp ± 1 second
         let start = date.addingTimeInterval(-1)
         let end = date.addingTimeInterval(1)
-
+        
         let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
-
+        
         for typeIdentifier in types {
             guard let type = HKObjectType.quantityType(forIdentifier: typeIdentifier) else { continue }
-
+            
             let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { query, samples, error in
                 guard let samples = samples, !samples.isEmpty else {
                     print("❌ No samples found for deletion for type: \(typeIdentifier.rawValue)")
                     return
                 }
-
+                
                 self.healthStore.delete(samples) { success, error in
                     if success {
                         print("✅ Deleted \(samples.count) samples for \(typeIdentifier.rawValue)")
@@ -384,105 +386,196 @@ class HealthManager: ObservableObject {
                     }
                 }
             }
-
+            
             healthStore.execute(query)
         }
     }
-
+    
     func fetchGlucoseData(startDate: Date, endDate: Date, completion: @escaping ([GlucoseSample]) -> Void) {
         guard let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose) else {
             completion([])
             return
         }
-
+        
         let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
-
+        
         let query = HKSampleQuery(sampleType: glucoseType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { query, samples, error in
-
+            
             var glucoseData: [GlucoseSample] = []
-
+            
             for sample in samples as? [HKQuantitySample] ?? [] {
                 let value = sample.quantity.doubleValue(for: HKUnit(from: "mg/dL"))
                 let glucoseSample = GlucoseSample(date: sample.startDate, value: value)
                 glucoseData.append(glucoseSample)
             }
-
+            
             DispatchQueue.main.async {
                 completion(glucoseData.sorted { $0.date < $1.date })
             }
         }
-
+        
         healthStore.execute(query)
     }
     
     func analyzeGlucoseImpact(for meal: MealLog, glucoseData: [GlucoseSample]) -> Double? {
         let mealTime = meal.date
         let windowEnd = Calendar.current.date(byAdding: .hour, value: 2, to: mealTime)!
-
+        
         // Filter glucose samples within the 0-2 hour window after meal
         let windowSamples = glucoseData.filter { $0.date >= mealTime && $0.date <= windowEnd }
-
+        
         // Find the most recent glucose BEFORE the meal
         guard let mealGlucose = glucoseData.last(where: { $0.date <= mealTime })?.value,
               let maxGlucose = windowSamples.map({ $0.value }).max() else {
             return nil
         }
-
+        
         let spike = maxGlucose - mealGlucose
         return spike > 0 ? spike : 0
     }
     
+    func getFastingGlucose(from samples: [GlucoseSample]) -> [FastingGlucoseResult] {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: samples) { sample -> Date in
+            let components = calendar.dateComponents([.year, .month, .day], from: sample.date)
+            return calendar.date(from: components)!
+        }
+        
+        var results: [FastingGlucoseResult] = []
+        
+        for (day, samplesForDay) in grouped {
+            // Define 4:00 AM – 6:00 AM window for this day
+            guard let start = calendar.date(bySettingHour: 4, minute: 0, second: 0, of: day),
+                  let end = calendar.date(bySettingHour: 6, minute: 0, second: 0, of: day) else {
+                continue
+            }
+            
+            let fastingSamples = samplesForDay.filter { $0.date >= start && $0.date <= end }
+            let values = fastingSamples.map { $0.value }
+            
+            let quality: QualityFlag
+            let fastingValue: Double?
+            
+            if values.count >= 3 {
+                let mean = values.reduce(0, +) / Double(values.count)
+                let stdDev = sqrt(values.map { pow($0 - mean, 2) }.reduce(0, +) / Double(values.count))
+                
+                if stdDev < 5 {
+                    quality = .reliable
+                    fastingValue = mean
+                } else {
+                    quality = .questionable
+                    fastingValue = mean
+                }
+            } else if values.count > 0 {
+                quality = .unreliable
+                fastingValue = values.reduce(0, +) / Double(values.count)
+            } else {
+                quality = .unreliable
+                fastingValue = nil
+            }
+            
+            results.append(FastingGlucoseResult(date: day, value: fastingValue, quality: quality))
+        }
+        
+        return results.sorted { $0.date < $1.date }
+    }
+    
+    func generateFastingGlucoseInsight(from results: [FastingGlucoseResult]) -> [GlucoseInsight] {
+        let reliableResults = results
+            .filter { $0.quality == .reliable }
+            .sorted { $0.date < $1.date }
+            .suffix(3)
+        
+        guard reliableResults.count == 3 else { return [] }
+        
+        let values = reliableResults.compactMap { $0.value }
+        //let avg = values.reduce(0, +) / Double(values.count)
+        
+        let change = values.last! - values.first!
+        let today = reliableResults.last!.date
+        
+        let summary: String
+        let detail: String?
+        let importance: InsightImportance
+        
+        if change <= -5 {
+            summary = "Fasting glucose dropped"
+            detail = "Your fasting glucose dropped by \(abs(Int(change))) mg/dL over the last 3 days — a sign of improving liver insulin sensitivity."
+            importance = .high
+        } else if change >= 5 {
+            summary = "Fasting glucose increased"
+            detail = "Your fasting glucose rose by \(Int(change)) mg/dL in 3 days — possible stress, poor sleep, or food-related liver stress."
+            importance = .high
+        } else {
+            summary = "Fasting glucose stable"
+            detail = "No significant change in fasting glucose over the past 3 days."
+            importance = .low
+        }
+        
+        return [GlucoseInsight(
+            date: today,
+            category: .fastingGlucose,
+            summary: summary,
+            detail: detail,
+            importance: importance
+        )]
+    }
+    
+    
+    
+    
     func detectGlucoseEvents(from samples: [GlucoseSample]) -> [GlucoseEvent] {
         guard samples.count > 1 else { return [] }
-
+        
         var events: [GlucoseEvent] = []
         var i = 0
-
+        
         while i < samples.count - 1 {
             let startVal = samples[i].value
             let startIdx = i
-
+            
             // Look for a rise of 15 mg/dL
             while i < samples.count && samples[i].value - startVal < 15 {
                 i += 1
             }
             if i >= samples.count { break }
-
+            
             let eventStart = samples[startIdx].date
             var eventEnd = samples[i].date
             var peakValue = samples[i].value
             var auc = 0.0
             var recovered = false
-
+            
             var j = i + 1
             while j < samples.count {
                 let currentValue = samples[j].value
                 let previousValue = samples[j - 1].value
-
+                
                 // AUC: trapezoid method
                 let timeDiff = samples[j].date.timeIntervalSince(samples[j - 1].date) / 60.0
                 auc += ((currentValue + previousValue) / 2 - startVal) * timeDiff
-
+                
                 if currentValue > peakValue {
                     peakValue = currentValue
                 }
-
+                
                 if abs(currentValue - startVal) < 10 {
                     recovered = true
                     eventEnd = samples[j].date
                     break
                 }
-
+                
                 if samples[j].date.timeIntervalSince(samples[startIdx].date) > 3 * 3600 {
                     eventEnd = samples[j].date
                     break
                 }
-
+                
                 j += 1
             }
-
+            
             let peakDelta = peakValue - startVal
-
+            
             let color: GlucoseColor
             switch (auc, peakDelta) {
             case let (a, p) where a < 500 && p < 25:
@@ -494,7 +587,7 @@ class HealthManager: ObservableObject {
             default:
                 color = .red
             }
-
+            
             let event = GlucoseEvent(
                 startTime: eventStart,
                 endTime: eventEnd,
@@ -503,16 +596,13 @@ class HealthManager: ObservableObject {
                 recovered: recovered,
                 color: color
             )
-
+            
             events.append(event)
             i = j
         }
-
+        
         return events
     }
-
-
-    
     
 }
 
