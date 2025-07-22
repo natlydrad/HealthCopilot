@@ -497,7 +497,15 @@ class HealthManager: ObservableObject {
         }
 
         let values = filteredResults.compactMap { $0.value }
-        let change = values.last! - values.first!
+        let dates = filteredResults.map { $0.date }
+
+        let startDate = dates.first!
+        let x = dates.map { $0.timeIntervalSince(startDate) / 86400.0 }  // convert to days
+        let y = values
+
+        let (slope, rSquared) = linearRegression(x: x, y: y)
+
+        let slopePerDay = slope
         let today = filteredResults.last!.date
 
         var summary: String
@@ -507,27 +515,28 @@ class HealthManager: ObservableObject {
         let startValue = Int(values.first!)
         let endValue = Int(values.last!)
 
-        if change <= -5 {
-            summary = "Fasting glucose dropped"
-            detail = "Your fasting glucose dropped by \(abs(Int(change))) mg/dL over the past \(days) days. Started at \(startValue) mg/dL, ended at \(endValue) mg/dL."
-            importance = .high
-        } else if change >= 5 {
-            summary = "Fasting glucose increased"
-            detail = "Your fasting glucose rose by \(Int(change)) mg/dL in \(days) days. Started at \(startValue) mg/dL, ended at \(endValue) mg/dL."
-            importance = .high
-        } else {
-            summary = "Fasting glucose stable"
-            detail = "No significant change over the past \(days) days. Started at \(startValue) mg/dL, ended at \(endValue) mg/dL."
-            importance = .low
-        }
-        
-        print("Days: \(days) | Count: \(filteredResults.count)")
-        if let startDate = filteredResults.first?.date,
-           let endDate = filteredResults.last?.date {
-            print("Start: \(startDate) | End: \(endDate)")
-        }
-        print("Values: \(filteredResults.compactMap { $0.value }.map { Int($0) })")
+        let slopeThreshold = 0.5        // mg/dL per day
+        let r2Threshold = 0.5
 
+        if rSquared >= r2Threshold {
+            if slopePerDay >= slopeThreshold {
+                summary = "Fasting glucose increased"
+                detail = "Your fasting glucose showed an upward trend of +\(String(format: "%.1f", slopePerDay)) mg/dL per day over \(days) days. Started at \(startValue), ended at \(endValue)."
+                importance = .high
+            } else if slopePerDay <= -slopeThreshold {
+                summary = "Fasting glucose dropped"
+                detail = "Your fasting glucose showed a downward trend of −\(String(format: "%.1f", abs(slopePerDay))) mg/dL per day over \(days) days. Started at \(startValue), ended at \(endValue)."
+                importance = .high
+            } else {
+                summary = "Fasting glucose stable"
+                detail = "No meaningful trend over \(days) days (slope: \(String(format: "%.2f", slopePerDay)) mg/dL/day)."
+            }
+        } else {
+            summary = "Fasting glucose variable"
+            detail = "No clear trend detected over the past \(days) days. Glucose readings fluctuated without a consistent pattern. Started at \(startValue), ended at \(endValue)."
+        }
+
+        print("Slope: \(slopePerDay) | R²: \(rSquared) | Count: \(filteredResults.count)")
 
         return [
             GlucoseInsight(
@@ -538,6 +547,37 @@ class HealthManager: ObservableObject {
                 importance: importance
             )
         ]
+    }
+
+
+    func linearRegression(x: [Double], y: [Double]) -> (slope: Double, rSquared: Double) {
+        let count = Double(x.count)
+        guard count >= 2 else { return (0, 0) }
+
+        let sumX = x.reduce(0, +)
+        let sumY = y.reduce(0, +)
+        let sumXY = zip(x, y).map(*).reduce(0, +)
+        let sumX2 = x.map { $0 * $0 }.reduce(0, +)
+
+        let numerator = (count * sumXY) - (sumX * sumY)
+        let denominator = (count * sumX2) - (sumX * sumX)
+
+        guard denominator != 0 else { return (0, 0) }
+
+        let slope = numerator / denominator
+        let intercept = (sumY - slope * sumX) / count
+
+        // Calculate R²
+        let meanY = sumY / count
+        let ssTot = y.map { pow($0 - meanY, 2) }.reduce(0, +)
+        let ssRes = zip(x, y).map { (xVal, yVal) in
+            let predicted = slope * xVal + intercept
+            return pow(yVal - predicted, 2)
+        }.reduce(0.0, +)
+
+        let rSquared = ssTot == 0 ? 0 : 1 - (ssRes / ssTot)
+
+        return (slope, rSquared)
     }
 
     
