@@ -34,9 +34,19 @@ struct GlucoseInsight: Identifiable {
     let id = UUID()
     let date: Date
     let category: InsightCategory
-    let summary: String
-    let detail: String?
+    let summary: String // "Fasting glucose dropped"
+    let detail: String? // Trend description (moved into expandable)
     let importance: InsightImportance
+    let mathStats: GlucoseMathStats?
+    let timeSpanLabel: String // "Last 3 days"
+}
+
+
+struct GlucoseMathStats {
+    let slope: Double
+    let rSquared: Double
+    let start: Int
+    let end: Int
 }
 
 enum InsightCategory {

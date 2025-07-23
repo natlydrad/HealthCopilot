@@ -404,6 +404,7 @@ class HealthManager: ObservableObject {
             var glucoseData: [GlucoseSample] = []
             
             for sample in samples as? [HKQuantitySample] ?? [] {
+                //print("Fetched sample: \(sample.startDate) | value: \(sample.quantity.doubleValue(for: HKUnit(from: "mg/dL")))")
                 let value = sample.quantity.doubleValue(for: HKUnit(from: "mg/dL"))
                 let glucoseSample = GlucoseSample(date: sample.startDate, value: value)
                 glucoseData.append(glucoseSample)
@@ -476,6 +477,7 @@ class HealthManager: ObservableObject {
             }
             
             results.append(FastingGlucoseResult(date: day, value: fastingValue, quality: quality))
+            //print("🧪 \(day): \(fastingValue ?? -1) mg/dL | quality: \(quality) | count: \(values.count)")
         }
         
         return results.sorted { $0.date < $1.date }
@@ -535,16 +537,33 @@ class HealthManager: ObservableObject {
             summary = "Fasting glucose variable"
             detail = "No clear trend detected over the past \(days) days. Glucose readings fluctuated without a consistent pattern. Started at \(startValue), ended at \(endValue)."
         }
+        
+        let mathStats = GlucoseMathStats(
+            slope: slopePerDay,
+            rSquared: rSquared,
+            start: startValue,
+            end: endValue
+        )
 
         print("Slope: \(slopePerDay) | R²: \(rSquared) | Count: \(filteredResults.count)")
 
+        if let start = filteredResults.first?.date,
+           let end = filteredResults.last?.date {
+            print("Insight range: \(start) to \(end)")
+        }
+        
+        let timeSpanLabel = "Last \(days) days"
+
+        
         return [
             GlucoseInsight(
                 date: today,
                 category: .fastingGlucose,
                 summary: summary,
                 detail: detail,
-                importance: importance
+                importance: importance,
+                mathStats: mathStats,
+                timeSpanLabel: timeSpanLabel
             )
         ]
     }

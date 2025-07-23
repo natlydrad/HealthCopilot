@@ -9,35 +9,62 @@ import SwiftUI
 
 struct GenInsightView: View {
     @EnvironmentObject var healthManager: HealthManager
+    @State private var expandedInsightIDs: Set<UUID> = []
 
     var body: some View {
         NavigationView {
-            List {
-                if healthManager.insights.isEmpty {
-                    Text("No insights to show.")
-                        .foregroundColor(.gray)
-                } else {
-                    ForEach(healthManager.insights) { insight in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(insight.summary)
-                                .font(.headline)
+            VStack(alignment: .leading, spacing: 4) {
+                // Header
+                Text("Insights")
+                    .font(.largeTitle.bold())
+                    .padding(.horizontal)
 
-                            if let detail = insight.detail {
-                                Text(detail)
+                // Central Date
+                Text(Date().formatted(date: .long, time: .omitted))
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+                    .padding(.horizontal)
+
+                List {
+                    if healthManager.insights.isEmpty {
+                        Text("No insights to show.")
+                            .foregroundColor(.gray)
+                    } else {
+                        ForEach(healthManager.insights) { insight in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(insight.timeSpanLabel)
+                                    .font(.headline)
+
+                                Text(insight.summary)
                                     .font(.subheadline)
                                     .foregroundColor(.gray)
-                            }
 
-                            Text(insight.date.formatted(date: .abbreviated, time: .omitted))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                                if insight.detail != nil || insight.mathStats != nil {
+                                    DisclosureGroup("See details") {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            if let detail = insight.detail {
+                                                Text(detail)
+                                            }
+
+                                            if let stats = insight.mathStats {
+                                                Text("• Slope: \(String(format: "%.2f", stats.slope)) mg/dL/day")
+                                                Text("• R²: \(String(format: "%.2f", stats.rSquared))")
+                                                Text("• Start: \(stats.start) mg/dL")
+                                                Text("• End: \(stats.end) mg/dL")
+                                            }
+                                        }
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .padding(.top, 4)
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 8)
+
                         }
-                        .padding(.vertical, 8)
                     }
                 }
             }
-            .navigationTitle("Insights")
-            
             .onAppear {
                 let end = Date()
                 let start = Calendar.current.date(byAdding: .day, value: -100, to: end)!
@@ -56,10 +83,7 @@ struct GenInsightView: View {
                         healthManager.insights = insights
                     }
                 }
-
-                    }
-                }
             }
-
         }
-
+    }
+}
