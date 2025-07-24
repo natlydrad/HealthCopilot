@@ -30,6 +30,13 @@ struct FastingGlucoseResult {
     let quality: QualityFlag
 }
 
+struct AUCResult {
+    let date: Date
+    let value: Double
+    let quality: QualityFlag  // same enum as FastingGlucoseResult
+}
+
+
 struct GlucoseInsight: Identifiable {
     let id = UUID()
     let date: Date
@@ -64,7 +71,6 @@ enum InsightImportance {
 enum GlucoseColor {
     case green, white, yellow, red
 }
-
 
 enum QualityFlag {
     case reliable

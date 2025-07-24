@@ -598,6 +598,128 @@ class HealthManager: ObservableObject {
 
         return (slope, rSquared)
     }
+    
+    func generateAUCResults(from samples: [GlucoseSample]) -> [AUCResult] {
+        let calendar = Calendar.current
+        let sortedSamples = samples.sorted(by: { $0.date < $1.date })
+        
+        // Group samples into 6am-to-6am daily buckets
+        let grouped = Dictionary(grouping: sortedSamples) { sample -> Date in
+            let adjusted = calendar.date(byAdding: .hour, value: -6, to: sample.date)!
+            let components = calendar.dateComponents([.year, .month, .day], from: adjusted)
+            return calendar.date(from: components)!
+        }
+
+        var aucResults: [AUCResult] = []
+
+        for (startOfDay, daySamples) in grouped {
+            guard daySamples.count >= 12 else {  // arbitrary threshold to reject sparse days
+                aucResults.append(AUCResult(date: startOfDay, value: 0.0, quality: .unreliable))
+                continue
+            }
+
+            let sortedDaySamples = daySamples.sorted(by: { $0.date < $1.date })
+
+            // Trapezoidal integration for AUC (mg/dL * min)
+            var auc: Double = 0.0
+            for i in 1..<sortedDaySamples.count {
+                let prev = sortedDaySamples[i - 1]
+                let curr = sortedDaySamples[i]
+
+                let timeDeltaMin = curr.date.timeIntervalSince(prev.date) / 60.0
+                let avgGlucose = (prev.value + curr.value) / 2.0
+                auc += avgGlucose * timeDeltaMin
+            }
+
+            aucResults.append(AUCResult(
+                date: startOfDay,
+                value: auc,
+                quality: .reliable
+            ))
+        }
+
+        // Sort results by date
+        return aucResults.sorted(by: { $0.date < $1.date })
+    }
+
+    
+    func generateAUCInsight(from results: [AUCResult], days: Int) -> [GlucoseInsight] {
+        let calendar = Calendar.current
+        guard let cutoffDate = calendar.date(byAdding: .day, value: -days, to: Date()) else {
+            return []
+        }
+
+        let filteredResults = results
+            .filter { $0.date >= cutoffDate }
+            .filter { $0.quality == .reliable }
+            .sorted { $0.date < $1.date }
+
+        guard filteredResults.count >= 2 else {
+            return []
+        }
+
+        let values = filteredResults.map { $0.value }
+        let dates = filteredResults.map { $0.date }
+
+        let startDate = dates.first!
+        let x = dates.map { $0.timeIntervalSince(startDate) / 86400.0 }  // convert to days
+        let y = values
+
+        let (slope, rSquared) = linearRegression(x: x, y: y)
+
+        let slopePerDay = slope
+        let today = filteredResults.last!.date
+
+        let startValue = Int(values.first!)
+        let endValue = Int(values.last!)
+
+        var summary: String
+        var detail: String?
+        var importance: InsightImportance = .low
+
+        let slopeThreshold = 500.0       // adjust based on how sensitive you want this
+        let r2Threshold = 0.5
+
+        if rSquared >= r2Threshold {
+            if slopePerDay >= slopeThreshold {
+                summary = "AUC increased"
+                detail = "Your glucose AUC showed an upward trend of +\(Int(slopePerDay)) units per day over \(days) days. Started at \(startValue), ended at \(endValue)."
+                importance = .high
+            } else if slopePerDay <= -slopeThreshold {
+                summary = "AUC dropped"
+                detail = "Your glucose AUC showed a downward trend of −\(Int(abs(slopePerDay))) units per day over \(days) days. Started at \(startValue), ended at \(endValue)."
+                importance = .high
+            } else {
+                summary = "AUC stable"
+                detail = "No meaningful trend over \(days) days (slope: \(Int(slopePerDay)) units/day)."
+            }
+        } else {
+            summary = "AUC variable"
+            detail = "No clear trend detected over the past \(days) days. AUC readings fluctuated without a consistent pattern. Started at \(startValue), ended at \(endValue)."
+        }
+
+        let mathStats = GlucoseMathStats(
+            slope: slopePerDay,
+            rSquared: rSquared,
+            start: startValue,
+            end: endValue
+        )
+
+        let timeSpanLabel = "Last \(days) days"
+
+        return [
+            GlucoseInsight(
+                date: today,
+                category: .auc,
+                summary: summary,
+                detail: detail,
+                importance: importance,
+                mathStats: mathStats,
+                timeSpanLabel: timeSpanLabel
+            )
+        ]
+    }
+
 
     
     
