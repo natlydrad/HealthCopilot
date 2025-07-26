@@ -48,6 +48,15 @@ struct GlucoseInsight: Identifiable {
     let timeSpanLabel: String // "Last 3 days"
 }
 
+struct TimeRangeInsights: Identifiable {
+    let id = UUID()
+    let dayCount: Int // like 3, 7, 14, 90
+    let range: String // e.g. "Last 14 days"
+    let fastingInsight: GlucoseInsight?
+    let aucInsight: GlucoseInsight?
+}
+
+
 
 struct GlucoseMathStats {
     let slope: Double

@@ -10,87 +10,132 @@ import SwiftUI
 struct GenInsightView: View {
     @EnvironmentObject var healthManager: HealthManager
     @State private var expandedInsightIDs: Set<UUID> = []
-    
+    @State private var fastingInsights: [GlucoseInsight] = []
+    @State private var aucInsights: [GlucoseInsight] = []
+
+    struct TimeRangeInsights: Identifiable {
+        let id: UUID
+        let dayCount: Int         // <-- You were trying to use this in your return!
+        let range: String         // e.g. "Last 14 days"
+        let fastingInsight: GlucoseInsight?
+        let aucInsight: GlucoseInsight?
+
+        init(dayCount: Int, range: String, fastingInsight: GlucoseInsight?, aucInsight: GlucoseInsight?) {
+            self.id = UUID()
+            self.dayCount = dayCount
+            self.range = range
+            self.fastingInsight = fastingInsight
+            self.aucInsight = aucInsight
+        }
+    }
+
+
     var body: some View {
         NavigationView {
-            VStack(alignment: .leading, spacing: 4) {
-                // Header
-                Text("Insights")
-                    .font(.largeTitle.bold())
-                    .padding(.horizontal)
-                
-                // Central Date
-                Text(Date().formatted(date: .long, time: .omitted))
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-                    .padding(.horizontal)
-                
-                List {
-                    if healthManager.insights.isEmpty {
-                        Text("No insights to show.")
-                            .foregroundColor(.gray)
-                    } else {
-                        ForEach(healthManager.insights) { insight in
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(insight.timeSpanLabel)
-                                    .font(.headline)
-                                
-                                Text(insight.summary)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 6) {
+                    // Header
+                    Text("Insights")
+                        .font(.largeTitle.bold())
+                        .padding(.horizontal)
+
+                    // Date
+                    Text(Date().formatted(date: .long, time: .omitted))
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                        .padding(.horizontal)
+
+                    // Combined cards
+                    ForEach(combinedInsights(fastingInsights: fastingInsights, aucInsights: aucInsights), id: \.range) { entry in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("\(entry.range)")
+                                .font(.headline)
+
+                            if let fasting = entry.fastingInsight {
+                                Text("\(fasting.summary)")
                                     .font(.subheadline)
-                                    .foregroundColor(.gray)
-                                
-                                if insight.detail != nil || insight.mathStats != nil {
-                                    DisclosureGroup("See details") {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            if let detail = insight.detail {
-                                                Text(detail)
-                                            }
-                                            
-                                            if let stats = insight.mathStats {
-                                                Text("• Slope: \(String(format: "%.2f", stats.slope)) mg/dL/day")
-                                                Text("• R²: \(String(format: "%.2f", stats.rSquared))")
-                                                Text("• Start: \(stats.start) mg/dL")
-                                                Text("• End: \(stats.end) mg/dL")
-                                            }
-                                        }
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                        .padding(.top, 4)
-                                    }
-                                }
                             }
-                            .padding(.vertical, 8)
-                            
+
+                            if let auc = entry.aucInsight {
+                                Text("\(auc.summary)")
+                                    .font(.subheadline)
+                            }
+
+                            NavigationLink("See details", destination: CombinedDetailView(
+                                fastingInsight: entry.fastingInsight,
+                                aucInsight: entry.aucInsight
+                            ))
                         }
+                        .padding(.vertical, 6)
                     }
                 }
             }
             .onAppear {
                 let end = Date()
                 let start = Calendar.current.date(byAdding: .day, value: -100, to: end)!
-                
+
                 healthManager.fetchGlucoseData(startDate: start, endDate: end) { samples in
                     let fastingResults = healthManager.getFastingGlucose(from: samples)
                     let aucResults = healthManager.generateAUCResults(from: samples)
-                    
-                    let fastingInsights = [
+
+                    let newFastingInsights = [
                         healthManager.generateFastingGlucoseInsight(from: fastingResults, days: 3),
                         healthManager.generateFastingGlucoseInsight(from: fastingResults, days: 7),
                         healthManager.generateFastingGlucoseInsight(from: fastingResults, days: 14),
                         healthManager.generateFastingGlucoseInsight(from: fastingResults, days: 90)
                     ].flatMap { $0 }
-                    
-                    let aucInsights = [
+
+                    let newAUCInsights = [
+                        healthManager.generateAUCInsight(from: aucResults, days: 3),
                         healthManager.generateAUCInsight(from: aucResults, days: 7),
                         healthManager.generateAUCInsight(from: aucResults, days: 14),
                         healthManager.generateAUCInsight(from: aucResults, days: 90)
                     ].flatMap { $0 }
-                    
+
                     DispatchQueue.main.async {
-                        healthManager.insights = fastingInsights + aucInsights
+                        self.fastingInsights = newFastingInsights
+                        self.aucInsights = newAUCInsights
+                        healthManager.insights = newFastingInsights + newAUCInsights
                     }
                 }
             }
+
         }
     }
+
+    func combinedInsights(
+        fastingInsights: [GlucoseInsight],
+        aucInsights: [GlucoseInsight]
+    ) -> [TimeRangeInsights] {
+
+        print("⏳ Starting combinedInsights()...")
+        print("fasting time spans: \(fastingInsights.map { $0.timeSpanLabel })")
+        print("auc time spans: \(aucInsights.map { $0.timeSpanLabel })")
+
+        let allRanges = Set(fastingInsights.map { $0.timeSpanLabel })
+            .union(aucInsights.map { $0.timeSpanLabel })
+
+        let combined = allRanges.compactMap { range -> TimeRangeInsights? in
+            let fasting = fastingInsights.first(where: { $0.timeSpanLabel == range })
+            let auc = aucInsights.first(where: { $0.timeSpanLabel == range })
+            let dayCount = extractDayCount(from: range)
+
+            return TimeRangeInsights(
+                dayCount: dayCount,
+                range: range,
+                fastingInsight: fasting,
+                aucInsight: auc
+            )
+        }
+
+        print("✅ Combined insight count: \(combined.count)")
+        return combined.sorted(by: { $0.dayCount < $1.dayCount })
+    }
+
+
+    func extractDayCount(from range: String) -> Int {
+        let digits = range.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()
+        return Int(digits) ?? 0
+    }
+
 }

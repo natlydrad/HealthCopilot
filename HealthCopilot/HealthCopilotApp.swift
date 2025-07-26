@@ -15,6 +15,21 @@ struct HealthCopilotApp: App {
     var body: some Scene {
         WindowGroup {
             TabView {
+                GenInsightView()
+                    .environmentObject(mealLogManager)
+                    .environmentObject(healthManager)
+                    .tabItem {
+                        Label("Insights", systemImage: "list.bullet")
+                    }
+                
+                
+                GlucoseScreen()
+                    .environmentObject(mealLogManager)
+                    .environmentObject(healthManager)
+                    .tabItem {
+                        Label("Glucose", systemImage: "waveform.path.ecg")
+                    }
+                
                 /*
                 NutritionView()
                     .environmentObject(mealLogManager)
@@ -30,21 +45,6 @@ struct HealthCopilotApp: App {
                         Label("History", systemImage: "list.bullet")
                     }
                 */
-                
-                GenInsightView()
-                    .environmentObject(mealLogManager)
-                    .environmentObject(healthManager)
-                    .tabItem {
-                        Label("Insights", systemImage: "plus.circle")
-                    }
-                
-                
-                GlucoseScreen()
-                    .environmentObject(mealLogManager)
-                    .environmentObject(healthManager)
-                    .tabItem {
-                        Label("Glucose", systemImage: "waveform.path.ecg")
-                    }
             }
         }
     }
