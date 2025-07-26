@@ -522,19 +522,19 @@ class HealthManager: ObservableObject {
 
         if rSquared >= r2Threshold {
             if slopePerDay >= slopeThreshold {
-                summary = "Fasting glucose increased"
+                summary = "⬆️ FG"
                 detail = "Your fasting glucose showed an upward trend of +\(String(format: "%.1f", slopePerDay)) mg/dL per day over \(days) days. Started at \(startValue), ended at \(endValue)."
                 importance = .high
             } else if slopePerDay <= -slopeThreshold {
-                summary = "Fasting glucose dropped"
+                summary = "⬇️ FG"
                 detail = "Your fasting glucose showed a downward trend of −\(String(format: "%.1f", abs(slopePerDay))) mg/dL per day over \(days) days. Started at \(startValue), ended at \(endValue)."
                 importance = .high
             } else {
-                summary = "Fasting glucose stable"
+                summary = "⚪️ FG"
                 detail = "No meaningful trend over \(days) days (slope: \(String(format: "%.2f", slopePerDay)) mg/dL/day)."
             }
         } else {
-            summary = "Fasting glucose variable"
+            summary = "🎲 FG"
             detail = "No clear trend detected over the past \(days) days. Glucose readings fluctuated without a consistent pattern. Started at \(startValue), ended at \(endValue)."
         }
         
@@ -542,7 +542,8 @@ class HealthManager: ObservableObject {
             slope: slopePerDay,
             rSquared: rSquared,
             start: startValue,
-            end: endValue
+            end: endValue,
+            unit: "mg / dL"
         )
 
         print("Slope: \(slopePerDay) | R²: \(rSquared) | Count: \(filteredResults.count)")
@@ -553,6 +554,9 @@ class HealthManager: ObservableObject {
         }
         
         let timeSpanLabel = "Last \(days) days"
+        
+        let average = Int(values.reduce(0, +) / Double(values.count))
+        summary += " || Avg: \(average)"
 
         
         return [
@@ -682,19 +686,19 @@ class HealthManager: ObservableObject {
 
         if rSquared >= r2Threshold {
             if slopePerDay >= slopeThreshold {
-                summary = "AUC increased"
+                summary = "⬆️ AUC"
                 detail = "Your glucose AUC showed an upward trend of +\(Int(slopePerDay)) units per day over \(days) days. Started at \(startValue), ended at \(endValue)."
                 importance = .high
             } else if slopePerDay <= -slopeThreshold {
-                summary = "AUC dropped"
+                summary = "⬇️ AUC"
                 detail = "Your glucose AUC showed a downward trend of −\(Int(abs(slopePerDay))) units per day over \(days) days. Started at \(startValue), ended at \(endValue)."
                 importance = .high
             } else {
-                summary = "AUC stable"
+                summary = "⚪️ AUC"
                 detail = "No meaningful trend over \(days) days (slope: \(Int(slopePerDay)) units/day)."
             }
         } else {
-            summary = "AUC variable"
+            summary = "🎲 AUC"
             detail = "No clear trend detected over the past \(days) days. AUC readings fluctuated without a consistent pattern. Started at \(startValue), ended at \(endValue)."
         }
 
@@ -702,7 +706,8 @@ class HealthManager: ObservableObject {
             slope: slopePerDay,
             rSquared: rSquared,
             start: startValue,
-            end: endValue
+            end: endValue,
+            unit: "AUC units"
         )
 
         let timeSpanLabel = "Last \(days) days"

@@ -32,44 +32,32 @@ struct GenInsightView: View {
 
     var body: some View {
         NavigationView {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 6) {
-                    // Header
-                    Text("Insights")
-                        .font(.largeTitle.bold())
-                        .padding(.horizontal)
-
-                    // Date
-                    Text(Date().formatted(date: .long, time: .omitted))
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
-                        .padding(.horizontal)
-
-                    // Combined cards
+            List {
+                Section(header: Text("Insights").font(.largeTitle.bold())) {
                     ForEach(combinedInsights(fastingInsights: fastingInsights, aucInsights: aucInsights), id: \.range) { entry in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("\(entry.range)")
-                                .font(.headline)
+                        NavigationLink(destination: CombinedDetailView(
+                            fastingInsight: entry.fastingInsight,
+                            aucInsight: entry.aucInsight
+                        )) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(entry.range)
+                                    .font(.headline)
 
-                            if let fasting = entry.fastingInsight {
-                                Text("\(fasting.summary)")
-                                    .font(.subheadline)
+                                if let fasting = entry.fastingInsight {
+                                    Text(fasting.summary)
+                                }
+
+                                if let auc = entry.aucInsight {
+                                    Text(auc.summary)
+                                }
                             }
-
-                            if let auc = entry.aucInsight {
-                                Text("\(auc.summary)")
-                                    .font(.subheadline)
-                            }
-
-                            NavigationLink("See details", destination: CombinedDetailView(
-                                fastingInsight: entry.fastingInsight,
-                                aucInsight: entry.aucInsight
-                            ))
+                            .padding(.vertical, 4)
                         }
-                        .padding(.vertical, 6)
                     }
                 }
             }
+        }
+
             .onAppear {
                 let end = Date()
                 let start = Calendar.current.date(byAdding: .day, value: -100, to: end)!
@@ -138,4 +126,4 @@ struct GenInsightView: View {
         return Int(digits) ?? 0
     }
 
-}
+

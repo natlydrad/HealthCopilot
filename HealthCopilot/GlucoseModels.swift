@@ -63,6 +63,7 @@ struct GlucoseMathStats {
     let rSquared: Double
     let start: Int
     let end: Int
+    let unit: String
 }
 
 enum InsightCategory {
