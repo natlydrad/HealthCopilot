@@ -11,42 +11,44 @@ import SwiftUI
 struct HealthCopilotApp: App {
     @StateObject var mealLogManager = MealLogManager()
     @StateObject var healthManager = HealthManager()
-
+    
     var body: some Scene {
         WindowGroup {
             TabView {
-                GenInsightView()
-                    .environmentObject(mealLogManager)
-                    .environmentObject(healthManager)
-                    .tabItem {
-                        Label("Insights", systemImage: "list.bullet")
-                    }
-                
-                
-                GlucoseScreen()
-                    .environmentObject(mealLogManager)
-                    .environmentObject(healthManager)
-                    .tabItem {
-                        Label("Glucose", systemImage: "waveform.path.ecg")
-                    }
-                
-                /*
-                NutritionView()
-                    .environmentObject(mealLogManager)
-                    .environmentObject(healthManager)
-                    .tabItem {
-                        Label("Log Meal", systemImage: "plus.circle")
-                    }
-
                 MealHistoryView()
                     .environmentObject(mealLogManager)
                     .environmentObject(healthManager)
                     .tabItem {
                         Label("History", systemImage: "list.bullet")
+                        
+                        /*
+                         NutritionView()
+                         .environmentObject(mealLogManager)
+                         .environmentObject(healthManager)
+                         .tabItem {
+                         Label("Log Meal", systemImage: "plus.circle")
+                         }
+                         
+                         GenInsightView()
+                         .environmentObject(mealLogManager)
+                         .environmentObject(healthManager)
+                         .tabItem {
+                         Label("Insights", systemImage: "list.bullet")
+                         }
+                         
+                         GlucoseScreen()
+                             .environmentObject(mealLogManager)
+                             .environmentObject(healthManager)
+                             .tabItem {
+                                 Label("Glucose", systemImage: "waveform.path.ecg")
+                             }
+                         
+                         
+                         
+                         }
+                         */
                     }
-                */
             }
         }
     }
 }
-

@@ -15,34 +15,18 @@ struct MealHistoryView: View {
     var body: some View {
         NavigationView {
             List {
-                
                 ForEach(mealLogManager.meals, id: \.id) { meal in
-                    // ✅ Use real insight if available, fallback to placeholder
-                    let insight = mealLogManager.mealInsights[meal.id] ?? InsightGenerator.generateTags(for: 0, recoveryMinutes: 90, percentile: 50)
-                    
-                    NavigationLink(
-                        destination: MealInsightView(
-                            meal: meal,
-                            insight: insight,
-                            averageSpike: 15
-                        )
-                    ) {
-                        
-                        MealRowView(meal: meal, insight: insight)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(meal.name)
+                            .font(.headline)
+                        Text(meal.date.formatted(date: .abbreviated, time: .shortened))
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Text("Calories: \(Int(meal.calories)) • Protein: \(Int(meal.protein))g • Carbs: \(Int(meal.carbs))g • Fat: \(Int(meal.fat))g")
+                            .font(.caption)
                     }
-                    .onAppear {
-                        mealLogManager.generateInsight(for: meal, using: healthManager)
-                    }
-                    
-                }
-                .onDelete { offsets in
-                    for index in offsets {
-                        if index < mealLogManager.meals.count {
-                            let meal = mealLogManager.meals[index]
-                            healthManager.deleteNutritionData(for: meal.date)  // optional: remove from HealthKit too
-                        }
-                    }
-                    mealLogManager.deleteMeal(at: offsets)
+                    .padding(.vertical, 4)
+
                 }
             .navigationTitle("Meal History")
                 

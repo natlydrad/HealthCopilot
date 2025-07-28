@@ -28,19 +28,15 @@ struct NutritionView: View {
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .padding()
 
+            /*
             Button("Analyze & Save to Health") {
                 analyzeAndSaveFood()
             }
             .padding()
-
+             */
             Text(gptResponse)
                 .padding()
                 .multilineTextAlignment(.leading)
-            
-            Button("📥 Load Test Meals") {
-                mealLogManager.loadTestMeals()
-            }
-            .padding()
             
 
         }
@@ -49,7 +45,7 @@ struct NutritionView: View {
             print("🔄 Loaded meals on startup: \(mealLogManager.meals.count)")
         }
     }
-
+/*
     func analyzeAndSaveFood() {
         let prompt = """
         I ate: \(foodInput)
@@ -98,6 +94,7 @@ struct NutritionView: View {
             }
         }
     }
+ */
 }
 
 

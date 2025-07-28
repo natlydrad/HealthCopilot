@@ -16,7 +16,7 @@ struct MealRowView: View {
         let isReady = timeSinceMeal >= 120
 
         VStack(alignment: .leading) {
-            Text(meal.description)
+            Text(meal.name)
                 .font(.headline)
             Text(meal.date, style: .date)
                 .font(.subheadline)

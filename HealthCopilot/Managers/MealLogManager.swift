@@ -10,181 +10,169 @@ import Foundation
 class MealLogManager: ObservableObject {
     @Published var meals: [MealLog] = []
     @Published var mealInsights: [UUID: MealInsight] = [:]
-
+    
     
     private let storageKey = "MealLogs"
     
     init() {
-        loadMeals()
+        loadMealsFromCSV()
         
-        // ✅ TEMP: Add a fake March meal for glucose testing
-        if meals.isEmpty {  // Only add if no meals exist
-            print("📝 No meals found, adding fake meal")
-            let fakeMeal = MealLog(
-                description: "Fake March Meal",
-                date: Calendar.current.date(from: DateComponents(year: 2025, month: 3, day: 25, hour: 12))!,
-                calories: 300,
-                protein: 20,
-                carbs: 30,
-                fat: 10
-            )
-            meals.append(fakeMeal)
-            saveMeals()
+    }
+    
+    func addMeal(_ meal: MealLog) {
+        var updatedMeals = meals
+        updatedMeals.append(meal)
+        meals = updatedMeals  // triggers SwiftUI update
+        saveMeals()
+    }
+    
+    func deleteMeal(at offsets: IndexSet) {
+        meals.remove(atOffsets: offsets)
+        saveMeals()
+    }
+    
+    private func saveMeals() {
+        if let encoded = try? JSONEncoder().encode(meals) {
+            UserDefaults.standard.set(encoded, forKey: storageKey)
         }
     }
-        
-        func addMeal(_ meal: MealLog) {
-            var updatedMeals = meals
-            updatedMeals.append(meal)
-            meals = updatedMeals  // triggers SwiftUI update
-            saveMeals()
-        }
-        
-        func deleteMeal(at offsets: IndexSet) {
-            meals.remove(atOffsets: offsets)
-            saveMeals()
-        }
-        
-        private func saveMeals() {
-            if let encoded = try? JSONEncoder().encode(meals) {
-                UserDefaults.standard.set(encoded, forKey: storageKey)
-            }
-        }
-        
-        private func loadMeals() {
-            if let saved = UserDefaults.standard.data(forKey: storageKey),
-               let decoded = try? JSONDecoder().decode([MealLog].self, from: saved) {
-                meals = decoded
-            }
-        }
     
-        func findNextMeal(after meal: MealLog) -> MealLog? {
-            let sortedMeals = meals.sorted { $0.date < $1.date }
-            guard let index = sortedMeals.firstIndex(where: { $0.id == meal.id }) else { return nil }
-            let nextIndex = index + 1
-            return nextIndex < sortedMeals.count ? sortedMeals[nextIndex] : nil
-        }
+    func findNextMeal(after meal: MealLog) -> MealLog? {
+        let sortedMeals = meals.sorted { $0.date < $1.date }
+        guard let index = sortedMeals.firstIndex(where: { $0.id == meal.id }) else { return nil }
+        let nextIndex = index + 1
+        return nextIndex < sortedMeals.count ? sortedMeals[nextIndex] : nil
+    }
     
-        func calculateRecoveryTime(for meal: MealLog, glucoseData: [GlucoseSample], nextMeal: MealLog?) -> Double? {
-            guard let preMealGlucose = glucoseData.last(where: { $0.date <= meal.date })?.value else {
-                print("❌ No baseline glucose found for \(meal.description)")
-                return nil
-            }
+    private func getMealsFileURL() -> URL {
+        let manager = FileManager.default
+        let url = manager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return url.appendingPathComponent("meals.json")
+    }
+    
+    
+    func loadMealsFromCSV() {
+        print("🌱 Loading meals from CSV...")
 
-            let recoveryThreshold: Double = 10  // mg/dL margin
-            let baselineLow = preMealGlucose - recoveryThreshold
-            let baselineHigh = preMealGlucose + recoveryThreshold
-
-            let mealTime = meal.date
-            let endTime = nextMeal?.date ?? mealTime.addingTimeInterval(4 * 60 * 60)  // ⏳ Extend window to 4h
-
-            let postMealGlucose = glucoseData
-                .filter { $0.date > mealTime && $0.date <= endTime }
-                .sorted { $0.date < $1.date }
-
-            var consecutiveInRangeCount = 0
-            let requiredConsecutive = 3  // e.g., need 3 in-range readings in a row
-            var firstRecoveryTime: Date?
-
-            for sample in postMealGlucose {
-                if sample.value >= baselineLow && sample.value <= baselineHigh {
-                    consecutiveInRangeCount += 1
-                    if consecutiveInRangeCount == 1 {
-                        firstRecoveryTime = sample.date
-                    }
-
-                    if consecutiveInRangeCount >= requiredConsecutive, let recoveryDate = firstRecoveryTime {
-                        let recoveryMinutes = recoveryDate.timeIntervalSince(mealTime) / 60
-                        let minimumRecoveryMinutes = max(recoveryMinutes, 45)  // ⏳ Enforce minimum recovery time
-                        return minimumRecoveryMinutes
-                    }
-                } else {
-                    consecutiveInRangeCount = 0
-                    firstRecoveryTime = nil
-                }
-            }
-
-            return nil  // No stable recovery detected
+        guard let path = Bundle.main.path(forResource: "foodLogs_data", ofType: "csv") else {
+            print("❌ CSV file not found.")
+            return
         }
 
+        do {
+            let content = try String(contentsOfFile: path)
+            let rows = content.components(separatedBy: .newlines).filter { !$0.isEmpty }
 
-            
-        func generateInsight(for meal: MealLog, using healthManager: HealthManager) {
-            let now = Date()
-            let mealReadyTime = meal.date.addingTimeInterval(2 * 60 * 60)
-            
-            guard now >= mealReadyTime else {
-                print("⏳ Meal is too recent—insight not ready yet for \(meal.description)")
+            guard let headerLine = rows.first else {
+                print("❌ No header row found.")
                 return
             }
-            
-            if let existing = mealInsights[meal.id], existing.spikeValue != 0 {
-                // 🛑 Skip recomputation if we already have a good spike
-                return
-            }
-            
-            let mealStart = meal.date
-            let nextMeal = findNextMeal(after: meal)  // ✅ NEW: find the next meal
-            let mealEnd = nextMeal?.date ?? Calendar.current.date(byAdding: .hour, value: 3, to: mealStart)!
-            
-            print("🔍 Generating insight for: \(meal.description) at \(mealStart)")
-            if let next = nextMeal {
-                print("➡️ Next meal: \(next.description) at \(next.date)")
-            } else {
-                print("➡️ No next meal—using default 3h window")
-            }
-            
-            healthManager.fetchGlucoseData(startDate: mealStart.addingTimeInterval(-2 * 60 * 60), endDate: mealEnd) { glucoseSamples in
-                
-                guard let spike = healthManager.analyzeGlucoseImpact(for: meal, glucoseData: glucoseSamples) else {
-                    print("⚠️ No spike detected for \(meal.description)")
-                    DispatchQueue.main.async {
-                        self.mealInsights[meal.id] = InsightGenerator.generateTags(for: 0, recoveryMinutes: 90, percentile: 50)
-                    }
-                    return
-                }
-                
-                let recoveryMinutes = self.calculateRecoveryTime(for: meal, glucoseData: glucoseSamples, nextMeal: nextMeal) ?? 999  // ✅ NEW: real recovery time or placeholder
-                print("✅ Spike: \(spike) mg/dL — Recovery: \(recoveryMinutes) min")
-                
-                let percentile = 50.0  // ✅ We’re skipping this for now
-                
-                let insight = InsightGenerator.generateTags(for: spike, recoveryMinutes: Int(recoveryMinutes), percentile: percentile)
-                
-                DispatchQueue.main.async {
-                    self.mealInsights[meal.id] = insight
-                }
-            }
-        }
-        
-        func loadTestMeals() {
-            print("🌱 Loading test meals...")
 
-            let testMeals: [MealLog] = [
-                MealLog(
-                    description: "1 rye bread, 2 eggs, 1/2 tbsp olive oil, 1/2 avocado, 1/4 cup georgian tomato sauce, 1 medium peach",
-                    date: Calendar.current.date(from: DateComponents(year: 2025, month: 7, day: 7, hour: 8, minute: 25))!,
-                    calories: 810,
-                    protein: 35,
-                    carbs: 60,
-                    fat: 45
-                ),
-                MealLog(
-                    description: "1 cup penne pasta, 60g white cabbage, 1 cup pork thighs, 120g chickpeas, 100g tomato sauce, 1 cup red grapes",
-                    date: Calendar.current.date(from: DateComponents(year: 2025, month: 7, day: 7, hour: 14, minute: 50))!,
-                    calories: 1178,
-                    protein: 60,
-                    carbs: 110,
-                    fat: 50
+            let headers = headerLine.components(separatedBy: ",")
+            let dataRows = rows.dropFirst()
+
+            var groupedIngredients: [String: [Ingredient]] = [:]
+            var mealMeta: [String: (date: Date, name: String)] = [:]
+
+            let dateFormatter = DateFormatter()
+            dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+            dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSX"
+
+
+            for line in dataRows {
+                let cols = line.components(separatedBy: ",")
+
+                // Match the number of columns to your CSV (adjust if needed)
+                guard cols.count >= 36 else { continue }
+
+                let timestamp = cols[0]
+                guard let date = dateFormatter.date(from: timestamp) else {
+                    print("⚠️ Invalid date: \(timestamp)")
+                    continue
+                }
+
+                let groupKey = timestamp
+                let mealName = "Meal at \(date.formatted(date: .omitted, time: .shortened))"
+
+                let ingredient = Ingredient(
+                    name: cols[2],
+                    unit: cols[3],
+                    quantity: Double(cols[4]) ?? 0,
+                    mass: Double(cols[5]) ?? 0,
+                    calories: Double(cols[7]) ?? 0,
+                    carbs: Double(cols[8]) ?? 0,
+                    fat: Double(cols[9]) ?? 0,
+                    protein: Double(cols[10]) ?? 0,
+                    saturatedFat: Double(cols[11]),
+                    transFat: Double(cols[12]),
+                    monoFat: Double(cols[13]),
+                    polyFat: Double(cols[14]),
+                    cholesterol: Double(cols[15]),
+                    sodium: Double(cols[16]),
+                    fiber: Double(cols[17]),
+                    sugar: Double(cols[18]),
+                    sugarAdded: Double(cols[19]),
+                    vitaminD: Double(cols[20]),
+                    calcium: Double(cols[21]),
+                    iron: Double(cols[22]),
+                    potassium: Double(cols[23]),
+                    vitaminA: Double(cols[24]),
+                    vitaminC: Double(cols[25]),
+                    alcohol: Double(cols[26]),
+                    sugarAlcohol: Double(cols[27]),
+                    vitaminB12: Double(cols[28]),
+                    vitaminB12Added: Double(cols[29]),
+                    vitaminB6: Double(cols[30]),
+                    vitaminE: Double(cols[31]),
+                    vitaminEAdded: Double(cols[32]),
+                    magnesium: Double(cols[33]),
+                    phosphorus: Double(cols[34]),
+                    iodine: Double(cols[35])
                 )
-            ]
 
-            meals.append(contentsOf: testMeals)
-            saveMeals()
+                groupedIngredients[groupKey, default: []].append(ingredient)
+                mealMeta[groupKey] = (date: date, name: mealName)
+            }
+
+            let parsedMeals: [MealLog] = groupedIngredients.compactMap { key, ingredients in
+                guard let meta = mealMeta[key] else { return nil }
+
+                let totalCalories = ingredients.reduce(0) { $0 + $1.calories }
+                let totalCarbs = ingredients.reduce(0) { $0 + $1.carbs }
+                let totalFat = ingredients.reduce(0) { $0 + $1.fat }
+                let totalProtein = ingredients.reduce(0) { $0 + $1.protein }
+                
+
+                return MealLog(
+                    date: meta.date,
+                    name: meta.name,
+                    notes: nil,
+                    ingredients: ingredients,
+                    calories: totalCalories,
+                    protein: totalProtein,
+                    carbs: totalCarbs,
+                    fat: totalFat,
+                    spikeValue: nil,
+                    auc: nil,
+                    avgDelta: nil,
+                    recoveryTime: nil,
+                    responseScore: nil,
+                    tags: []
+                )
+            }
+
+            let sortedMeals = parsedMeals.sorted { $0.date > $1.date }
+
+            DispatchQueue.main.async {
+                self.meals.append(contentsOf: sortedMeals)
+                self.saveMeals()
+                print("✅ Loaded \(sortedMeals.count) meals from CSV (sorted by time 🕒)")
+            }
+
+
+        } catch {
+            print("❌ Error reading CSV: \(error)")
         }
-
-        
     }
-    
-    
 
+}

@@ -15,7 +15,7 @@ struct MealInsightView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
-                Text("🍽 Meal: \(meal.description) at \(formattedDate(meal.date))")
+                Text("🍽 Meal: \(meal.name) at \(formattedDate(meal.date))")
 
                 Text("📈 Spike: +\(Int(insight.spikeValue)) mg/dL → \(insight.spikeTag)")
                     .font(.subheadline)
