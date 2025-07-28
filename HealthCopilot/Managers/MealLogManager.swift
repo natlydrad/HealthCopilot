@@ -82,7 +82,6 @@ class MealLogManager: ObservableObject {
             for line in dataRows {
                 let cols = line.components(separatedBy: ",")
 
-                // Match the number of columns to your CSV (adjust if needed)
                 guard cols.count >= 36 else { continue }
 
                 let timestamp = cols[0]
@@ -92,7 +91,6 @@ class MealLogManager: ObservableObject {
                 }
 
                 let groupKey = timestamp
-                let mealName = "Meal at \(date.formatted(date: .omitted, time: .shortened))"
 
                 let ingredient = Ingredient(
                     name: cols[2],
@@ -131,8 +129,21 @@ class MealLogManager: ObservableObject {
                 )
 
                 groupedIngredients[groupKey, default: []].append(ingredient)
-                mealMeta[groupKey] = (date: date, name: mealName)
+                // Only set mealMeta if it's not already set
+                if mealMeta[groupKey] == nil {
+                    mealMeta[groupKey] = (date: date, name: "") // name will be set later
+                }
             }
+
+            // ✅ Now compute the meal name for each groupKey once
+            for (groupKey, ingredients) in groupedIngredients {
+                let mealName = ingredients.map { $0.name }.joined(separator: ", ")
+                if var meta = mealMeta[groupKey] {
+                    meta.name = mealName
+                    mealMeta[groupKey] = meta
+                }
+            }
+
 
             let parsedMeals: [MealLog] = groupedIngredients.compactMap { key, ingredients in
                 guard let meta = mealMeta[key] else { return nil }
