@@ -15,6 +15,8 @@ class HealthManager: ObservableObject {
     @Published var exerciseMinutes: Double = 0.0
     @Published var latestHeartRate: Double = 0.0
     @Published var insights: [GlucoseInsight] = []
+    @Published var glucoseSamples: [GlucoseSample] = []
+
 
     
     init() {

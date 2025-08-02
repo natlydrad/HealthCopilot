@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import UIKit
 
 class MealLogManager: ObservableObject {
     @Published var meals: [MealLog] = []
@@ -185,5 +186,6 @@ class MealLogManager: ObservableObject {
             print("❌ Error reading CSV: \(error)")
         }
     }
-
+    
+    
 }

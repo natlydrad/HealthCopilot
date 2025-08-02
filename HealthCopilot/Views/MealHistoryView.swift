@@ -14,6 +14,16 @@ struct MealHistoryView: View {
     
     var body: some View {
         NavigationView {
+            Text("Export Meal Events")
+                        .onAppear {
+                            let mealEvents = fuseMealLogsWithGlucose(
+                                meals: mealLogManager.meals,
+                                glucoseData: healthManager.glucoseSamples
+                            )
+                            
+                            let csv = exportMealEventsToCSV(events: mealEvents)
+                            shareCSV(csv)
+                        }
             List {
                 ForEach(mealLogManager.meals, id: \.id) { meal in
                     VStack(alignment: .leading, spacing: 4) {
@@ -34,3 +44,116 @@ struct MealHistoryView: View {
         }
     }
 }
+
+func exportMealEventsToCSV(events: [MealEvent]) -> String {
+    var csv = "date,carbs,fiber,fat,protein,mealName,preMealGlucose,aucGlucose,spike,mealID\n"
+    let formatter = ISO8601DateFormatter()
+
+    for event in events {
+        let row = [
+            formatter.string(from: event.timestamp),
+            "\(event.carbs)",
+            "\(event.fiber)",
+            "\(event.fat)",
+            "\(event.protein)",
+            "\"\(event.mealName ?? "")\"",
+            "\(event.preMealGlucose ?? -1)",
+            "\(event.aucGlucose ?? -1)",
+            "\(event.spike == true ? 1 : 0)",
+            event.mealID ?? ""
+        ].joined(separator: ",")
+
+        csv.append("\(row)\n")
+    }
+
+    return csv
+}
+
+func shareCSV(_ csv: String) {
+    let fileName = "MealEvents.csv"
+    let path = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+
+    do {
+        try csv.write(to: path, atomically: true, encoding: .utf8)
+
+        let activityVC = UIActivityViewController(activityItems: [path], applicationActivities: nil)
+        if let window = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let rootVC = window.windows.first?.rootViewController {
+            rootVC.present(activityVC, animated: true)
+        }
+    } catch {
+        print("❌ CSV save error: \(error)")
+    }
+}
+
+func fuseMealLogsWithGlucose(
+    meals: [MealLog],
+    glucoseData: [GlucoseSample],
+    preMealWindowMinutes: Int = 30,
+    postMealWindowMinutes: Int = 120
+) -> [MealEvent] {
+    var mealEvents: [MealEvent] = []
+
+    for meal in meals {
+        let mealTime = meal.date
+
+        // 1. Get CGM values 30 min before
+        let preMealGlucose = glucoseData
+            .filter { $0.date >= mealTime.addingTimeInterval(TimeInterval(-preMealWindowMinutes * 60)) &&
+                      $0.date < mealTime }
+            .map { $0.value }
+
+        let avgPreMealGlucose = preMealGlucose.isEmpty ? nil : preMealGlucose.reduce(0, +) / Double(preMealGlucose.count)
+
+        // 2. Get CGM values 2h after
+        let postMealGlucose = glucoseData
+            .filter { $0.date >= mealTime &&
+                      $0.date <= mealTime.addingTimeInterval(TimeInterval(postMealWindowMinutes * 60)) }
+
+        let auc = calculateAUC(postMealGlucose: postMealGlucose, baseline: avgPreMealGlucose)
+
+        // 3. Determine spike (e.g., if value ever > 140)
+        let spike = postMealGlucose.contains { $0.value > 140 }
+
+        // 4. Build MealEvent
+        let event = MealEvent(
+            timestamp: mealTime,
+            carbs: meal.carbs,
+            fiber: meal.ingredients.reduce(0) { $0 + ($1.fiber ?? 0) },
+            fat: meal.fat,
+            protein: meal.protein,
+            mealName: meal.name,
+            preMealGlucose: avgPreMealGlucose,
+            aucGlucose: auc,
+            spike: spike,
+            sleepPreviousNight: nil,
+            stepsBeforeMeal: nil,
+            heartRateBeforeMeal: nil,
+            //moodBeforeMeal: nil,
+            mealID: meal.id.uuidString
+        )
+
+        mealEvents.append(event)
+    }
+
+    return mealEvents
+}
+
+func calculateAUC(postMealGlucose: [GlucoseSample], baseline: Double?) -> Double? {
+    guard let baseline = baseline, postMealGlucose.count >= 2 else { return nil }
+
+    let sorted = postMealGlucose.sorted { $0.date < $1.date }
+
+    var auc = 0.0
+    for i in 1..<sorted.count {
+        let dt = sorted[i].date.timeIntervalSince(sorted[i-1].date) / 60.0 // minutes
+        let val1 = sorted[i-1].value - baseline
+        let val2 = sorted[i].value - baseline
+        let trapezoid = max((val1 + val2) / 2, 0) * dt
+        auc += trapezoid
+    }
+
+    return auc
+}
+
+
