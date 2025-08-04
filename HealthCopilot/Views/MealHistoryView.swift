@@ -6,44 +6,47 @@
 //
 
 import SwiftUI
-
+import UIKit
 
 struct MealHistoryView: View {
     @EnvironmentObject var mealLogManager: MealLogManager
     @EnvironmentObject var healthManager: HealthManager
-    
-    var body: some View {
-        NavigationView {
-            Text("Export Meal Events")
-                        .onAppear {
-                            let mealEvents = fuseMealLogsWithGlucose(
-                                meals: mealLogManager.meals,
-                                glucoseData: healthManager.glucoseSamples
-                            )
-                            
-                            let csv = exportMealEventsToCSV(events: mealEvents)
-                            shareCSV(csv)
-                        }
-            List {
-                ForEach(mealLogManager.meals, id: \.id) { meal in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(meal.name)
-                            .font(.headline)
-                        Text(meal.date.formatted(date: .abbreviated, time: .shortened))
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        Text("Calories: \(Int(meal.calories)) • Protein: \(Int(meal.protein))g • Carbs: \(Int(meal.carbs))g • Fat: \(Int(meal.fat))g")
-                            .font(.caption)
-                    }
-                    .padding(.vertical, 4)
+    @State private var didAutoExport = false
 
+    var body: some View {
+        NavigationStack {
+            VStack {
+                Text("Exporting Meal Events...")
+
+                Button("Export CSV Again") {
+                    exportAndShare()
                 }
-            .navigationTitle("Meal History")
-                
+            }
+            .navigationTitle("Meal Export")
+            .onChange(of: mealLogManager.meals.count) { mealCount in
+                if !didAutoExport && mealCount > 0 {
+                    didAutoExport = true
+                    exportAndShare()
+                }
             }
         }
     }
+
+    private func exportAndShare() {
+        print("🍔 meals.count =", mealLogManager.meals.count)
+        print("📈 glucoseSamples.count =", healthManager.glucoseSamples.count)
+
+        let mealEvents = fuseMealLogsWithGlucose(
+            meals: mealLogManager.meals,
+            glucoseData: healthManager.glucoseSamples
+        )
+        print("🧪 mealEvents.count =", mealEvents.count)
+
+        let csv = exportMealEventsToCSV(events: mealEvents)
+        shareCSV(csv)
+    }
 }
+
 
 func exportMealEventsToCSV(events: [MealEvent]) -> String {
     var csv = "date,carbs,fiber,fat,protein,mealName,preMealGlucose,aucGlucose,spike,mealID\n"
@@ -157,3 +160,16 @@ func calculateAUC(postMealGlucose: [GlucoseSample], baseline: Double?) -> Double
 }
 
 
+/*
+List {
+    ForEach(mealLogManager.meals, id: \.id) { meal in
+        VStack(alignment: .leading, spacing: 4) {
+            Text(meal.name).font(.headline)
+            Text(meal.date.formatted(date: .abbreviated, time: .shortened))
+                .font(.subheadline).foregroundColor(.secondary)
+            Text("Calories: \(Int(meal.calories)) • Protein: \(Int(meal.protein))g • Carbs: \(Int(meal.carbs))g • Fat: \(Int(meal.fat))g")
+                .font(.caption)
+        }
+        .padding(.vertical, 4)
+    }
+}*/
