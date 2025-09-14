@@ -1,9 +1,9 @@
 #
-//  meal_model.py
-//  HealthCopilot
-//
-//  Created by Natalie Radu on 8/4/25.
-//
+#  meal_model.py
+# HealthCopilot
+#
+# Created by Natalie Radu on 8/4/25.
+#
 
 import pandas as pd
 import xgboost as xgb
@@ -11,7 +11,9 @@ import shap
 import matplotlib.pyplot as plt
 
 # Load your CSV
-df = pd.read_csv("MealEvents.csv")
+import os
+base_dir = os.path.dirname(__file__)
+df = pd.read_csv(os.path.join(base_dir, "MealEvents.csv"))
 
 # Drop missing values (you can make this more sophisticated later)
 df = df.dropna()
