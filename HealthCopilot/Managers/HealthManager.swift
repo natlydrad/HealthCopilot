@@ -420,6 +420,33 @@ class HealthManager: ObservableObject {
         healthStore.execute(query)
     }
     
+    func exportGlucoseCSV(start: Date, end: Date) {
+        fetchGlucoseData(startDate: start, endDate: end) { samples in
+            guard !samples.isEmpty else {
+                print("⚠️ No glucose samples found in range.")
+                return
+            }
+            
+            var csv = "timestamp,glucose\n"
+            let isoFormatter = ISO8601DateFormatter()
+            
+            for s in samples {
+                csv += "\(isoFormatter.string(from: s.date)),\(s.value)\n"
+            }
+            
+            if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                let fileURL = dir.appendingPathComponent("GlucoseReadings.csv")
+                do {
+                    try csv.write(to: fileURL, atomically: true, encoding: .utf8)
+                    print("✅ Exported to \(fileURL)")
+                } catch {
+                    print("❌ Failed to export CSV: \(error)")
+                }
+            }
+        }
+    }
+
+    
     func analyzeGlucoseImpact(for meal: MealLog, glucoseData: [GlucoseSample]) -> Double? {
         let mealTime = meal.date
         let windowEnd = Calendar.current.date(byAdding: .hour, value: 2, to: mealTime)!
