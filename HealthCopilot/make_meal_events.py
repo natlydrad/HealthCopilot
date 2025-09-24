@@ -46,6 +46,9 @@ for col in ["carbs", "fat", "protein", "fiber"]:
 window = pd.Timedelta("2h")
 records = []
 
+# --- Extended Episode Metrics ---
+records = []
+
 for _, meal in meal_groups.iterrows():
     t0 = meal["time (utc)"]
 
@@ -53,21 +56,43 @@ for _, meal in meal_groups.iterrows():
     pre_glucose = glucose.loc[glucose["timestamp"] <= t0].tail(1)
     pre_val = pre_glucose["glucose"].values[0] if not pre_glucose.empty else np.nan
 
-    # Post-meal glucose window
+    # Post-meal glucose window (2h)
     post = glucose[(glucose["timestamp"] > t0) & (glucose["timestamp"] <= t0 + window)]
-    if post.empty:
+    if post.empty or np.isnan(pre_val):
         continue
 
-    # Auto-detect interval for AUC
+    # Median interval (assume 5 min if missing)
     interval = post["timestamp"].diff().median()
     if pd.isna(interval):
         interval = pd.Timedelta("5min")
     minutes = interval.total_seconds() / 60
 
-    # Outcome metrics
-    auc = np.trapz(post["glucose"].values, dx=minutes)
-    delta = post["glucose"].max() - post["glucose"].min()
-    spike = int(post["glucose"].max() > pre_val + 30) if not np.isnan(pre_val) else np.nan
+    # --- Outcome metrics ---
+    g_vals = post["glucose"].values
+    t_vals = (post["timestamp"] - t0).dt.total_seconds() / 60  # minutes since meal
+
+    auc = np.trapz(g_vals, dx=minutes)
+    delta = g_vals.max() - pre_val
+    spike = int(g_vals.max() > pre_val + 30)
+
+    # Time to peak
+    peak_idx = g_vals.argmax()
+    time_to_peak = t_vals.iloc[peak_idx] if len(t_vals) > 0 else np.nan
+
+    # Duration above baseline (+10 mg/dL)
+    above_mask = g_vals > (pre_val + 10)
+    duration_above = above_mask.sum() * minutes
+
+    # Time to return to baseline (±10 mg/dL of pre_val)
+    return_mask = np.where(np.abs(g_vals - pre_val) <= 10)[0]
+    time_to_return = np.nan
+    if len(return_mask) > 0:
+        time_to_return = t_vals.iloc[return_mask[0]]
+    # If never returns in 2h window → censored (NaN)
+
+    # Count major fluctuations (>±30 mg/dL swings relative to pre)
+    fluct_mask = np.abs(g_vals - pre_val) > 30
+    num_fluctuations = int(fluct_mask.sum())
 
     records.append({
         "meal_time": t0,
@@ -78,8 +103,18 @@ for _, meal in meal_groups.iterrows():
         "preMealGlucose": pre_val,
         "aucGlucose": auc,
         "deltaGlucose": delta,
-        "spike": spike
+        "spike": spike,
+        "timeToPeak": time_to_peak,
+        "durationAboveBaseline": duration_above,
+        "timeToReturnBaseline": time_to_return,
+        "numFluctuations": num_fluctuations
     })
+
+df = pd.DataFrame(records)
+out_path = os.path.join(base_dir, "MealEvents.csv")
+df.to_csv(out_path, index=False)
+print(f"✅ Saved MealEvents.csv with {len(df)} rows and new episode metrics")
+
 
 df = pd.DataFrame(records)
 out_path = os.path.join(base_dir, "MealEvents.csv")
