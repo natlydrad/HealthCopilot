@@ -23,7 +23,7 @@ meals.columns = meals.columns.str.strip()
 
 # --- Helper: rolling glucose stats ---
 def compute_glucose_stats(glucose, t0, window="30min"):
-    """Compute mean, std, slope of glucose in window before t0"""
+    """Compute mean, std, slope of glucose strictly before t0"""
     t0 = pd.to_datetime(t0)
     g = glucose[(glucose["timestamp"] > t0 - pd.Timedelta(window)) &
                 (glucose["timestamp"] <= t0)]
@@ -63,16 +63,20 @@ for _, meal in meals.iterrows():
     row["carb_fiber_ratio"] = row["carbs"] / (row["fiber"] + 1e-6)
     row["carb_protein_ratio"] = row["carbs"] / (row["protein"] + 1e-6)
 
-    # --- Pre-meal glucose context ---
+    # --- Pre-meal glucose context (strictly BEFORE meal) ---
     mean30, std30, slope30 = compute_glucose_stats(glucose, t0, "30min")
     mean60, std60, slope60 = compute_glucose_stats(glucose, t0, "60min")
+    mean120, std120, slope120 = compute_glucose_stats(glucose, t0, "120min")
 
-    row["glucose_mean_30m"] = mean30
-    row["glucose_std_30m"] = std30
-    row["glucose_slope_30m"] = slope30
-    row["glucose_mean_60m"] = mean60
-    row["glucose_std_60m"] = std60
-    row["glucose_slope_60m"] = slope60
+    row["glucose_mean_30m_before"] = mean30
+    row["glucose_std_30m_before"] = std30
+    row["glucose_slope_30m_before"] = slope30
+    row["glucose_mean_60m_before"] = mean60
+    row["glucose_std_60m_before"] = std60
+    row["glucose_slope_60m_before"] = slope60
+    row["glucose_mean_120m_before"] = mean120
+    row["glucose_std_120m_before"] = std120
+    row["glucose_slope_120m_before"] = slope120
 
     # --- Circadian / timing context ---
     row["hour_of_day"] = t0.hour
@@ -83,10 +87,11 @@ for _, meal in meals.iterrows():
     row["fiber_preload"] = 1 if row["fiber"] >= 5 else 0  # tweak threshold later
 
     # --- Targets (from MealEvents.csv) ---
-    # pass through outcome variables so X + y are aligned
-    for col in ["aucGlucose", "deltaGlucose", "spike",
-                "timeToPeak", "durationAboveBaseline",
-                "timeToReturnBaseline", "numFluctuations"]:
+    for col in [
+        "aucGlucose", "deltaGlucose", "spike",
+        "timeToPeak", "durationAboveBaseline",
+        "timeToReturnBaseline", "numFluctuations"
+    ]:
         if col in meal:
             row[col] = meal[col]
 
