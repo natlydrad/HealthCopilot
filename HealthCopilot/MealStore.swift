@@ -1,17 +1,9 @@
-//
-//  MealStore.swift
-//  HealthCopilot
-//
-//  Created by Natalie Radu on 9/27/25.
-//
-
 import Foundation
 
 struct Meal: Identifiable, Codable {
     let id: UUID
     var timestamp: Date
     var text: String
-    var verified: Bool
 }
 
 class MealStore: ObservableObject {
@@ -23,21 +15,15 @@ class MealStore: ObservableObject {
     }
     
     func addMeal(text: String) {
-        let newMeal = Meal(id: UUID(), timestamp: Date(), text: text, verified: false)
+        let newMeal = Meal(id: UUID(), timestamp: Date(), text: text)
         meals.append(newMeal)
         saveMeals()
     }
     
-    func updateMeal(meal: Meal, newText: String) {
+    func updateMeal(meal: Meal, newText: String, newDate: Date) {
         if let index = meals.firstIndex(where: { $0.id == meal.id }) {
             meals[index].text = newText
-            saveMeals()
-        }
-    }
-    
-    func toggleVerify(meal: Meal) {
-        if let index = meals.firstIndex(where: { $0.id == meal.id }) {
-            meals[index].verified.toggle()
+            meals[index].timestamp = newDate
             saveMeals()
         }
     }
@@ -68,3 +54,4 @@ class MealStore: ObservableObject {
         }
     }
 }
+

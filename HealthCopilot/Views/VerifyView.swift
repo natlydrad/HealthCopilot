@@ -8,19 +8,12 @@ struct VerifyView: View {
     
     var body: some View {
         List {
-            ForEach(store.meals) { meal in
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text(meal.text)
-                        Text(meal.timestamp.formatted())
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                    }
-                    Spacer()
-                    Button(meal.verified ? "✅" : "❌") {
-                        store.toggleVerify(meal: meal)
-                    }
-                    .buttonStyle(.borderless) // 👈 lets the button work inside List row
+            ForEach(store.meals.sorted(by: { $0.timestamp > $1.timestamp })) { meal in
+                VStack(alignment: .leading) {
+                    Text(meal.text)
+                    Text(meal.timestamp.formatted())
+                        .font(.caption)
+                        .foregroundColor(.gray)
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
@@ -41,12 +34,7 @@ struct VerifyView: View {
                     
                     Section {
                         Button("Save Changes") {
-                            store.updateMeal(meal: meal, newText: editText)
-                            // also update timestamp
-                            if let idx = store.meals.firstIndex(where: { $0.id == meal.id }) {
-                                store.meals[idx].timestamp = editDate
-                                store.saveMeals()
-                            }
+                            store.updateMeal(meal: meal, newText: editText, newDate: editDate)
                             editingMeal = nil
                         }
                         .foregroundColor(.blue)
