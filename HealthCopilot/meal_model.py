@@ -1,12 +1,5 @@
 # meal_model.py
-# HealthCopilot Stage-1: Multi-target modeling
-#
-# Input: MealFeatures.csv
-# Output: RESULTS/results_<timestamp>/ with:
-#         - metrics.json
-#         - SHAP plots (PNG files)
-#
-# Note: CSV snapshots & PDF are handled in make_report.py
+# HealthCopilot Stage-1: Multi-target modeling with train/test split
 
 import os
 import json
@@ -15,6 +8,9 @@ import matplotlib.pyplot as plt
 import shap
 from sklearn.metrics import mean_absolute_error, r2_score, accuracy_score, f1_score
 from datetime import datetime
+
+# Train/test split
+from sklearn.model_selection import train_test_split
 
 # Try XGBoost, fallback to sklearn if missing
 try:
@@ -62,6 +58,11 @@ for target in targets:
     y = df[target]
     X = df[feature_cols]
 
+    # ⏳ Chronological train/test split
+    split_idx = int(len(df) * 0.7)  # 70% train, 30% test
+    X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
+    y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
+
     # Pick model
     if target == "spike":  # classification
         if USE_XGB:
@@ -83,36 +84,54 @@ for target in targets:
             model = RandomForestRegressor(n_estimators=100, random_state=42)
 
     # Train
-    model.fit(X, y)
+    model.fit(X_train, y_train)
     print("✅ Model trained")
 
-    # Evaluate
+    # Evaluate on train and test
+    metrics_summary[target] = {}
     if target == "spike":
-        y_pred = model.predict(X)
-        acc = accuracy_score(y, y_pred)
-        f1 = f1_score(y, y_pred)
-        metrics_summary[target] = {"ACC": acc, "F1": f1}
-        print(f"Metrics for {target}: ACC={acc:.3f}, F1={f1:.3f}")
-    else:
-        y_pred = model.predict(X)
-        mae = mean_absolute_error(y, y_pred)
-        r2 = r2_score(y, y_pred)
-        metrics_summary[target] = {"MAE": mae, "R2": r2}
-        print(f"Metrics for {target}: MAE={mae:.2f}, R2={r2:.2f}")
+        # Train
+        y_train_pred = model.predict(X_train)
+        acc_train = accuracy_score(y_train, y_train_pred)
+        f1_train = f1_score(y_train, y_train_pred)
+        metrics_summary[target]["train"] = {"ACC": acc_train, "F1": f1_train}
 
-    # SHAP plots
+        # Test
+        y_test_pred = model.predict(X_test)
+        acc_test = accuracy_score(y_test, y_test_pred)
+        f1_test = f1_score(y_test, y_test_pred)
+        metrics_summary[target]["test"] = {"ACC": acc_test, "F1": f1_test}
+
+        print(f"Train: ACC={acc_train:.3f}, F1={f1_train:.3f} | "
+              f"Test: ACC={acc_test:.3f}, F1={f1_test:.3f}")
+
+    else:
+        # Train
+        y_train_pred = model.predict(X_train)
+        mae_train = mean_absolute_error(y_train, y_train_pred)
+        r2_train = r2_score(y_train, y_train_pred)
+        metrics_summary[target]["train"] = {"MAE": mae_train, "R2": r2_train}
+
+        # Test
+        y_test_pred = model.predict(X_test)
+        mae_test = mean_absolute_error(y_test, y_test_pred)
+        r2_test = r2_score(y_test, y_test_pred)
+        metrics_summary[target]["test"] = {"MAE": mae_test, "R2": r2_test}
+
+        print(f"Train: MAE={mae_train:.2f}, R2={r2_train:.2f} | "
+              f"Test: MAE={mae_test:.2f}, R2={r2_test:.2f}")
+
+    # SHAP plots (still from whole dataset for now)
     try:
-        explainer = shap.Explainer(model, X)
-        sample_X = X.sample(min(50, len(X)), random_state=42)
+        explainer = shap.Explainer(model, X_train)
+        sample_X = X_test.sample(min(50, len(X_test)), random_state=42)
         shap_values = explainer(sample_X)
 
-        # Save summary plot
         shap.summary_plot(shap_values, sample_X, show=False)
         fig = plt.gcf()
         fig.savefig(os.path.join(results_dir, f"{target}_shap_summary.png"))
         plt.close(fig)
 
-        # Save waterfall plot (first sample)
         shap.plots.waterfall(shap_values[0], show=False)
         fig = plt.gcf()
         fig.savefig(os.path.join(results_dir, f"{target}_shap_waterfall.png"))

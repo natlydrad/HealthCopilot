@@ -43,7 +43,13 @@ with PdfPages(pdf_path) as pdf:
 
     y_pos = 0.9
     for target, vals in metrics_summary.items():
-        line = f"{target}: " + ", ".join([f"{k}={v:.3f}" for k, v in vals.items()])
+        parts = []
+        for k, v in vals.items():
+            if isinstance(v, (int, float)):
+                parts.append(f"{k}={v:.3f}")
+            else:
+                parts.append(f"{k}={v}")
+        line = f"{target}: " + ", ".join(parts)
         ax.text(0.05, y_pos, line, fontsize=12, va="top")
         y_pos -= 0.05
 
