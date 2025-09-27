@@ -1,53 +1,25 @@
-//
-//  HealthCopilotApp.swift
-//  HealthCopilot
-//
-//  Created by Natalie Radu on 7/5/25.
-//
-
 import SwiftUI
 
 @main
 struct HealthCopilotApp: App {
-    @StateObject var mealLogManager = MealLogManager()
-    @StateObject var healthManager = HealthManager()
+    @StateObject private var mealStore = MealStore()
     
     var body: some Scene {
         WindowGroup {
             TabView {
-                MealHistoryView()
-                    .environmentObject(mealLogManager)
-                    .environmentObject(healthManager)
-                    .tabItem {
-                        Label("History", systemImage: "list.bullet")
-                        
-                        /*
-                         NutritionView()
-                         .environmentObject(mealLogManager)
-                         .environmentObject(healthManager)
-                         .tabItem {
-                         Label("Log Meal", systemImage: "plus.circle")
-                         }
-                         
-                         GenInsightView()
-                         .environmentObject(mealLogManager)
-                         .environmentObject(healthManager)
-                         .tabItem {
-                         Label("Insights", systemImage: "list.bullet")
-                         }
-                         
-                         GlucoseScreen()
-                             .environmentObject(mealLogManager)
-                             .environmentObject(healthManager)
-                             .tabItem {
-                                 Label("Glucose", systemImage: "waveform.path.ecg")
-                             }
-                         
-                         
-                         
-                         }
-                         */
-                    }
+                NavigationView {
+                    LogView(store: mealStore)
+                }
+                .tabItem {
+                    Label("Log Meal", systemImage: "plus.circle")
+                }
+
+                NavigationView {
+                    VerifyView(store: mealStore)
+                }
+                .tabItem {
+                    Label("Verify", systemImage: "checkmark.circle")
+                }
             }
         }
     }
