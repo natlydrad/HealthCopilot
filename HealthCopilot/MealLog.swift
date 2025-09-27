@@ -73,4 +73,30 @@ struct Ingredient: Identifiable, Codable {
     var iodine: Double?
 }
 
+// MARK: - Unified modeling struct
+
+struct MealEvent: Codable {
+    var timestamp: Date
+
+    // 🥗 Nutritional Info
+    var carbs: Double
+    var fiber: Double
+    var fat: Double
+    var protein: Double
+    var mealName: String?
+
+    // 🩸 CGM Features
+    var preMealGlucose: Double?
+    var aucGlucose: Double?
+    var spike: Bool?
+
+    // ⌚ Apple Health
+    var sleepPreviousNight: Double?
+    var stepsBeforeMeal: Int?
+    var heartRateBeforeMeal: Double?
+    //var moodBeforeMeal: String?
+
+    var mealID: String?
+}
+
 
