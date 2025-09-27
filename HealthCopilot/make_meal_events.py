@@ -1,3 +1,6 @@
+#This makes meal events. It functions as the TARGET OUTPUTS of the ML model,
+#what the model is attempting to predict. These are the true events, ie labels.
+
 import pandas as pd
 import numpy as np
 import os
