@@ -18,12 +18,12 @@ class MealStore: ObservableObject {
     }
     
     // MARK: - CRUD
-    
+
     func addMeal(text: String) {
         let newMeal = Meal(id: UUID(), timestamp: Date(), text: text)
         meals.append(newMeal)
         saveMeals()
-        SyncManager.shared.syncMeals([newMeal])   // <--- NEW: try sync immediately
+        SyncManager.shared.uploadMeal(newMeal)   // <--- NEW: try sync immediately
     }
     
     func updateMeal(meal: Meal, newText: String, newDate: Date) {
@@ -32,7 +32,7 @@ class MealStore: ObservableObject {
             meals[index].timestamp = newDate
             meals[index].pendingSync = true   // <--- re-sync after edit
             saveMeals()
-            SyncManager.shared.syncMeals([meals[index]])   // <--- try sync immediately
+            SyncManager.shared.uploadMeal(meals[index])   // <--- try sync immediately
         }
     }
     
