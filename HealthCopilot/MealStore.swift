@@ -9,7 +9,7 @@ import Foundation
 
 struct Meal: Identifiable, Codable {
     let id: UUID
-    let timestamp: Date
+    var timestamp: Date
     var text: String
     var verified: Bool
 }
