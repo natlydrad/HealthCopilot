@@ -1,15 +1,19 @@
 # meal_model.py
-# HealthCopilot Stage-1: Multi-target modeling + PDF Report
+# HealthCopilot Stage-1: Multi-target modeling
 #
 # Input: MealFeatures.csv
-# Output: Single PDF report (metrics cover page + SHAP plots, timestamped)
+# Output: RESULTS/results_<timestamp>/ with:
+#         - metrics.json
+#         - SHAP plots (PNG files)
+#
+# Note: CSV snapshots & PDF are handled in make_report.py
 
 import os
+import json
 import pandas as pd
 import matplotlib.pyplot as plt
 import shap
 from sklearn.metrics import mean_absolute_error, r2_score, accuracy_score, f1_score
-from matplotlib.backends.backend_pdf import PdfPages
 from datetime import datetime
 
 # Try XGBoost, fallback to sklearn if missing
@@ -20,8 +24,14 @@ except ImportError:
     from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
     USE_XGB = False
 
-# --- Timestamp for filenames ---
+# --- Timestamp + results folder ---
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
+project_dir = os.path.dirname(os.path.dirname(__file__))
+results_root = os.path.join(project_dir, "RESULTS")
+os.makedirs(results_root, exist_ok=True)
+
+results_dir = os.path.join(results_root, f"results_{timestamp}")
+os.makedirs(results_dir, exist_ok=True)
 
 # --- Load dataset ---
 base_dir = os.path.dirname(__file__)
@@ -38,15 +48,13 @@ targets = [
     "numFluctuations"
 ]
 targets = [t for t in targets if t in df.columns]
-
 feature_cols = [c for c in df.columns if c not in targets + ["meal_time"]]
 
 print("Features being used:", feature_cols)
 print("Targets to analyze:", targets)
 
-# --- Storage for metrics + plots ---
-metrics_summary = []
-plots = []  # store (fig, title) pairs
+# --- Storage for metrics ---
+metrics_summary = {}
 
 # --- Train + evaluate + collect plots ---
 for target in targets:
@@ -83,59 +91,45 @@ for target in targets:
         y_pred = model.predict(X)
         acc = accuracy_score(y, y_pred)
         f1 = f1_score(y, y_pred)
-        metrics_summary.append(f"{target}: ACC={acc:.3f}, F1={f1:.3f}")
+        metrics_summary[target] = {"ACC": acc, "F1": f1}
         print(f"Metrics for {target}: ACC={acc:.3f}, F1={f1:.3f}")
     else:
         y_pred = model.predict(X)
         mae = mean_absolute_error(y, y_pred)
         r2 = r2_score(y, y_pred)
-        metrics_summary.append(f"{target}: MAE={mae:.2f}, R2={r2:.2f}")
+        metrics_summary[target] = {"MAE": mae, "R2": r2}
         print(f"Metrics for {target}: MAE={mae:.2f}, R2={r2:.2f}")
 
-    # SHAP plots -> capture as figures
+    # SHAP plots
     try:
         explainer = shap.Explainer(model, X)
         sample_X = X.sample(min(50, len(X)), random_state=42)
         shap_values = explainer(sample_X)
 
-        # Summary plot
+        # Save summary plot
         shap.summary_plot(shap_values, sample_X, show=False)
         fig = plt.gcf()
-        plots.append((fig, f"{target} - SHAP Summary"))
+        fig.savefig(os.path.join(results_dir, f"{target}_shap_summary.png"))
         plt.close(fig)
 
-        # Waterfall plot (first sample)
+        # Save waterfall plot (first sample)
         shap.plots.waterfall(shap_values[0], show=False)
         fig = plt.gcf()
-        plots.append((fig, f"{target} - SHAP Waterfall"))
+        fig.savefig(os.path.join(results_dir, f"{target}_shap_waterfall.png"))
         plt.close(fig)
 
-        print(f"✅ SHAP plots captured for {target}")
+        print(f"✅ SHAP plots saved for {target}")
 
     except Exception as e:
         print(f"⚠️ SHAP failed for {target}: {e}")
 
-# --- Build PDF ---
-pdf_path = os.path.join(base_dir, f"model_report_{timestamp}.pdf")
-with PdfPages(pdf_path) as pdf:
+# --- Save metrics as JSON ---
+metrics_path = os.path.join(results_dir, "metrics.json")
+with open(metrics_path, "w") as f:
+    json.dump(metrics_summary, f, indent=2)
+print(f"\n📊 Metrics saved at {metrics_path}")
 
-    # Cover page: metrics summary
-    fig, ax = plt.subplots(figsize=(8.5, 11))
-    ax.axis("off")
-    ax.text(0.05, 0.95, f"HealthCopilot Model Report {timestamp}", fontsize=18, weight="bold", va="top")
-
-    y_pos = 0.9
-    for line in metrics_summary:
-        ax.text(0.05, y_pos, line, fontsize=12, va="top")
-        y_pos -= 0.05
-
-    pdf.savefig(fig)
-    plt.close(fig)
-
-    # Following pages: SHAP plots
-    for fig, title in plots:
-        fig.suptitle(title, fontsize=14)
-        pdf.savefig(fig)
-        plt.close(fig)
-
-print(f"\n📄 PDF report saved at {pdf_path}")
+# --- Call make_report.py automatically ---
+import subprocess, sys
+print("📝 Generating PDF report...")
+subprocess.run([sys.executable, os.path.join(base_dir, "make_report.py"), results_dir])
