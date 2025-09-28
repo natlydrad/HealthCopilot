@@ -2,29 +2,50 @@ import SwiftUI
 
 struct VerifyView: View {
     @ObservedObject var store: MealStore
-    @State private var editingMeal: Meal?
+    @State private var editingMealLocalId: String?   // 🔑 track by localId
     @State private var editText: String = ""
     @State private var editDate: Date = Date()
     
     var body: some View {
         List {
-            ForEach(store.meals.sorted(by: { $0.timestamp > $1.timestamp })) { meal in
+            ForEach(store.meals.sorted(by: { $0.timestamp > $1.timestamp }), id: \.id) { meal in
                 VStack(alignment: .leading) {
                     Text(meal.text)
-                    Text(meal.timestamp.formatted())
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                    HStack(spacing: 8) {
+                        Text(meal.timestamp.formatted())
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        if meal.pendingSync {
+                            Text("unsynced")
+                                .font(.caption2)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.gray.opacity(0.2))
+                                .clipShape(Capsule())
+                        }
+                    }
                 }
+
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    editingMeal = meal
+                    editingMealLocalId = meal.localId
                     editText = meal.text
                     editDate = meal.timestamp
                 }
+
             }
             .onDelete(perform: store.deleteMeal)
         }
-        .sheet(item: $editingMeal) { meal in
+        .sheet(item: Binding(
+            get: {
+                editingMealLocalId.flatMap { id in
+                    store.meals.first(where: { $0.localId == id })
+                }
+            },
+            set: { newMeal in
+                editingMealLocalId = newMeal?.localId
+            }
+        )) { meal in
             NavigationView {
                 Form {
                     Section(header: Text("Meal Details")) {
@@ -34,13 +55,15 @@ struct VerifyView: View {
                     
                     Section {
                         Button("Save Changes") {
-                            store.updateMeal(meal: meal, newText: editText, newDate: editDate)
-                            editingMeal = nil
+                            store.updateMeal(meal: meal,
+                                             newText: editText,
+                                             newDate: editDate)
+                            editingMealLocalId = nil
                         }
                         .foregroundColor(.blue)
                         
                         Button("Cancel") {
-                            editingMeal = nil
+                            editingMealLocalId = nil
                         }
                         .foregroundColor(.red)
                     }
@@ -51,4 +74,3 @@ struct VerifyView: View {
         .navigationTitle("Verify Meals")
     }
 }
-
