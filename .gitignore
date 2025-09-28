@@ -13,3 +13,4 @@ DerivedData/
 # PocketBase / app secrets
 .env
 *.json
+pb_data/

@@ -1,5 +1,55 @@
 import Foundation
 
+private let pbDateFormatterMS: DateFormatter = {
+    let df = DateFormatter()
+    df.locale = Locale(identifier: "en_US_POSIX")
+    df.timeZone = TimeZone(secondsFromGMT: 0)
+    df.dateFormat = "yyyy-MM-dd HH:mm:ss.SSSXXXXX"  // PB with ms
+    return df
+}()
+
+private let pbDateFormatter: DateFormatter = {
+    let df = DateFormatter()
+    df.locale = Locale(identifier: "en_US_POSIX")
+    df.timeZone = TimeZone(secondsFromGMT: 0)
+    df.dateFormat = "yyyy-MM-dd HH:mm:ssXXXXX"      // PB without ms
+    return df
+}()
+
+private let isoTFormatter: ISO8601DateFormatter = {
+    let f = ISO8601DateFormatter()
+    f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return f
+}()
+
+private func parsePBDate(_ s: String) -> Date? {
+    // Try "yyyy-MM-dd HH:mm:ss.SSSXXXXX" and "...ssXXXXX"
+    if let d = pbDateFormatterMS.date(from: s) ?? pbDateFormatter.date(from: s) {
+        return d
+    }
+    // Accept ISO by swapping space → "T"
+    let isoLike = s.replacingOccurrences(of: " ", with: "T")
+    if let d = isoTFormatter.date(from: isoLike) { return d }
+
+    // Fallbacks that treat 'Z' as a literal
+    let fmts = [
+        "yyyy-MM-dd HH:mm:ss.SSS'Z'",
+        "yyyy-MM-dd HH:mm:ss'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss'Z'"
+    ]
+    let df = DateFormatter()
+    df.locale = Locale(identifier: "en_US_POSIX")
+    df.timeZone = TimeZone(secondsFromGMT: 0)
+    for f in fmts {
+        df.dateFormat = f
+        if let d = df.date(from: s) { return d }
+        if let d = df.date(from: isoLike) { return d }
+    }
+    return nil
+}
+
+
 class SyncManager {
     static let shared = SyncManager()
     private init() {}
@@ -185,31 +235,81 @@ class SyncManager {
     
     // Fetch & merge
     func fetchMeals() {
-        guard let token = token, let userId = userId else { return }
+        guard let token = token, let userId = userId else {
+            print("❌ fetchMeals: missing token/userId"); return
+        }
+
         let raw = "filter=" + "user='\(userId)'"
         let qs  = raw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? raw
         guard let url = URL(string: "\(baseURL)/api/collections/meals/records?\(qs)&sort=-created") else { return }
-        
+
+        print("🌐 GET \(url.absoluteString)")
+
         var req = URLRequest(url: url)
         req.httpMethod = "GET"
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        
-        URLSession.shared.dataTask(with: req) { data, _, err in
-            guard let data = data, err == nil else { return }
+
+        URLSession.shared.dataTask(with: req) { data, resp, err in
+            if let err = err {
+                print("❌ fetchMeals network error:", err)
+                return
+            }
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+            print("📥 fetchMeals HTTP status:", code)
+
+            guard let data = data else { print("❌ fetchMeals: no data"); return }
+
+            // Log raw length (optional: dump string if needed)
+            print("📦 fetchMeals bytes:", data.count)
+
             let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            
+            decoder.dateDecodingStrategy = .custom { dec in
+                let c = try dec.singleValueContainer()
+                let s = try c.decode(String.self)
+                if let d = parsePBDate(s) { return d }
+                print("❌ Bad date string from PB:", s)   // <-- will show exact string
+                throw DecodingError.dataCorruptedError(in: c, debugDescription: "Unparsable date: \(s)")
+            }
+
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let items = json["items"] as? [[String: Any]] {
-                let meals = items
-                    .compactMap { try? JSONSerialization.data(withJSONObject: $0) }
-                    .compactMap { try? decoder.decode(Meal.self, from: $0) }
-                DispatchQueue.main.async {
-                    MealStore.shared.mergeFetched(meals)
+
+                print("🧮 fetchMeals items count:", items.count)
+
+                var decoded: [Meal] = []
+                for (idx, obj) in items.enumerated() {
+                    do {
+                        // quick pre-checks for missing keys we require
+                        if obj["localId"] == nil {
+                            print("⚠️ [\(idx)] skipping: missing localId. Raw:", obj)
+                            continue
+                        }
+                        if obj["timestamp"] == nil {
+                            print("⚠️ [\(idx)] skipping: missing timestamp. Raw:", obj)
+                            continue
+                        }
+
+                        let raw = try JSONSerialization.data(withJSONObject: obj)
+                        let m = try decoder.decode(Meal.self, from: raw)
+                        decoded.append(m)
+                    } catch {
+                        print("❌ [\(idx)] decode error:", error)
+                        print("   Raw item:", obj)
+                    }
                 }
+
+                print("✅ Decoded meals:", decoded.count)
+                DispatchQueue.main.async {
+                    MealStore.shared.mergeFetched(decoded)
+                }
+            } else {
+                print("❌ fetchMeals: JSON parse failed. Body:",
+                      String(data: data, encoding: .utf8) ?? "<non-utf8>")
             }
+
         }.resume()
     }
+
     
     
     // Helper: find record id by localId

@@ -1,8 +1,8 @@
 /// <reference path="../pb_data/types.d.ts" />
 migrate((app) => {
   const collection = new Collection({
-    "createRule": null,
-    "deleteRule": null,
+    "createRule": "@request.auth.id != \"\"",
+    "deleteRule": "@request.auth.id != \"\"",
     "fields": [
       {
         "autogeneratePattern": "[a-z0-9]{15}",
@@ -44,6 +44,33 @@ migrate((app) => {
         "type": "date"
       },
       {
+        "cascadeDelete": false,
+        "collectionId": "_pb_users_auth_",
+        "hidden": false,
+        "id": "relation2375276105",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "user",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text1601813202",
+        "max": 0,
+        "min": 0,
+        "name": "localId",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": true,
+        "system": false,
+        "type": "text"
+      },
+      {
         "hidden": false,
         "id": "autodate2990389176",
         "name": "created",
@@ -65,13 +92,15 @@ migrate((app) => {
       }
     ],
     "id": "pbc_695162881",
-    "indexes": [],
-    "listRule": null,
+    "indexes": [
+      "CREATE UNIQUE INDEX `idx_iqmleCA91v` ON `meals` (`localId`)"
+    ],
+    "listRule": "@request.auth.id != \"\"",
     "name": "meals",
     "system": false,
     "type": "base",
-    "updateRule": null,
-    "viewRule": null
+    "updateRule": "@request.auth.id != \"\"",
+    "viewRule": "@request.auth.id != \"\""
   });
 
   return app.save(collection);

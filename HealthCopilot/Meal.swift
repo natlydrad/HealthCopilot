@@ -1,39 +1,43 @@
+// Meal.swift
 import Foundation
 
 struct Meal: Identifiable, Codable {
-    // SwiftUI identity = localId
+    // PB identity (optional until first upload)
+    var pbId: String?          // maps from "id" in PB
+
+    // Stable local identity
+    var localId: String        // created once on device
+
+    // Content
+    var text: String
+    var timestamp: Date
+
+    // Sync metadata (LOCAL ONLY)
+    var pendingSync: Bool = false   // default false; not decoded/encoded to PB
+    var updatedAt: Date?            // mirrors PB "updated" (optional for now)
+
+    // SwiftUI identity
     var id: String { localId }
 
-    // PocketBase record id (nil until synced)
-    var pbId: String?
-
-    // Stable local identity we generate once and never change
-    var localId: String
-
-    var timestamp: Date
-    var text: String
-    var pendingSync: Bool = true
-
-    init(
-        pbId: String? = nil,
-        localId: String = UUID().uuidString,
-        timestamp: Date,
-        text: String,
-        pendingSync: Bool = true
-    ) {
-        self.pbId = pbId
-        self.localId = localId
-        self.timestamp = timestamp
-        self.text = text
-        self.pendingSync = pendingSync
-    }
-
-    // Map PocketBase "id" <-> pbId while keeping localId as-is
     enum CodingKeys: String, CodingKey {
-        case pbId = "id"
+        case pbId      = "id"
         case localId
-        case timestamp
         case text
-        case pendingSync
+        case timestamp
+        case updatedAt = "updated"
+        // NOTE: no "pendingSync" here on purpose
+        
+    }
+}
+
+extension Meal {
+    /// Create a brand-new local meal (no PB id yet)
+    init(text: String, timestamp: Date) {
+        self.pbId = nil
+        self.localId = UUID().uuidString
+        self.text = text
+        self.timestamp = timestamp
+        self.pendingSync = true          // needs upload
+        self.updatedAt = Date()          // last writer wins; local now
     }
 }

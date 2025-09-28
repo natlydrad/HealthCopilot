@@ -25,16 +25,20 @@ struct VerifyView: View {
                         }
                     }
                 }
-
                 .contentShape(Rectangle())
                 .onTapGesture {
                     editingMealLocalId = meal.localId
                     editText = meal.text
                     editDate = meal.timestamp
                 }
-
             }
             .onDelete(perform: store.deleteMeal)
+        }
+        .listStyle(.plain)                   // ⬅️ outside the List block
+        .refreshable {
+            print("🔄 Pull-to-refresh → fetchMeals()")
+            SyncManager.shared.fetchMeals()
+
         }
         .sheet(item: Binding(
             get: {
