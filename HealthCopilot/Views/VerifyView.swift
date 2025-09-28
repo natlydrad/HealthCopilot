@@ -2,13 +2,20 @@ import SwiftUI
 
 struct VerifyView: View {
     @ObservedObject var store: MealStore
-    @State private var editingMealLocalId: String?   // 🔑 track by localId
+    @State private var editingMealLocalId: String?
     @State private var editText: String = ""
     @State private var editDate: Date = Date()
-    
+
+    // Single source of truth for what the List shows
+    private var visibleMeals: [Meal] {
+        store.meals
+            .filter { !$0.isDeleted }
+            .sorted(by: { $0.timestamp > $1.timestamp })
+    }
+
     var body: some View {
         List {
-            ForEach(store.meals.sorted(by: { $0.timestamp > $1.timestamp }), id: \.id) { meal in
+            ForEach(visibleMeals, id: \.id) { meal in
                 VStack(alignment: .leading) {
                     Text(meal.text)
                     HStack(spacing: 8) {
@@ -32,13 +39,16 @@ struct VerifyView: View {
                     editDate = meal.timestamp
                 }
             }
-            .onDelete(perform: store.deleteMeal)
+            .onDelete { offsets in
+                // Map visible indexes back to localIds so we delete the right rows
+                let ids = offsets.map { visibleMeals[$0].localId }
+                store.deleteMeals(withLocalIds: ids)
+            }
         }
-        .listStyle(.plain)                   // ⬅️ outside the List block
+        .listStyle(.plain)
         .refreshable {
             print("🔄 Pull-to-refresh → fetchMeals()")
             SyncManager.shared.fetchMeals()
-
         }
         .sheet(item: Binding(
             get: {
@@ -56,16 +66,13 @@ struct VerifyView: View {
                         TextField("Meal description", text: $editText)
                         DatePicker("Time", selection: $editDate)
                     }
-                    
                     Section {
                         Button("Save Changes") {
-                            store.updateMeal(meal: meal,
-                                             newText: editText,
-                                             newDate: editDate)
+                            store.updateMeal(meal: meal, newText: editText, newDate: editDate)
                             editingMealLocalId = nil
                         }
                         .foregroundColor(.blue)
-                        
+
                         Button("Cancel") {
                             editingMealLocalId = nil
                         }
@@ -78,3 +85,4 @@ struct VerifyView: View {
         .navigationTitle("Verify Meals")
     }
 }
+

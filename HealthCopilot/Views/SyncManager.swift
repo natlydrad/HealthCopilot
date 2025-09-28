@@ -110,9 +110,7 @@ class SyncManager {
             "user": userId
         ])
         
-        var toSend = meal //unsure about this placement
-        toSend.updatedAt = Date()
-        
+
         URLSession.shared.dataTask(with: req) { data, resp, err in
             if let err = err { print("❌ Upload error:", err); return }
             
@@ -313,37 +311,33 @@ class SyncManager {
         }.resume()
     }
 
-    // MARK: - Stage 4: Push Queue
-
-    /// Sweep all pending items and push them.
-    /// Call this after login, on foreground, and after local edits.
+    // MARK: - Push everything dirty (deletes first)
     func pushDirty() {
-        // must be logged in
-        guard let _ = token, let _ = userId else {
-            print("⛔️ pushDirty: no token/userId yet — will try again after login")
-            return
-        }
+        // Grab a snapshot so we don’t mutate while iterating
+        let all = MealStore.shared.meals
 
-        // collect dirty rows
-        let dirty = MealStore.shared.meals.filter { $0.pendingSync }
-        guard !dirty.isEmpty else {
-            print("🧹 pushDirty: nothing to push")
-            return
-        }
-        print("🚚 pushDirty: \(dirty.count) items")
+        // 1) Deletes (tombstoned items)
+        let deletes = all.filter { $0.isDeleted }
+        // 2) Upserts (dirty but not deleted)
+        let upserts = all.filter { $0.pendingSync && $0.isDeleted == false }
 
-        Task {  // run sequentially to keep logs sane
-            for meal in dirty {
-                do {
-                    try await upsertMealAsync(meal)
-                    MealStore.shared.markClean(localId: meal.localId)
-                } catch {
-                    print("⏳ pushDirty will retry later:", meal.localId, error.localizedDescription)
-                    // leave pendingSync = true; we'll retry next time
-                }
+        print("🚚 pushDirty: \(deletes.count) deletes, \(upserts.count) upserts")
+
+        // --- Deletes first so we never resurrect a row on fetch ---
+        for m in deletes {
+            deleteMealAsync(m)
+        }
+        // Then upserts
+        for m in upserts {
+            if m.pbId == nil {
+                upsertMeal(m)
+            } else {
+                updateMeal(m)
             }
         }
     }
+
+
     
     // One-time reconciliation: link existing PB records and mark the rest pending.
     func reconcileLocalWithServer() {
@@ -440,6 +434,94 @@ class SyncManager {
         }.resume()
     }
 
+    // MARK: - DELETE (idempotent)
+    private func deleteMealAsync(_ meal: Meal) {
+        guard let token = token else { return }
+
+        // If we don’t know pbId yet, resolve it by localId (once online)
+        func resolveAndDelete(by localId: String) {
+            findPbId(forLocalId: localId) { pbId in
+                guard let pbId = pbId else {
+                    print("🗑️ DELETE noop (404): \(localId)")
+                    // Treat as success and purge locally
+                    MealStore.shared.remove(localId: localId)
+                    return
+                }
+                self.performDelete(pbId: pbId, localId: localId)
+            }
+        }
+
+        if let pbId = meal.pbId {
+            performDelete(pbId: pbId, localId: meal.localId)
+        } else {
+            resolveAndDelete(by: meal.localId)
+        }
+    }
+    
+    // Resolve PocketBase id from our stable localId + user filter
+    private func findPbId(forLocalId localId: String,
+                          completion: @escaping (String?) -> Void) {
+        guard let token = token else { completion(nil); return }
+
+        // if you keep userId on SyncManager, include it (safer & faster)
+        let userFilter: String
+        if let userId = self.userId, !userId.isEmpty {
+            userFilter = "user='\(userId)' && localId='\(localId)'"
+        } else {
+            userFilter = "localId='\(localId)'"
+        }
+
+        // URL-encode filter
+        let allowed = CharacterSet.urlQueryAllowed
+        let encodedFilter = userFilter.addingPercentEncoding(withAllowedCharacters: allowed) ?? userFilter
+
+        // perPage=1 is enough because localId should be unique in PB
+        let url = URL(string: "\(baseURL)/api/collections/meals/records?filter=\(encodedFilter)&perPage=1")!
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        URLSession.shared.dataTask(with: req) { data, _, err in
+            guard err == nil, let data = data else { completion(nil); return }
+            // Minimal decode: items[0].id
+            struct ListResp: Decodable { struct Item: Decodable { let id: String }
+                let items: [Item] }
+            if let r = try? JSONDecoder().decode(ListResp.self, from: data),
+               let first = r.items.first {
+                completion(first.id)
+            } else {
+                completion(nil)
+            }
+        }.resume()
+    }
+
+
+    private func performDelete(pbId: String, localId: String) {
+        guard let token = token else { return }
+        let url = URL(string: "\(baseURL)/api/collections/meals/records/\(pbId)")!
+        var req = URLRequest(url: url)
+        req.httpMethod = "DELETE"
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        URLSession.shared.dataTask(with: req) { _, resp, err in
+            if let err = err {
+                print("⏳ delete retry later: \(localId) \(err.localizedDescription)")
+                return
+            }
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+            if (200..<300).contains(code) || code == 404 {
+                print("🗑️ DELETE ok: \(localId)")
+                // Now we may purge the local row
+                DispatchQueue.main.async {
+                    MealStore.shared.remove(localId: localId)
+                }
+            } else {
+                print("⏳ delete retry later: \(localId) HTTP \(code)")
+            }
+        }.resume()
+    }
+
+
 
     /// Async upsert-by-localId (POST → fallback to PATCH)
     private func upsertMealAsync(_ meal: Meal) async throws {
@@ -453,14 +535,21 @@ class SyncManager {
 
         // 2) Otherwise, try POST; on 400/409 conflict, find by localId and PATCH
         do {
-            let _ = try await postMealAsync(from: meal, token: token) // returns record JSON if you want
-        } catch let e as HTTPError where e.status == 400 || e.status == 409 {
-            if let existing = try await findByLocalIdAsync(meal.localId, token: token) {
-                try await patchMealAsync(pbId: existing.id, from: meal, token: token)
+            let _ = try await postMealAsync(from: meal, token: token)
+        } catch let e as HTTPError {
+            // Log once
+            print("⚠️ POST failed status=\(e.status): \(e.bodyPrefix)")
+            if [400, 409, 422].contains(e.status) {
+                if let existing = try await findByLocalIdAsync(meal.localId, token: token) {
+                    try await patchMealAsync(pbId: existing.id, from: meal, token: token)
+                } else {
+                    throw e
+                }
             } else {
                 throw e
             }
         }
+
     }
 
     // MARK: - HTTP helpers (async)
@@ -468,12 +557,14 @@ class SyncManager {
     private struct PBRecord: Decodable { let id: String }
 
     private enum HTTPError: Error {
-        case code(Int, String)
-        var status: Int {
-            if case .code(let s, _) = self { return s }
-            return -1
+        case code(Int, String) // status, body
+        var status: Int { if case .code(let s, _) = self { s } else { -1 } }
+        var bodyPrefix: String {
+            if case .code(_, let b) = self { return String(b.prefix(200)) }
+            return ""
         }
     }
+
 
     private func postMealAsync(from meal: Meal, token: String) async throws -> PBRecord {
         guard let userId = self.userId else { throw URLError(.userAuthenticationRequired) }

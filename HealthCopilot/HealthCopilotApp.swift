@@ -20,8 +20,8 @@ struct HealthCopilotApp: App {
                     UserDefaults.standard.set(true, forKey: key)
                 }
                 
-                SyncManager.shared.fetchMeals()   // pull from PB on launch
                 SyncManager.shared.pushDirty()
+                SyncManager.shared.fetchMeals()   // pull from PB on launch
             } else {
                 print("❌ Login failed")
             }
@@ -41,8 +41,8 @@ struct HealthCopilotApp: App {
                 print("🟦 scenePhase:", phase)
                 if phase == .active {
                     print("🟩 Foreground → fetchMeals()")
-                    SyncManager.shared.fetchMeals()
                     SyncManager.shared.pushDirty()
+                    SyncManager.shared.fetchMeals()
                 }
             }
         }

@@ -9,6 +9,7 @@ struct Meal: Identifiable, Codable {
     var pendingSync: Bool = false         // local-only flag, should persist locally
     var updatedAt: Date?                  // PB 'updated' mirror
     var id: String { localId }
+    var isDeleted: Bool = false
 
     enum CodingKeys: String, CodingKey {
         case pbId       = "id"
@@ -17,6 +18,7 @@ struct Meal: Identifiable, Codable {
         case timestamp
         case pendingSync                    // ⬅️ include so we save it locally
         case updatedAt  = "updated"
+        case isDeleted
     }
 
     // Custom decode: PB won’t send pendingSync, so default it to false
@@ -28,6 +30,7 @@ struct Meal: Identifiable, Codable {
         self.timestamp  = try c.decode(Date.self, forKey: .timestamp)
         self.updatedAt  = try? c.decode(Date.self, forKey: .updatedAt)
         self.pendingSync = (try? c.decodeIfPresent(Bool.self, forKey: .pendingSync)) ?? false
+        self.isDeleted   = (try? c.decodeIfPresent(Bool.self, forKey: .isDeleted)) ?? false
     }
 
     // Synthesized encode is fine (it will include pendingSync via CodingKeys)

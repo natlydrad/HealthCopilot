@@ -31,20 +31,74 @@ class MealStore: ObservableObject {
         }
     }
 
+
     
-    
-    
-    // Delete
+    // Tombstone delete
     func deleteMeal(at offsets: IndexSet) {
-        let removed = offsets.map { meals[$0] }
-        meals.remove(atOffsets: offsets)
-        saveMeals()
-        removed.forEach { m in
+        var changed = false
+        for index in offsets {
+            var m = meals[index]
             if let _ = m.pbId {
-                SyncManager.shared.deleteMeal(m)
+                // server knows this record → tombstone & queue
+                m.isDeleted = true
+                m.pendingSync = true
+                m.updatedAt = Date()
+                meals[index] = m
+                changed = true
+            } else {
+                // never uploaded → just remove locally
+                meals.remove(at: index)
+                changed = true
             }
         }
+        if changed {
+            saveMeals()
+            SyncManager.shared.pushDirty()
+        }
     }
+    
+    // MARK: - Delete / Tombstone
+
+    /// User-initiated delete from UI (can be offline).
+    /// We DO NOT remove from the array yet — we tombstone & queue a sync.
+    func deleteMeals(withLocalIds ids: [String]) {
+        var changed = false
+        for id in ids {
+            if let idx = meals.firstIndex(where: { $0.localId == id }) {
+                if meals[idx].isDeleted == false {
+                    meals[idx].isDeleted = true
+                    meals[idx].pendingSync = true
+                    meals[idx].updatedAt = Date()   // local becomes latest writer
+                    changed = true
+                }
+            }
+        }
+        if changed {
+            saveMeals()
+            // optional: kick a push right away
+            SyncManager.shared.pushDirty()
+        }
+    }
+
+    /// Called by SyncManager after a successful server DELETE (2xx or 404).
+    /// Now we physically remove it from disk+memory.
+    func remove(localId: String) {
+        if let idx = meals.firstIndex(where: { $0.localId == localId }) {
+            meals.remove(at: idx)
+            saveMeals()
+        }
+    }
+
+    /// Called by SyncManager after a successful POST/PATCH.
+    func markSynced(localId: String) {
+        if let idx = meals.firstIndex(where: { $0.localId == localId }) {
+            meals[idx].pendingSync = false
+            meals[idx].updatedAt = Date()
+            saveMeals()
+        }
+    }
+
+
     
     // Link PB id into the existing local meal (called after POST succeeds)
     func linkLocalToRemote(localId: String, pbId: String) {
@@ -55,13 +109,6 @@ class MealStore: ObservableObject {
         }
     }
     
-    func markSynced(localId: String) {
-        if let i = meals.firstIndex(where: { $0.localId == localId }) {
-            meals[i].pendingSync = false
-            saveMeals()
-            objectWillChange.send()
-        }
-    }
     
     func markClean(localId: String) {
         if let i = meals.firstIndex(where: { $0.localId == localId }) {
@@ -107,40 +154,61 @@ class MealStore: ObservableObject {
     func mergeFetched(_ remote: [Meal]) {
         print("🔗 mergeFetched: remote=\(remote.count) local(before)=\(meals.count)")
 
-        // Build quick lookup by localId
+        // Fast lookup by localId for local records
         var byLocal = Dictionary(uniqueKeysWithValues: meals.map { ($0.localId, $0) })
 
         for server in remote {
             if var local = byLocal[server.localId] {
-                // Compare "last writer"
+
+                // 🔒 Tombstone protection: if we have a local tombstone,
+                // NEVER let a server row overwrite or clear its pending delete.
+                if local.isDeleted {
+                    // Keep the delete + keep pendingSync so the delete will still push
+                    byLocal[server.localId] = local
+                    continue
+                }
+
+                // Last-writer-wins, but only for non-deleted local rows
                 let localUpdated  = age(local.updatedAt)
                 let serverUpdated = age(server.updatedAt)
 
                 if serverUpdated > localUpdated {
-                    // Server wins → take server fields; clear pendingSync
-                    local.pbId       = server.pbId ?? local.pbId
-                    local.text       = server.text
-                    local.timestamp  = server.timestamp
-                    local.updatedAt  = server.updatedAt
+                    // Server wins → take fields; clear pendingSync (only because it's not deleted)
+                    local.pbId        = server.pbId ?? local.pbId
+                    local.text        = server.text
+                    local.timestamp   = server.timestamp
+                    local.updatedAt   = server.updatedAt
                     local.pendingSync = false
+                    // Never copy any server-side "deleted" state into local;
+                    // PocketBase doesn't usually return hard-deleted rows anyway.
                     byLocal[server.localId] = local
                 } else {
-                    // Local wins → keep local as-is (still pendingSync = true if dirty)
-                    // no change needed
+                    // Local wins → keep as-is (pendingSync stays true if dirty)
+                    byLocal[server.localId] = local
                 }
+
             } else {
-                // New to device → accept server row
+                // New to device → accept server row (not deleted)
                 var fresh = server
+                // If your API ever returns server-side soft-deleted rows, skip them:
+                if fresh.isDeleted { continue }
                 fresh.pendingSync = false
                 byLocal[server.localId] = fresh
             }
         }
 
-        // Commit back to array (keep your preferred sort)
-        meals = Array(byLocal.values).sorted(by: { $0.timestamp > $1.timestamp })
+        // Build array, drop local tombstones from the visible list,
+        // and stabilize ordering by (timestamp, then updatedAt)
+        meals = Array(byLocal.values)
+            .filter { !$0.isDeleted }
+            .sorted { a, b in
+                if a.timestamp != b.timestamp { return a.timestamp > b.timestamp }
+                return age(a.updatedAt) > age(b.updatedAt)
+            }
 
         print("🔗 mergeFetched: local(after)=\(meals.count)")
         saveMeals()
     }
+
 
 }
