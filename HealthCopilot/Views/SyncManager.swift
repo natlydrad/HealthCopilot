@@ -110,6 +110,9 @@ class SyncManager {
             "user": userId
         ])
         
+        var toSend = meal //unsure about this placement
+        toSend.updatedAt = Date()
+        
         URLSession.shared.dataTask(with: req) { data, resp, err in
             if let err = err { print("❌ Upload error:", err); return }
             

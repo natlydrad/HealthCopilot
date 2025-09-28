@@ -10,10 +10,12 @@ class MealStore: ObservableObject {
     
     // Add
     func addMeal(text: String, at date: Date = Date()) {
-        let newMeal = Meal(text: text, timestamp: date)   // ← now compiles
+        var newMeal = Meal(text: text, timestamp: date)
+        newMeal.pendingSync = true
+        newMeal.updatedAt = Date()              // 👈 local is now the latest writer
         meals.append(newMeal)
         saveMeals()
-        SyncManager.shared.uploadMeal(newMeal)            // (or upsert)
+        SyncManager.shared.uploadMeal(newMeal)
     }
     
     // Update
@@ -91,26 +93,48 @@ class MealStore: ObservableObject {
         }
     }
     
-    // Merge fetched → print before/after
+    /// Helper: treat nil as very old for comparisons.
+    private func age(_ d: Date?) -> Date {
+        d ?? .distantPast
+    }
+
     func mergeFetched(_ remote: [Meal]) {
         print("🔗 mergeFetched: remote=\(remote.count) local(before)=\(meals.count)")
-        var byLocal: [String: Meal] = [:]
-        meals.forEach { byLocal[$0.localId] = $0 }
-        
-        for r in remote {
-            if var existing = byLocal[r.localId] {
-                existing.pbId = r.pbId ?? existing.pbId
-                existing.text = r.text
-                existing.timestamp = r.timestamp
-                existing.pendingSync = false
-                byLocal[r.localId] = existing
+
+        // Build quick lookup by localId
+        var byLocal = Dictionary(uniqueKeysWithValues: meals.map { ($0.localId, $0) })
+
+        for server in remote {
+            if var local = byLocal[server.localId] {
+                // Compare "last writer"
+                let localUpdated  = age(local.updatedAt)
+                let serverUpdated = age(server.updatedAt)
+
+                if serverUpdated > localUpdated {
+                    // Server wins → take server fields; clear pendingSync
+                    local.pbId       = server.pbId ?? local.pbId
+                    local.text       = server.text
+                    local.timestamp  = server.timestamp
+                    local.updatedAt  = server.updatedAt
+                    local.pendingSync = false
+                    byLocal[server.localId] = local
+                } else {
+                    // Local wins → keep local as-is (still pendingSync = true if dirty)
+                    // no change needed
+                }
             } else {
-                byLocal[r.localId] = r
+                // New to device → accept server row
+                var fresh = server
+                fresh.pendingSync = false
+                byLocal[server.localId] = fresh
             }
         }
-        
+
+        // Commit back to array (keep your preferred sort)
         meals = Array(byLocal.values).sorted(by: { $0.timestamp > $1.timestamp })
+
         print("🔗 mergeFetched: local(after)=\(meals.count)")
         saveMeals()
     }
+
 }
