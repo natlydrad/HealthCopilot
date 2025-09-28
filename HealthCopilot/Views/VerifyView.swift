@@ -2,45 +2,79 @@ import SwiftUI
 
 struct VerifyView: View {
     @ObservedObject var store: MealStore
-    @State private var editingMeal: Meal?
+    @State private var editingMealLocalId: String?
     @State private var editText: String = ""
     @State private var editDate: Date = Date()
-    
+
+    // Single source of truth for what the List shows
+    private var visibleMeals: [Meal] {
+        store.meals
+            .filter { !$0.isDeleted }
+            .sorted(by: { $0.timestamp > $1.timestamp })
+    }
+
     var body: some View {
         List {
-            ForEach(store.meals.sorted(by: { $0.timestamp > $1.timestamp })) { meal in
+            ForEach(visibleMeals, id: \.id) { meal in
                 VStack(alignment: .leading) {
                     Text(meal.text)
-                    Text(meal.timestamp.formatted())
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                    HStack(spacing: 8) {
+                        Text(meal.timestamp.formatted())
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        if meal.pendingSync {
+                            Text("unsynced")
+                                .font(.caption2)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.gray.opacity(0.2))
+                                .clipShape(Capsule())
+                        }
+                    }
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    editingMeal = meal
+                    editingMealLocalId = meal.localId
                     editText = meal.text
                     editDate = meal.timestamp
                 }
             }
-            .onDelete(perform: store.deleteMeal)
+            .onDelete { offsets in
+                // Map visible indexes back to localIds so we delete the right rows
+                let ids = offsets.map { visibleMeals[$0].localId }
+                store.deleteMeals(withLocalIds: ids)
+            }
         }
-        .sheet(item: $editingMeal) { meal in
+        .listStyle(.plain)
+        .refreshable {
+            print("🔄 Pull-to-refresh → fetchMeals()")
+            SyncManager.shared.fetchMeals()
+        }
+        .sheet(item: Binding(
+            get: {
+                editingMealLocalId.flatMap { id in
+                    store.meals.first(where: { $0.localId == id })
+                }
+            },
+            set: { newMeal in
+                editingMealLocalId = newMeal?.localId
+            }
+        )) { meal in
             NavigationView {
                 Form {
                     Section(header: Text("Meal Details")) {
                         TextField("Meal description", text: $editText)
                         DatePicker("Time", selection: $editDate)
                     }
-                    
                     Section {
                         Button("Save Changes") {
                             store.updateMeal(meal: meal, newText: editText, newDate: editDate)
-                            editingMeal = nil
+                            editingMealLocalId = nil
                         }
                         .foregroundColor(.blue)
-                        
+
                         Button("Cancel") {
-                            editingMeal = nil
+                            editingMealLocalId = nil
                         }
                         .foregroundColor(.red)
                     }
