@@ -313,6 +313,240 @@ class SyncManager {
         }.resume()
     }
 
+    // MARK: - Stage 4: Push Queue
+
+    /// Sweep all pending items and push them.
+    /// Call this after login, on foreground, and after local edits.
+    func pushDirty() {
+        // must be logged in
+        guard let _ = token, let _ = userId else {
+            print("⛔️ pushDirty: no token/userId yet — will try again after login")
+            return
+        }
+
+        // collect dirty rows
+        let dirty = MealStore.shared.meals.filter { $0.pendingSync }
+        guard !dirty.isEmpty else {
+            print("🧹 pushDirty: nothing to push")
+            return
+        }
+        print("🚚 pushDirty: \(dirty.count) items")
+
+        Task {  // run sequentially to keep logs sane
+            for meal in dirty {
+                do {
+                    try await upsertMealAsync(meal)
+                    MealStore.shared.markClean(localId: meal.localId)
+                } catch {
+                    print("⏳ pushDirty will retry later:", meal.localId, error.localizedDescription)
+                    // leave pendingSync = true; we'll retry next time
+                }
+            }
+        }
+    }
+    
+    // One-time reconciliation: link existing PB records and mark the rest pending.
+    func reconcileLocalWithServer() {
+        guard let token = token, let userId = userId else {
+            print("⛔️ reconcile: not logged in"); return
+        }
+
+        // Fetch ALL server meals for this user (no delta so we see everything)
+        let raw = "filter=" + "user='\(userId)'"
+        let qs  = raw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? raw
+        guard let url = URL(string: "\(baseURL)/api/collections/meals/records?\(qs)&perPage=200") else { return }
+
+        print("🧭 reconcile: GET \(url.absoluteString)")
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        URLSession.shared.dataTask(with: req) { data, resp, err in
+            if let err = err { print("❌ reconcile fetch error:", err); return }
+            guard let data = data else { print("❌ reconcile: no data"); return }
+
+            // Parse raw JSON to build a map of localId -> (id, updated)
+            var serverByLocalId: [String: (id: String, updated: Date?)] = [:]
+
+            if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let items = obj["items"] as? [[String: Any]] {
+                for it in items {
+                    if let lid = it["localId"] as? String,
+                       let id  = it["id"] as? String {
+                        let s = it["updated"] as? String
+                        let updated = parsePBDate(s ?? "")
+                        serverByLocalId[lid] = (id: id, updated: updated)
+                    }
+                }
+                print("🧭 reconcile: server items =", serverByLocalId.count)
+            } else {
+                print("❌ reconcile: JSON parse failed:",
+                      String(data: data, encoding: .utf8) ?? "<non-utf8>")
+                return
+            }
+
+            // Walk local meals
+            var changed = false
+            for i in 0..<MealStore.shared.meals.count {
+                var m = MealStore.shared.meals[i]
+
+                // Case A: local has no pbId
+                if m.pbId == nil {
+                    if let srv = serverByLocalId[m.localId] {
+                        // Found on server → link pbId and adopt server 'updated' if newer
+                        m.pbId = srv.id
+                        if let su = srv.updated, su > (m.updatedAt ?? .distantPast) {
+                            m.updatedAt = su
+                        }
+                        // If content differs and local is newer, leave pending to PATCH
+                        // Else mark clean
+                        // (We don't compare text here to keep it simple—Stage 2 will handle conflicts.)
+                        m.pendingSync = false
+                        MealStore.shared.meals[i] = m
+                        changed = true
+                        print("🔗 reconcile linked:", m.localId, "→", srv.id)
+                    } else {
+                        // Not on server → mark pending so queue will POST it
+                        if m.pendingSync == false {
+                            m.pendingSync = true
+                            // Keep or bump updatedAt so local is considered newer
+                            if m.updatedAt == nil { m.updatedAt = Date() }
+                            MealStore.shared.meals[i] = m
+                            changed = true
+                            print("🟥 reconcile marked pending:", m.localId)
+                        }
+                    }
+                } else {
+                    // Case B: local has pbId — optionally verify it still exists on server
+                    // If it doesn't, flip to pending so we recreate (rare; e.g., server deletion).
+                    if serverByLocalId[m.localId] == nil {
+                        m.pendingSync = true
+                        MealStore.shared.meals[i] = m
+                        changed = true
+                        print("🟧 reconcile: pbId set but not on server, will re-push:", m.localId)
+                    }
+                }
+            }
+
+            if changed {
+                MealStore.shared.saveMeals()
+            }
+
+            // Finally, run the queue
+            DispatchQueue.main.async {
+                self.pushDirty()
+            }
+        }.resume()
+    }
+
+
+    /// Async upsert-by-localId (POST → fallback to PATCH)
+    private func upsertMealAsync(_ meal: Meal) async throws {
+        guard let token = token else { throw URLError(.userAuthenticationRequired) }
+
+        // 1) If we already have pbId, just PATCH it.
+        if let pbId = meal.pbId {
+            try await patchMealAsync(pbId: pbId, from: meal, token: token)
+            return
+        }
+
+        // 2) Otherwise, try POST; on 400/409 conflict, find by localId and PATCH
+        do {
+            let _ = try await postMealAsync(from: meal, token: token) // returns record JSON if you want
+        } catch let e as HTTPError where e.status == 400 || e.status == 409 {
+            if let existing = try await findByLocalIdAsync(meal.localId, token: token) {
+                try await patchMealAsync(pbId: existing.id, from: meal, token: token)
+            } else {
+                throw e
+            }
+        }
+    }
+
+    // MARK: - HTTP helpers (async)
+
+    private struct PBRecord: Decodable { let id: String }
+
+    private enum HTTPError: Error {
+        case code(Int, String)
+        var status: Int {
+            if case .code(let s, _) = self { return s }
+            return -1
+        }
+    }
+
+    private func postMealAsync(from meal: Meal, token: String) async throws -> PBRecord {
+        guard let userId = self.userId else { throw URLError(.userAuthenticationRequired) }
+
+        var req = URLRequest(url: URL(string: "\(baseURL)/api/collections/meals/records")!)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let payload: [String: Any] = [
+            "localId": meal.localId,
+            "text": meal.text,
+            "timestamp": ISO8601DateFormatter().string(from: meal.timestamp),
+            "user": userId                                 // ⬅️ include user like your old upload
+        ]
+        req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+        guard (200..<300).contains(code) else {
+            throw HTTPError.code(code, String(data: data, encoding: .utf8) ?? "")
+        }
+        print("📦 POST ok:", meal.localId)
+        return try JSONDecoder().decode(PBRecord.self, from: data)
+    }
+
+
+    private func patchMealAsync(pbId: String, from meal: Meal, token: String) async throws {
+        var req = URLRequest(url: URL(string: "\(baseURL)/api/collections/meals/records/\(pbId)")!)
+        req.httpMethod = "PATCH"
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let payload: [String: Any] = [
+            "localId": meal.localId, // defensive: keep identity aligned
+            "text": meal.text,
+            "timestamp": ISO8601DateFormatter().string(from: meal.timestamp)
+        ]
+        req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+        guard (200..<300).contains(code) else {
+            throw HTTPError.code(code, String(data: data, encoding: .utf8) ?? "")
+        }
+        print("📝 PATCH ok:", meal.localId)
+    }
+
+    private func findByLocalIdAsync(_ localId: String, token: String) async throws -> PBRecord? {
+        // filter=localId="..."
+        let raw = "filter=localId=\"\(localId)\""
+        let qs  = raw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? raw
+        let url = URL(string: "\(baseURL)/api/collections/meals/records?\(qs)&perPage=1")!
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+        guard (200..<300).contains(code) else {
+            throw HTTPError.code(code, String(data: data, encoding: .utf8) ?? "")
+        }
+
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let items = json["items"] as? [[String: Any]],
+           let first = items.first,
+           let id = first["id"] as? String {
+            return PBRecord(id: id)
+        }
+        return nil
+    }
+
     
     
     // Helper: find record id by localId

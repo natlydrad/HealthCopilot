@@ -15,7 +15,7 @@ class MealStore: ObservableObject {
         newMeal.updatedAt = Date()              // 👈 local is now the latest writer
         meals.append(newMeal)
         saveMeals()
-        SyncManager.shared.uploadMeal(newMeal)
+        SyncManager.shared.pushDirty()
     }
     
     // Update
@@ -27,8 +27,7 @@ class MealStore: ObservableObject {
             meals[i].updatedAt = Date()   // ← important
             saveMeals()
 
-            var updated = meals[i]
-            SyncManager.shared.uploadMeal(updated)  // or upsert/update path
+            SyncManager.shared.pushDirty()  // or upsert/update path
         }
     }
 
@@ -64,6 +63,13 @@ class MealStore: ObservableObject {
         }
     }
     
+    func markClean(localId: String) {
+        if let i = meals.firstIndex(where: { $0.localId == localId }) {
+            meals[i].pendingSync = false
+            saveMeals()
+            print("✅ Marked clean:", localId)
+        }
+    }
     
     // Merge fetched server meals by localId (don’t duplicate, don’t lose local)
     private func getFileURL() -> URL {

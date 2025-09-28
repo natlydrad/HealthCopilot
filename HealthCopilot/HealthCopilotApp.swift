@@ -13,7 +13,15 @@ struct HealthCopilotApp: App {
                                  password: "London303!") { success in
             if success {
                 print("✅ Logged in to PocketBase; initial fetch")
+                
+                let key = "didRunReconcileV1"
+                if !UserDefaults.standard.bool(forKey: key) {
+                    SyncManager.shared.reconcileLocalWithServer()
+                    UserDefaults.standard.set(true, forKey: key)
+                }
+                
                 SyncManager.shared.fetchMeals()   // pull from PB on launch
+                SyncManager.shared.pushDirty()
             } else {
                 print("❌ Login failed")
             }
@@ -34,6 +42,7 @@ struct HealthCopilotApp: App {
                 if phase == .active {
                     print("🟩 Foreground → fetchMeals()")
                     SyncManager.shared.fetchMeals()
+                    SyncManager.shared.pushDirty()
                 }
             }
         }
