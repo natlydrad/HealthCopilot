@@ -2,11 +2,11 @@ import SwiftUI
 
 struct VerifyView: View {
     @ObservedObject var store: MealStore
-    @State private var editingMealLocalId: String?
-    @State private var editText: String = ""
-    @State private var editDate: Date = Date()
 
-    // Single source of truth for what the List shows
+    // Replace localId juggling with simple state:
+    @State private var isEditingSheetPresented = false
+    @State private var mealToEdit: Meal? = nil
+
     private var visibleMeals: [Meal] {
         store.meals
             .filter { !$0.isDeleted }
@@ -16,31 +16,17 @@ struct VerifyView: View {
     var body: some View {
         List {
             ForEach(visibleMeals, id: \.id) { meal in
-                VStack(alignment: .leading) {
-                    Text(meal.text)
-                    HStack(spacing: 8) {
-                        Text(meal.timestamp.formatted())
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                        if meal.pendingSync {
-                            Text("unsynced")
-                                .font(.caption2)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.gray.opacity(0.2))
-                                .clipShape(Capsule())
-                        }
+                MealRow(
+                    meal: meal,
+                    baseURL: SyncManager.shared.baseURL,
+                    token: SyncManager.shared.token ?? "",
+                    onTap: {
+                        mealToEdit = meal
+                        isEditingSheetPresented = true
                     }
-                }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    editingMealLocalId = meal.localId
-                    editText = meal.text
-                    editDate = meal.timestamp
-                }
+                )
             }
             .onDelete { offsets in
-                // Map visible indexes back to localIds so we delete the right rows
                 let ids = offsets.map { visibleMeals[$0].localId }
                 store.deleteMeals(withLocalIds: ids)
             }
@@ -50,39 +36,32 @@ struct VerifyView: View {
             print("🔄 Pull-to-refresh → fetchMeals()")
             SyncManager.shared.fetchMeals()
         }
-        .sheet(item: Binding(
-            get: {
-                editingMealLocalId.flatMap { id in
-                    store.meals.first(where: { $0.localId == id })
-                }
-            },
-            set: { newMeal in
-                editingMealLocalId = newMeal?.localId
-            }
-        )) { meal in
-            NavigationView {
-                Form {
-                    Section(header: Text("Meal Details")) {
-                        TextField("Meal description", text: $editText)
-                        DatePicker("Time", selection: $editDate)
+        // Simple sheet – no heavy generic Binding to infer
+        .sheet(isPresented: $isEditingSheetPresented) {
+            if let meal = mealToEdit {
+                EditMealSheet(
+                    meal: meal,
+                    onSave: { newText, newDate in
+                        store.updateMeal(meal: meal, newText: newText, newDate: newDate)
+                        mealToEdit = nil
+                        isEditingSheetPresented = false
+                    },
+                    onCancel: {
+                        mealToEdit = nil
+                        isEditingSheetPresented = false
                     }
-                    Section {
-                        Button("Save Changes") {
-                            store.updateMeal(meal: meal, newText: editText, newDate: editDate)
-                            editingMealLocalId = nil
-                        }
-                        .foregroundColor(.blue)
-
-                        Button("Cancel") {
-                            editingMealLocalId = nil
-                        }
-                        .foregroundColor(.red)
-                    }
-                }
-                .navigationTitle("Edit Meal")
+                )
             }
         }
         .navigationTitle("Verify Meals")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    print("🔄 Toolbar refresh → fetchMeals()")
+                    SyncManager.shared.fetchMeals()
+                } label: { Image(systemName: "arrow.clockwise") }
+            }
+        }
     }
 }
 

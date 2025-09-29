@@ -1,4 +1,8 @@
 import Foundation
+import UniformTypeIdentifiers
+import ImageIO
+
+private let PB_PHOTO_FIELD = "image"
 
 private let pbDateFormatterMS: DateFormatter = {
     let df = DateFormatter()
@@ -54,9 +58,9 @@ class SyncManager {
     static let shared = SyncManager()
     private init() {}
     
-    private let baseURL = "http://192.168.1.196:8090"
+    let baseURL = "http://192.168.1.196:8090"
     
-    private var token: String? {
+    var token: String? {
         get { UserDefaults.standard.string(forKey: "PBToken") }
         set { UserDefaults.standard.setValue(newValue, forKey: "PBToken") }
     }
@@ -433,6 +437,112 @@ class SyncManager {
             }
         }.resume()
     }
+    
+    // Create (POST) with image multipart
+    // Helper: parse 'photo' from PB JSON (string or [string])
+    private func parsePhotoFilename(_ json: [String: Any], field: String = PB_PHOTO_FIELD) -> String? {
+        if let s = json[field] as? String, !s.isEmpty { return s }
+        if let arr = json[field] as? [Any], let s = arr.first as? String, !s.isEmpty { return s }
+        return nil
+    }
+
+    // Fallback: PATCH image onto an existing record
+    // Async JSON PATCH of an existing record (no image upload here).
+    private func patchMealAsync(pbId: String, from meal: Meal, token: String) async throws {
+        var req = URLRequest(url: URL(string: "\(baseURL)/api/collections/meals/records/\(pbId)")!)
+        req.httpMethod = "PATCH"
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let payload: [String: Any] = [
+            "localId": meal.localId,
+            "text": meal.text,
+            "timestamp": ISO8601DateFormatter().string(from: meal.timestamp)
+        ]
+        req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+        guard (200..<300).contains(code) else {
+            throw HTTPError.code(code, String(data: data, encoding: .utf8) ?? "")
+        }
+        print("📝 PATCH ok:", meal.localId)
+    }
+
+
+    func uploadMealWithImage(meal: Meal, imageData: Data) async throws {
+        let filename = "meal-\(meal.localId.prefix(8)).jpg"
+        let files = [(name: PB_PHOTO_FIELD, filename: filename, mime: "image/jpeg", data: imageData)]
+        let boundary = "Boundary-\(UUID().uuidString)"
+        
+        guard let token = self.token, let userId = self.userId else {
+            throw URLError(.userAuthenticationRequired)
+        }
+
+
+        var req = URLRequest(url: URL(string: "\(baseURL)/api/collections/meals/records")!)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(token ?? "")", forHTTPHeaderField: "Authorization")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        req.httpBody = makeMultipartBody(boundary: boundary,
+                                         fields: [
+                                            "user": userId,
+                                            "timestamp": ISO8601DateFormatter().string(from: meal.timestamp),
+                                            "text": meal.text,
+                                            "localId": meal.localId
+                                         ],
+                                         files: files)
+
+        // 🔁 async/await
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        let status = (resp as? HTTPURLResponse)?.statusCode ?? -1
+        guard (200..<300).contains(status) else {
+            throw HTTPError.code(status, String(data: data, encoding: .utf8) ?? "")
+        }
+
+        // Parse response
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let pbId = json["id"] as? String else { return }
+
+        let photo = self.parsePhotoFilename(json, field: PB_PHOTO_FIELD) // handles string or [string]
+
+        // Link local ↔ PB id on main
+        await MainActor.run {
+            MealStore.shared.linkLocalToRemote(localId: meal.localId, pbId: pbId)
+            if let photo { MealStore.shared.updatePhoto(localId: meal.localId, filename: photo) }
+        }
+
+        // If PB didn’t save the file on POST (rare), fall back to a multipart PATCH
+        if photo == nil {
+            try await self.patchMealPhotoAsync(pbId: pbId, imageData: imageData, field: PB_PHOTO_FIELD, localId: meal.localId)
+        }
+    }
+    
+    private func patchMealPhotoAsync(pbId: String, imageData: Data, field: String, localId: String) async throws {
+        let filename = "meal-\(localId.prefix(8)).jpg"
+        var req = URLRequest(url: URL(string: "\(baseURL)/api/collections/meals/records/\(pbId)")!)
+        let boundary = "Boundary-\(UUID().uuidString)"
+
+        
+        req.httpMethod = "PATCH"
+        req.setValue("Bearer \(token ?? "")", forHTTPHeaderField: "Authorization")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        req.httpBody = makeMultipartBody(boundary: boundary, fields: [:],
+                                         files: [(name: field, filename: filename, mime: "image/jpeg", data: imageData)])
+
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        let status = (resp as? HTTPURLResponse)?.statusCode ?? -1
+        guard (200..<300).contains(status) else {
+            throw HTTPError.code(status, String(data: data, encoding: .utf8) ?? "")
+        }
+        if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let fn = parsePhotoFilename(json, field: field) {
+            await MainActor.run { MealStore.shared.updatePhoto(localId: localId, filename: fn) }
+        }
+    }
+
+
+
 
     // MARK: - DELETE (idempotent)
     private func deleteMealAsync(_ meal: Meal) {
@@ -592,27 +702,6 @@ class SyncManager {
     }
 
 
-    private func patchMealAsync(pbId: String, from meal: Meal, token: String) async throws {
-        var req = URLRequest(url: URL(string: "\(baseURL)/api/collections/meals/records/\(pbId)")!)
-        req.httpMethod = "PATCH"
-        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let payload: [String: Any] = [
-            "localId": meal.localId, // defensive: keep identity aligned
-            "text": meal.text,
-            "timestamp": ISO8601DateFormatter().string(from: meal.timestamp)
-        ]
-        req.httpBody = try JSONSerialization.data(withJSONObject: payload)
-
-        let (data, resp) = try await URLSession.shared.data(for: req)
-        let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
-        guard (200..<300).contains(code) else {
-            throw HTTPError.code(code, String(data: data, encoding: .utf8) ?? "")
-        }
-        print("📝 PATCH ok:", meal.localId)
-    }
-
     private func findByLocalIdAsync(_ localId: String, token: String) async throws -> PBRecord? {
         // filter=localId="..."
         let raw = "filter=localId=\"\(localId)\""
@@ -637,8 +726,6 @@ class SyncManager {
         }
         return nil
     }
-
-    
     
     // Helper: find record id by localId
     private func findByLocalId(_ localId: String, completion: @escaping (String?) -> Void) {
@@ -664,4 +751,57 @@ class SyncManager {
             }
         }.resume()
     }
+    
+    // Read EXIF/TIFF capture date from image data (best-effort)
+    private func photoCaptureDate(from imageData: Data) -> Date? {
+        guard let src = CGImageSourceCreateWithData(imageData as CFData, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any] else { return nil }
+
+        // EXIF DateTimeOriginal is the best
+        if let exif = props[kCGImagePropertyExifDictionary] as? [CFString: Any],
+           let s = exif[kCGImagePropertyExifDateTimeOriginal] as? String {
+            let df = DateFormatter()
+            df.locale = Locale(identifier: "en_US_POSIX")
+            df.timeZone = TimeZone(secondsFromGMT: 0)
+            df.dateFormat = "yyyy:MM:dd HH:mm:ss"
+            if let d = df.date(from: s) { return d }
+        }
+        // Fallback: TIFF DateTime
+        if let tiff = props[kCGImagePropertyTIFFDictionary] as? [CFString: Any],
+           let s = tiff[kCGImagePropertyTIFFDateTime] as? String {
+            let df = DateFormatter()
+            df.locale = Locale(identifier: "en_US_POSIX")
+            df.timeZone = TimeZone(secondsFromGMT: 0)
+            df.dateFormat = "yyyy:MM:dd HH:mm:ss"
+            if let d = df.date(from: s) { return d }
+        }
+        return nil
+    }
+
+    private func makeMultipartBody(boundary: String,
+                                   fields: [String: String],
+                                   files: [(name: String, filename: String, mime: String, data: Data)]) -> Data {
+        var body = Data()
+        let lb = "\r\n"
+
+        for (k, v) in fields {
+            body.append("--\(boundary)\(lb)".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"\(k)\"\(lb)\(lb)".data(using: .utf8)!)
+            body.append("\(v)\(lb)".data(using: .utf8)!)
+        }
+
+        for f in files {
+            body.append("--\(boundary)\(lb)".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"\(f.name)\"; filename=\"\(f.filename)\"\(lb)".data(using: .utf8)!)
+            body.append("Content-Type: \(f.mime)\(lb)\(lb)".data(using: .utf8)!)
+            body.append(f.data)
+            body.append(lb.data(using: .utf8)!)
+        }
+
+        body.append("--\(boundary)--\(lb)".data(using: .utf8)!)
+        return body
+    }
+
+    
+    
 }

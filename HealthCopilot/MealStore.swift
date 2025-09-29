@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 class MealStore: ObservableObject {
     static let shared = MealStore()
@@ -118,6 +119,51 @@ class MealStore: ObservableObject {
         }
     }
     
+    func addMealWithImage(text: String, imageData originalData: Data, takenAt: Date?) {
+        let pickedTimestamp = takenAt ?? Date()
+        
+        var newMeal = Meal(text: text, timestamp: pickedTimestamp)
+        newMeal.pendingSync = true
+        newMeal.updatedAt = Date()
+        meals.append(newMeal)
+        saveMeals()
+        
+        print("➕ [LOCAL] meal added:",
+              "localId=\(newMeal.localId)",
+              "pbId=\(newMeal.pbId ?? "nil")",
+              "timestamp=\(pickedTimestamp)",
+              "text.len=\(text.count)")
+        
+        // Compress to ~85% JPEG for a good balance; tweak to taste
+        let compressed: Data
+        if let ui = UIImage(data: originalData),
+           let jpeg = ui.jpegData(compressionQuality: 0.85) {
+            compressed = jpeg
+            print("🗜️ Compressed image:", originalData.count, "→", compressed.count, "bytes")
+        } else {
+            compressed = originalData
+            print("⚠️ Using original image bytes:", originalData.count)
+        }
+        
+        // Kick the multipart POST immediately (so the photo filename comes back)
+        Task {
+            do {
+                try await SyncManager.shared.uploadMealWithImage(meal: newMeal, imageData: compressed)
+            } catch {
+                print("❌ uploadMealWithImage error:", error)
+            }
+        }
+    }
+
+    
+    // Save/replace the PocketBase filename on a local meal
+    func updatePhoto(localId: String, filename: String) {
+        if let i = meals.firstIndex(where: { $0.localId == localId }) {
+            meals[i].photo = filename
+            saveMeals()
+        }
+    }
+    
     // Merge fetched server meals by localId (don’t duplicate, don’t lose local)
     private func getFileURL() -> URL {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
@@ -210,5 +256,6 @@ class MealStore: ObservableObject {
         saveMeals()
     }
 
-
+    
 }
+

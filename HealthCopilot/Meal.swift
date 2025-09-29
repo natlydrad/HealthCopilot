@@ -10,6 +10,7 @@ struct Meal: Identifiable, Codable {
     var updatedAt: Date?                  // PB 'updated' mirror
     var id: String { localId }
     var isDeleted: Bool = false
+    var photo: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case pbId       = "id"
@@ -19,6 +20,7 @@ struct Meal: Identifiable, Codable {
         case pendingSync                    // ⬅️ include so we save it locally
         case updatedAt  = "updated"
         case isDeleted
+        case photo
     }
 
     // Custom decode: PB won’t send pendingSync, so default it to false
