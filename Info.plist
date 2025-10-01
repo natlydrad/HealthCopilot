@@ -34,5 +34,8 @@
 
     <key>NSHealthUpdateUsageDescription</key>
     <string>This app writes health data that you choose to log.</string>
+
+    <key>NSCameraUsageDescription</key>
+    <string>We use the camera to log meals</string>
 </dict>
 </plist>

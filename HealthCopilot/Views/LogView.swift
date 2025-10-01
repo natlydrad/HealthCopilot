@@ -40,6 +40,7 @@ struct LogView: View {
     @State private var input = ""
     @State private var pickedItem: PhotosPickerItem? = nil
     @State private var pickedImageData: Data? = nil
+    @State private var showCamera = false
 
     var body: some View {
         VStack() {
@@ -49,6 +50,12 @@ struct LogView: View {
 
             // Photo picker + tiny preview
             HStack {
+                Button {
+                        showCamera = true
+                    } label: {
+                        Label("Snap Photo", systemImage: "camera")
+                    }
+                
                 PhotosPicker(selection: $pickedItem, matching: .images, photoLibrary: .shared()) {
                     Label(pickedImageData == nil ? "Choose Photo" : "Change Photo",
                           systemImage: "photo")
@@ -105,6 +112,22 @@ struct LogView: View {
                 Text("Add Meal")
                     .frame(maxWidth: .infinity)
             }
+            
+            .sheet(isPresented: $showCamera) {
+                CameraCaptureSheet { data in
+                    let takenAt = exifCaptureDate(from: data)    // optional; preserves EXIF capture time
+                    store.addMealWithImage(
+                        text: input.trimmingCharacters(in: .whitespacesAndNewlines),
+                        imageData: data,
+                        takenAt: takenAt
+                    )
+                    // reset UI after add
+                    input = ""
+                    pickedItem = nil
+                    pickedImageData = nil
+                }
+            }
+
             .padding(.top, 4)
 
 
