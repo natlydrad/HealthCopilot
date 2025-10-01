@@ -42,10 +42,17 @@ struct MealRow: View {
             if let pbId = meal.pbId, let photo = meal.photo,
                let url = URL(string: "\(baseURL)/api/files/meals/\(pbId)/\(photo)") {
                 AuthorizedAsyncImage(url: url, token: token)
+                    .onAppear {
+                        print("🖼️ THUMB: building URL for pbId=\(pbId) photo=\(photo)")
+                    }
                     .frame(width: 64, height: 64)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .overlay(RoundedRectangle(cornerRadius: 10).stroke(.secondary.opacity(0.3)))
+            } else {
+                // This else is just for debugging why no image rendered
             }
+
+            
 
             // Texts
             VStack(alignment: .leading, spacing: 4) {

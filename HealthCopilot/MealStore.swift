@@ -233,42 +233,59 @@ class MealStore: ObservableObject {
         for server in remote {
             if var local = byLocal[server.localId] {
 
-                // 🔒 Tombstone protection: if we have a local tombstone,
-                // NEVER let a server row overwrite or clear its pending delete.
+                // 🧪 DEBUG: show merge inputs
+                print("""
+                🔍 MERGE for localId=\(server.localId)
+                   local.updatedAt=\(String(describing: local.updatedAt))
+                   server.updatedAt=\(String(describing: server.updatedAt))
+                   local.pbId=\(local.pbId ?? "nil"), server.pbId=\(server.pbId ?? "nil")
+                   local.photo=\(local.photo ?? "nil"), server.photo=\(server.photo ?? "nil")
+                """)
+
+                // 🔒 Tombstone protection (unchanged)
                 if local.isDeleted {
-                    // Keep the delete + keep pendingSync so the delete will still push
+                    print("   🚫 local is tombstoned → keep local delete, skip server overwrite")
                     byLocal[server.localId] = local
                     continue
                 }
 
-                // Last-writer-wins, but only for non-deleted local rows
+                // "Last-writer-wins" timestamps
                 let localUpdated  = age(local.updatedAt)
                 let serverUpdated = age(server.updatedAt)
 
                 if serverUpdated > localUpdated {
-                    // Server wins → take fields; clear pendingSync (only because it's not deleted)
+                    // ✅ Server wins — copy all authoritative fields
                     local.pbId        = server.pbId ?? local.pbId
                     local.text        = server.text
                     local.timestamp   = server.timestamp
                     local.updatedAt   = server.updatedAt
+                    local.photo       = server.photo ?? local.photo   // ← your earlier patch
                     local.pendingSync = false
-                    // Never copy any server-side "deleted" state into local;
-                    // PocketBase doesn't usually return hard-deleted rows anyway.
                     byLocal[server.localId] = local
+                    print("   🟢 server wins; adopted fields incl. photo=\(local.photo ?? "nil")")
                 } else {
-                    // Local wins → keep as-is (pendingSync stays true if dirty)
+                    // 🟡 Local wins — keep local edits,
+                    // BUT: if local is missing a photo and server has one, adopt it anyway.
+                    if (local.photo == nil || local.photo?.isEmpty == true),
+                       let srvPhoto = server.photo, !srvPhoto.isEmpty {
+                        local.photo = srvPhoto
+                        print("   📸 local wins but missing photo → adopted server photo=\(srvPhoto)")
+                    } else {
+                        print("   🟡 local wins; photo stays \(local.photo ?? "nil")")
+                    }
                     byLocal[server.localId] = local
                 }
 
             } else {
-                // New to device → accept server row (not deleted)
+                // New to device → accept server row
                 var fresh = server
-                // If your API ever returns server-side soft-deleted rows, skip them:
                 if fresh.isDeleted { continue }
                 fresh.pendingSync = false
                 byLocal[server.localId] = fresh
+                print("   🆕 accepted new server meal localId=\(server.localId), photo=\(fresh.photo ?? "nil")")
             }
         }
+
 
         // Build array, drop local tombstones from the visible list,
         // and stabilize ordering by (timestamp, then updatedAt)

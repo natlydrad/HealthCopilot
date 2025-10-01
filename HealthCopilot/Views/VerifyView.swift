@@ -62,6 +62,13 @@ struct VerifyView: View {
                 } label: { Image(systemName: "arrow.clockwise") }
             }
         }
+        
+        .onAppear {
+            // Push any offline writes first, then pull the server truth (including photo filenames)
+            SyncManager.shared.pushDirty()
+            SyncManager.shared.fetchMeals()
+        }
     }
+
 }
 

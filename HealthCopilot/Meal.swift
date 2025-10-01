@@ -6,8 +6,8 @@ struct Meal: Identifiable, Codable {
     var localId: String
     var text: String
     var timestamp: Date
-    var pendingSync: Bool = false         // local-only flag, should persist locally
-    var updatedAt: Date?                  // PB 'updated' mirror
+    var pendingSync: Bool = false
+    var updatedAt: Date?
     var id: String { localId }
     var isDeleted: Bool = false
     var photo: String? = nil
@@ -17,50 +17,47 @@ struct Meal: Identifiable, Codable {
         case localId
         case text
         case timestamp
-        case pendingSync                    // ⬅️ include so we save it locally
+        case pendingSync
         case updatedAt  = "updated"
         case isDeleted
-        case photo
+        case photo                  // local JSON uses "photo"
+        case image                  // PB uses "image"
     }
 
-    // Custom decode: PB won’t send pendingSync, so default it to false
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.pbId       = try? c.decode(String.self, forKey: .pbId)
-        self.localId    = try c.decode(String.self, forKey: .localId)
-        self.text       = try c.decode(String.self, forKey: .text)
-        self.timestamp  = try c.decode(Date.self, forKey: .timestamp)
-        self.updatedAt  = try? c.decode(Date.self, forKey: .updatedAt)
+        self.pbId        = try? c.decode(String.self, forKey: .pbId)
+        self.localId     = try c.decode(String.self, forKey: .localId)
+        self.text        = try c.decode(String.self, forKey: .text)
+        self.timestamp   = try c.decode(Date.self, forKey: .timestamp)
+        self.updatedAt   = try? c.decode(Date.self, forKey: .updatedAt)
         self.pendingSync = (try? c.decodeIfPresent(Bool.self, forKey: .pendingSync)) ?? false
         self.isDeleted   = (try? c.decodeIfPresent(Bool.self, forKey: .isDeleted)) ?? false
+
+        // Accept either "photo" (local file) or "image" (PocketBase)
+        self.photo = (try? c.decodeIfPresent(String.self, forKey: .photo))
+                  ?? (try? c.decodeIfPresent(String.self, forKey: .image))
     }
 
-    // Synthesized encode is fine (it will include pendingSync via CodingKeys)
-}
-
-extension Meal {
-    /// Full designated initializer (so you still have a memberwise-style init)
-    init(pbId: String? = nil,
-         localId: String,
-         text: String,
-         timestamp: Date,
-         pendingSync: Bool = false,
-         updatedAt: Date? = nil) {
-        self.pbId = pbId
-        self.localId = localId
-        self.text = text
-        self.timestamp = timestamp
-        self.pendingSync = pendingSync
-        self.updatedAt = updatedAt
+    // Keep local saves backward-compatible: write "photo" in meals.json (not "image")
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(pbId, forKey: .pbId)
+        try c.encode(localId, forKey: .localId)
+        try c.encode(text, forKey: .text)
+        try c.encode(timestamp, forKey: .timestamp)
+        try c.encodeIfPresent(updatedAt, forKey: .updatedAt)
+        try c.encode(pendingSync, forKey: .pendingSync)
+        try c.encode(isDeleted, forKey: .isDeleted)
+        try c.encodeIfPresent(photo, forKey: .photo)   // ← only "photo" for local storage
     }
 
-    /// Convenience initializer for creating a brand-new local meal
     init(text: String, timestamp: Date) {
         self.pbId = nil
         self.localId = UUID().uuidString
         self.text = text
         self.timestamp = timestamp
-        self.pendingSync = true          // new local records start dirty
-        self.updatedAt = Date()          // local just wrote
+        self.pendingSync = true
+        self.updatedAt = Date()
     }
 }

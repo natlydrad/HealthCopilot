@@ -307,6 +307,12 @@ class SyncManager {
                 DispatchQueue.main.async {
                     MealStore.shared.mergeFetched(decoded)
                 }
+                
+                for m in decoded {
+                    print("   • PB item id=\(m.pbId ?? "nil") localId=\(m.localId) updatedAt=\(String(describing: m.updatedAt)) photo=\(m.photo ?? "nil") text.len=\(m.text.count)")
+                }
+
+                
             } else {
                 print("❌ fetchMeals: JSON parse failed. Body:",
                       String(data: data, encoding: .utf8) ?? "<non-utf8>")
