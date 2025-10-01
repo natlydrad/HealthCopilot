@@ -57,7 +57,7 @@ struct MealRow: View {
                     Text(meal.timestamp.formatted())
                         .font(.caption)
                         .foregroundColor(.secondary)
-
+  
                     if meal.pendingSync {
                         Text("unsynced")
                             .font(.caption2)

@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import ImageIO
 
 class MealStore: ObservableObject {
     static let shared = MealStore()
@@ -120,7 +121,17 @@ class MealStore: ObservableObject {
     }
     
     func addMealWithImage(text: String, imageData originalData: Data, takenAt: Date?) {
-        let pickedTimestamp = takenAt ?? Date()
+        let pickedTimestamp: Date
+        if let exifDate = photoCaptureDate(from: originalData) {
+            pickedTimestamp = exifDate
+        } else if let takenAt = takenAt {
+            pickedTimestamp = takenAt
+        } else {
+            pickedTimestamp = Date()
+        }
+
+
+
         
         var newMeal = Meal(text: text, timestamp: pickedTimestamp)
         newMeal.pendingSync = true
@@ -153,6 +164,22 @@ class MealStore: ObservableObject {
                 print("❌ uploadMealWithImage error:", error)
             }
         }
+    }
+    
+    func photoCaptureDate(from imageData: Data) -> Date? {
+        guard let src = CGImageSourceCreateWithData(imageData as CFData, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any] else { return nil }
+
+        if let exif = props[kCGImagePropertyExifDictionary] as? [CFString: Any],
+           let s = exif[kCGImagePropertyExifDateTimeOriginal] as? String {
+            let df = DateFormatter()
+            df.locale = Locale(identifier: "en_US_POSIX")
+            df.timeZone = .current   // 👈 interpret as local wall clock
+            df.dateFormat = "yyyy:MM:dd HH:mm:ss"
+            return df.date(from: s)
+        }
+
+        return nil
     }
 
     
