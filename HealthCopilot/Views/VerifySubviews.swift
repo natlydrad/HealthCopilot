@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import PhotosUI
 
 struct AuthorizedAsyncImage: View {
     let url: URL
@@ -26,8 +27,6 @@ struct AuthorizedAsyncImage: View {
         }
     }
 }
-
-import SwiftUI
 
 struct MealRow: View {
     let meal: Meal
@@ -84,18 +83,19 @@ struct MealRow: View {
     }
 }
 
-import SwiftUI
-
 struct EditMealSheet: View {
     let meal: Meal
-    let onSave: (_ newText: String, _ newDate: Date) -> Void
+    // NOTE: new onSave signature includes `newImageData`
+    let onSave: (_ newText: String, _ newDate: Date, _ newImageData: Data?) -> Void
     let onCancel: () -> Void
 
     @State private var text: String
     @State private var date: Date
+    @State private var pickedItem: PhotosPickerItem? = nil
+    @State private var pickedImageData: Data? = nil
 
     init(meal: Meal,
-         onSave: @escaping (_ newText: String, _ newDate: Date) -> Void,
+         onSave: @escaping (_ newText: String, _ newDate: Date, _ newImageData: Data?) -> Void,
          onCancel: @escaping () -> Void) {
         self.meal = meal
         self.onSave = onSave
@@ -111,10 +111,40 @@ struct EditMealSheet: View {
                     TextField("Meal description", text: $text)
                     DatePicker("Time", selection: $date)
                 }
-                Section {
-                    Button("Save Changes") { onSave(text, date) }
-                        .foregroundColor(.blue)
 
+                Section(header: Text("Photo")) {
+                    HStack(spacing: 12) {
+                        PhotosPicker(selection: $pickedItem, matching: .images, photoLibrary: .shared()) {
+                            Label(pickedImageData == nil ? "Choose Photo" : "Change Photo", systemImage: "photo")
+                        }
+                        .onChange(of: pickedItem) { newItem in
+                            Task {
+                                guard let item = newItem else { pickedImageData = nil; return }
+                                pickedImageData = try? await item.loadTransferable(type: Data.self)
+                            }
+                        }
+                        if let data = pickedImageData, let img = UIImage(data: data) {
+                            Image(uiImage: img)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 44, height: 44)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .overlay(RoundedRectangle(cornerRadius: 6).stroke(.secondary, lineWidth: 0.5))
+                        } else if let _ = meal.photo {
+                            Text("Existing photo will remain unless you pick a new one.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("No photo yet.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                Section {
+                    Button("Save Changes") { onSave(text, date, pickedImageData) }
+                        .foregroundColor(.blue)
                     Button("Cancel") { onCancel() }
                         .foregroundColor(.red)
                 }

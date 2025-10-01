@@ -41,8 +41,11 @@ struct VerifyView: View {
             if let meal = mealToEdit {
                 EditMealSheet(
                     meal: meal,
-                    onSave: { newText, newDate in
-                        store.updateMeal(meal: meal, newText: newText, newDate: newDate)
+                    onSave: { newText, newDate, newImageData in
+                        store.updateMeal(meal: meal,
+                                         newText: newText,
+                                         newDate: newDate,
+                                         newImageData: newImageData)
                         mealToEdit = nil
                         isEditingSheetPresented = false
                     },

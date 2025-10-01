@@ -1,6 +1,7 @@
 import Foundation
 import UniformTypeIdentifiers
 import ImageIO
+import UIKit
 
 private let PB_PHOTO_FIELD = "image"
 
@@ -810,4 +811,28 @@ class SyncManager {
 
     
     
+}
+
+// SyncManager.swift
+extension SyncManager {
+    /// Add/replace the photo for an existing local meal.
+    /// - If meal.pbId != nil → multipart PATCH the image field.
+    /// - Else → multipart POST a full record with the image.
+    func setMealPhoto(for meal: Meal, imageData rawData: Data) async throws {
+        // compress for network sanity (same approach as addMealWithImage)
+        let compressed: Data = {
+            if let ui = UIImage(data: rawData),
+               let jpeg = ui.jpegData(compressionQuality: 0.85) {
+                return jpeg
+            }
+            return rawData
+        }()
+
+        if let pbId = meal.pbId {
+            try await self.patchMealPhotoAsync(pbId: pbId, imageData: compressed, field: PB_PHOTO_FIELD, localId: meal.localId)
+        } else {
+            // Not on server yet → create it with the image so we get back a filename
+            try await self.uploadMealWithImage(meal: meal, imageData: compressed)
+        }
+    }
 }

@@ -21,15 +21,35 @@ class MealStore: ObservableObject {
     }
     
     // Update
-    func updateMeal(meal: Meal, newText: String, newDate: Date) {
+    func updateMeal(meal: Meal, newText: String, newDate: Date, newImageData: Data?) {
+        // 1) Update local fields and queue a sync (unchanged)
         if let i = meals.firstIndex(where: { $0.localId == meal.localId }) {
             meals[i].text = newText
             meals[i].timestamp = newDate
             meals[i].pendingSync = true
-            meals[i].updatedAt = Date()   // ← important
+            meals[i].updatedAt = Date()   // ← keep LWW semantics
             saveMeals()
 
-            SyncManager.shared.pushDirty()  // or upsert/update path
+            // This kicks JSON PATCH for text/date
+            SyncManager.shared.pushDirty()
+        }
+
+        // 2) If user picked a photo, upload/replace it on PocketBase
+        if let data = newImageData {
+            // (optional) compress to ~85% JPEG as you already do elsewhere
+            let compressed: Data = {
+                if let ui = UIImage(data: data),
+                   let jpeg = ui.jpegData(compressionQuality: 0.85) { return jpeg }
+                return data
+            }()
+
+            Task {
+                do {
+                    try await SyncManager.shared.setMealPhoto(for: meal, imageData: compressed)
+                } catch {
+                    print("❌ setMealPhoto error:", error.localizedDescription)
+                }
+            }
         }
     }
 
