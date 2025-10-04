@@ -1,4 +1,5 @@
 let authToken = null;
+const PB_BASE = "http://127.0.0.1:8090";
 
 export function setAuthToken(token) {
   authToken = token;
@@ -18,10 +19,21 @@ export async function fetchMeals() {
 }
 
 export async function fetchIngredients(mealId) {
-  const res = await fetch(
-    `/api/collections/ingredients/records?filter=meal='${mealId}'`
-  );
-  if (!res.ok) throw new Error("Failed to fetch ingredients");
+  // PocketBase filter for a relation field must use this format:
+  // filter=(mealId='jmlpwbqrpq4etn8')
+  const filter = encodeURIComponent(`(mealId='${mealId}')`);
+
+  const url = `${PB_BASE}/api/collections/ingredients/records?filter=${filter}`;
+
+  console.log("🛰 Fetching:", url);
+  const res = await fetch(url);
+
+  if (!res.ok) {
+    console.error("❌ fetchIngredients failed", res.status, res.statusText);
+    throw new Error("Failed to fetch ingredients");
+  }
+
   const data = await res.json();
+  console.log("📦 fetchIngredients got", data.items.length, "ingredients");
   return data.items;
 }
