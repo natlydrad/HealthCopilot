@@ -16,3 +16,12 @@ export async function fetchMeals() {
   const data = await res.json();
   return data.items || [];
 }
+
+export async function fetchIngredients(mealId) {
+  const res = await fetch(
+    `/api/collections/ingredients/records?filter=meal='${mealId}'`
+  );
+  if (!res.ok) throw new Error("Failed to fetch ingredients");
+  const data = await res.json();
+  return data.items;
+}
