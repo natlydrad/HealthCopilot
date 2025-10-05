@@ -1,7 +1,9 @@
-import { useState } from "react";
-import { login } from "./auth";
-import { setAuthToken } from "./api";
+import { useState } from "react";                      // ← missing import
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Dashboard from "./Dashboard";
+import DayDetail from "./DayDetail"; // we'll create this next
+import { login } from "./auth";                         // ← needed for handleLogin
+import { setAuthToken } from "./api";                   // ← needed for token storage
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -36,12 +38,22 @@ export default function App() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-        <button className="bg-blue-500 text-white px-4 py-2 rounded" type="submit">
+        <button
+          className="bg-blue-500 text-white px-4 py-2 rounded"
+          type="submit"
+        >
           Log in
         </button>
       </form>
     );
   }
 
-  return <Dashboard />;
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/day/:date" element={<DayDetail />} />
+      </Routes>
+    </BrowserRouter>
+  );
 }
