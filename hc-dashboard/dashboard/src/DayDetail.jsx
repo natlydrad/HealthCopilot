@@ -11,6 +11,7 @@ export default function DayDetail() {
   useEffect(() => {
     async function load() {
       const allMeals = await fetchMeals();
+      console.log("Fetched meals:", allMeals.map(m => ({ id: m.id, text: m.text })));
       const dayMeals = allMeals.filter(
         (m) => new Date(m.timestamp).toISOString().split("T")[0] === date
       );

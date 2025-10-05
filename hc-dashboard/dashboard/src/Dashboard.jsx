@@ -8,8 +8,13 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchMeals().then(setMeals);
-  }, []);
+  async function load() {
+    const items = await fetchMeals();
+    setMeals(items);
+  }
+  load();
+}, []); // ← this runs once per page refresh (which is enough)
+
 
   const grouped = groupMealsByDay(meals);
 

@@ -24,11 +24,26 @@ def get_token():
     return _cached_token
 
 def fetch_meals():
-    url = f"{PB_URL}/api/collections/meals/records"
     headers = {"Authorization": f"Bearer {get_token()}"}
-    r = requests.get(url, headers=headers)
-    r.raise_for_status()
-    return r.json()["items"]
+    all_items = []
+    page = 1
+    per_page = 200  # grab up to 200 at a time
+
+    while True:
+        url = f"{PB_URL}/api/collections/meals/records?page={page}&perPage={per_page}&sort=-created"
+        print(f"🔄 Fetching meals page {page}...")
+        r = requests.get(url, headers=headers)
+        r.raise_for_status()
+        data = r.json()
+        items = data.get("items", [])
+        all_items.extend(items)
+        if len(items) < per_page:
+            break
+        page += 1
+
+    print(f"✅ Retrieved {len(all_items)} meals from PocketBase")
+    return all_items
+
 
 def insert_ingredient(ingredient):
     url = f"{PB_URL}/api/collections/ingredients/records"

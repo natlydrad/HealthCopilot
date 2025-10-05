@@ -8,15 +8,31 @@ export function setAuthToken(token) {
 export async function fetchMeals() {
   if (!authToken) throw new Error("Not logged in");
 
-  const res = await fetch("http://127.0.0.1:8090/api/collections/meals/records", {
+  const url = "http://127.0.0.1:8090/api/collections/meals/records?perPage=200&sort=-created";
+  console.log("Fetching meals from:", url);
+
+  const res = await fetch(url, {
     headers: {
-      Authorization: `Bearer ${authToken}`
-    }
+      Authorization: `Bearer ${authToken}`,
+    },
   });
 
   const data = await res.json();
-  return data.items || [];
+  console.log("Raw meals response:", data); // <-- log everything
+
+  if (!data || !data.items) {
+    console.warn("No 'items' field in meal data:", data);
+    return [];
+  }
+
+  // Optional: sort client-side by created just to be sure
+  const sorted = [...data.items].sort(
+    (a, b) => new Date(b.created) - new Date(a.created)
+  );
+  console.log("Sorted meal IDs:", sorted.map((m) => m.id));
+  return sorted;
 }
+
 
 export async function fetchIngredients(mealId) {
   // PocketBase filter for a relation field must use this format:
