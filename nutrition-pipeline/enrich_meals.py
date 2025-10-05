@@ -50,6 +50,7 @@ def enrich_meals():
 
             ing = normalize_quantity(ing)
             usda = usda_lookup(ing["name"])
+            meal_timestamp = meal.get("timestamp")
 
             ingredient = {
                 "mealId": meal["id"],
@@ -61,6 +62,7 @@ def enrich_meals():
                 "nutrition": usda["nutrition"] if usda else {},
                 "rawGPT": ing,
                 "rawUSDA": usda or {},
+                "timestamp": meal_timestamp,
             }
 
             result = insert_ingredient(ingredient)
