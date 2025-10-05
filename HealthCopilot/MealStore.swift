@@ -141,6 +141,7 @@ class MealStore: ObservableObject {
     }
     
     func addMealWithImage(text: String, imageData originalData: Data, takenAt: Date?) {
+        // Determine timestamp (prefer EXIF)
         let pickedTimestamp: Date
         if let exifDate = photoCaptureDate(from: originalData) {
             pickedTimestamp = exifDate
@@ -150,22 +151,20 @@ class MealStore: ObservableObject {
             pickedTimestamp = Date()
         }
 
-
-
-        
+        // Create a new local meal record
         var newMeal = Meal(text: text, timestamp: pickedTimestamp)
         newMeal.pendingSync = true
         newMeal.updatedAt = Date()
         meals.append(newMeal)
         saveMeals()
-        
+
         print("➕ [LOCAL] meal added:",
               "localId=\(newMeal.localId)",
               "pbId=\(newMeal.pbId ?? "nil")",
               "timestamp=\(pickedTimestamp)",
               "text.len=\(text.count)")
-        
-        // Compress to ~85% JPEG for a good balance; tweak to taste
+
+        // Compress to ~85% JPEG
         let compressed: Data
         if let ui = UIImage(data: originalData),
            let jpeg = ui.jpegData(compressionQuality: 0.85) {
@@ -175,16 +174,39 @@ class MealStore: ObservableObject {
             compressed = originalData
             print("⚠️ Using original image bytes:", originalData.count)
         }
-        
-        // Kick the multipart POST immediately (so the photo filename comes back)
+
+        // --- 🆕 Save image locally so it shows up offline + can retry later ---
+        let imgName = "meal-\(newMeal.localId).jpg"
+        let imgURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+            .first!.appendingPathComponent(imgName)
+        do {
+            try compressed.write(to: imgURL)
+            newMeal.photo = imgName
+            if let i = meals.firstIndex(where: { $0.localId == newMeal.localId }) {
+                meals[i] = newMeal
+            }
+            saveMeals()
+            objectWillChange.send()
+            print("💾 Saved local image:", imgURL.lastPathComponent)
+
+        } catch {
+            print("⚠️ Failed to save local image:", error)
+        }
+
+        // --- Try immediate upload (will fail gracefully offline) ---
         Task {
             do {
                 try await SyncManager.shared.uploadMealWithImage(meal: newMeal, imageData: compressed)
+
+                // On success → optionally delete cached file
+                try? FileManager.default.removeItem(at: imgURL)
             } catch {
-                print("❌ uploadMealWithImage error:", error)
+                print("❌ uploadMealWithImage error:", error.localizedDescription)
+                // Leave local file; SyncManager.pushDirty() will retry later
             }
         }
     }
+
     
     func photoCaptureDate(from imageData: Data) -> Date? {
         guard let src = CGImageSourceCreateWithData(imageData as CFData, nil),
@@ -243,6 +265,12 @@ class MealStore: ObservableObject {
     private func age(_ d: Date?) -> Date {
         d ?? .distantPast
     }
+    
+    private func localImageURL(for localId: String) -> URL {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        return docs.appendingPathComponent("meal-\(localId).jpg")
+    }
+
 
     func mergeFetched(_ remote: [Meal]) {
         print("🔗 mergeFetched: remote=\(remote.count) local(before)=\(meals.count)")

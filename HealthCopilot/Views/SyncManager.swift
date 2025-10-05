@@ -340,12 +340,34 @@ class SyncManager {
         }
         // Then upserts
         for m in upserts {
+            // 🆕 If local cached image exists and not yet uploaded, handle that first
+            let localImageURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+                .first!.appendingPathComponent("meal-\(m.localId).jpg")
+
+            if FileManager.default.fileExists(atPath: localImageURL.path) {
+                print("📸 Found local image for \(m.localId); attempting upload")
+
+                if let data = try? Data(contentsOf: localImageURL) {
+                    Task {
+                        do {
+                            try await self.uploadMealWithImage(meal: m, imageData: data)
+                        } catch {
+                            print("⚠️ Retried image upload failed:", error)
+                        }
+                    }
+                }
+                continue
+            }
+
+
+            // 🧠 Otherwise, just normal text-only sync
             if m.pbId == nil {
                 upsertMeal(m)
             } else {
                 updateMeal(m)
             }
         }
+
     }
 
 
@@ -478,52 +500,91 @@ class SyncManager {
 
 
     func uploadMealWithImage(meal: Meal, imageData: Data) async throws {
+        // --- BUILD REQUEST ---
         let filename = "meal-\(meal.localId.prefix(8)).jpg"
         let files = [(name: PB_PHOTO_FIELD, filename: filename, mime: "image/jpeg", data: imageData)]
         let boundary = "Boundary-\(UUID().uuidString)"
-        
+
+        // 🔒 Auth check
         guard let token = self.token, let userId = self.userId else {
             throw URLError(.userAuthenticationRequired)
         }
 
+        guard let url = URL(string: "\(baseURL)/api/collections/meals/records") else {
+            throw URLError(.badURL)
+        }
 
-        var req = URLRequest(url: URL(string: "\(baseURL)/api/collections/meals/records")!)
+        var req = URLRequest(url: url)
         req.httpMethod = "POST"
-        req.setValue("Bearer \(token ?? "")", forHTTPHeaderField: "Authorization")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        req.httpBody = makeMultipartBody(boundary: boundary,
-                                         fields: [
-                                            "user": userId,
-                                            "timestamp": ISO8601DateFormatter().string(from: meal.timestamp),
-                                            "text": meal.text,
-                                            "localId": meal.localId
-                                         ],
-                                         files: files)
+        req.httpBody = makeMultipartBody(
+            boundary: boundary,
+            fields: [
+                "user": userId,
+                "timestamp": ISO8601DateFormatter().string(from: meal.timestamp),
+                "text": meal.text,
+                "localId": meal.localId
+            ],
+            files: files
+        )
 
-        // 🔁 async/await
-        let (data, resp) = try await URLSession.shared.data(for: req)
-        let status = (resp as? HTTPURLResponse)?.statusCode ?? -1
-        guard (200..<300).contains(status) else {
-            throw HTTPError.code(status, String(data: data, encoding: .utf8) ?? "")
-        }
+        // --- ATTEMPT UPLOAD ---
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            let status = (resp as? HTTPURLResponse)?.statusCode ?? -1
+            guard (200..<300).contains(status) else {
+                throw HTTPError.code(status, String(data: data, encoding: .utf8) ?? "")
+            }
 
-        // Parse response
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let pbId = json["id"] as? String else { return }
+            // --- PARSE RESPONSE ---
+            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let pbId = json["id"] as? String else {
+                print("⚠️ uploadMealWithImage: Missing id in response")
+                return
+            }
 
-        let photo = self.parsePhotoFilename(json, field: PB_PHOTO_FIELD) // handles string or [string]
+            let photo = self.parsePhotoFilename(json, field: PB_PHOTO_FIELD)
 
-        // Link local ↔ PB id on main
-        await MainActor.run {
-            MealStore.shared.linkLocalToRemote(localId: meal.localId, pbId: pbId)
-            if let photo { MealStore.shared.updatePhoto(localId: meal.localId, filename: photo) }
-        }
+            // --- UPDATE LOCAL STORE ---
+            await MainActor.run {
+                MealStore.shared.linkLocalToRemote(localId: meal.localId, pbId: pbId)
+                if let photo {
+                    MealStore.shared.updatePhoto(localId: meal.localId, filename: photo)
+                }
+                MealStore.shared.markSynced(localId: meal.localId)
+            }
 
-        // If PB didn’t save the file on POST (rare), fall back to a multipart PATCH
-        if photo == nil {
-            try await self.patchMealPhotoAsync(pbId: pbId, imageData: imageData, field: PB_PHOTO_FIELD, localId: meal.localId)
+            // --- CLEANUP LOCAL CACHED FILE (if exists) ---
+            let localURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+                .first!.appendingPathComponent("meal-\(meal.localId).jpg")
+            if FileManager.default.fileExists(atPath: localURL.path) {
+                try? FileManager.default.removeItem(at: localURL)
+                print("🧹 Deleted cached image:", localURL.lastPathComponent)
+            }
+
+            // --- FALLBACK PATCH IF NO PHOTO RETURNED ---
+            if photo == nil {
+                try await self.patchMealPhotoAsync(
+                    pbId: pbId,
+                    imageData: imageData,
+                    field: PB_PHOTO_FIELD,
+                    localId: meal.localId
+                )
+            }
+
+        } catch {
+            // --- OFFLINE OR NETWORK FAILURE HANDLING ---
+            if (error as? URLError)?.code == .notConnectedToInternet {
+                print("🌐 Offline: queued image upload for later:", meal.localId)
+                // leave local file for pushDirty retry
+            } else {
+                print("❌ uploadMealWithImage error:", error.localizedDescription)
+            }
+            throw error // propagate to caller for logging, but local data remains safe
         }
     }
+
     
     private func patchMealPhotoAsync(pbId: String, imageData: Data, field: String, localId: String) async throws {
         let filename = "meal-\(localId.prefix(8)).jpg"

@@ -37,23 +37,48 @@ struct MealRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
 
-            // Thumbnail (if we have one)
-            if let pbId = meal.pbId, let photo = meal.photo,
-               let url = URL(string: "\(baseURL)/api/files/meals/\(pbId)/\(photo)") {
-                AuthorizedAsyncImage(url: url, token: token)
-                    .onAppear {
-                        print("🖼️ THUMB: building URL for pbId=\(pbId) photo=\(photo)")
+            // --- 🖼️ IMAGE THUMBNAIL ---
+            Group {
+                if let pbId = meal.pbId,
+                   let photo = meal.photo,
+                   let url = URL(string: "\(baseURL)/api/files/meals/\(pbId)/\(photo)") {
+                    // ✅ Server-hosted image
+                    AuthorizedAsyncImage(url: url, token: token)
+                        .onAppear {
+                            print("🖼️ THUMB (PB): \(pbId) \(photo)")
+                        }
+
+                } else if let localFilename = meal.photo,
+                          let localURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+                              .first?
+                              .appendingPathComponent(localFilename),
+                          FileManager.default.fileExists(atPath: localURL.path),
+                          let ui = UIImage(contentsOfFile: localURL.path) {
+                    // ✅ Local offline image
+                    Image(uiImage: ui)
+                        .resizable()
+                        .scaledToFill()
+                        .onAppear {
+                            print("🖼️ THUMB (LOCAL): \(localFilename)")
+                        }
+
+                } else {
+                    // 🚫 No image available yet
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.gray.opacity(0.1))
+                        Image(systemName: "photo")
+                            .foregroundColor(.secondary.opacity(0.4))
+                            .imageScale(.large)
                     }
-                    .frame(width: 64, height: 64)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(.secondary.opacity(0.3)))
-            } else {
-                // This else is just for debugging why no image rendered
+                    .onAppear { print("⚠️ No image for localId=\(meal.localId)") }
+                }
             }
+            .frame(width: 64, height: 64)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(.secondary.opacity(0.3)))
 
-            
-
-            // Texts
+            // --- 📝 TEXT INFO ---
             VStack(alignment: .leading, spacing: 4) {
                 Text(meal.text.isEmpty ? "—" : meal.text)
                     .font(.body)
@@ -63,7 +88,7 @@ struct MealRow: View {
                     Text(meal.timestamp.formatted())
                         .font(.caption)
                         .foregroundColor(.secondary)
-  
+
                     if meal.pendingSync {
                         Text("unsynced")
                             .font(.caption2)
@@ -82,6 +107,7 @@ struct MealRow: View {
         .padding(.vertical, 6)
     }
 }
+
 
 struct EditMealSheet: View {
     let meal: Meal
