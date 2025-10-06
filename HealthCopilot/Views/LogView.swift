@@ -111,6 +111,8 @@ struct LogView: View {
             }) {
                 Text("Add Meal")
                     .frame(maxWidth: .infinity)
+            
+
             }
             
             .sheet(isPresented: $showCamera) {
@@ -130,7 +132,8 @@ struct LogView: View {
 
             .padding(.top, 4)
 
-
+            SyncStatusBar()
+                .padding(.top, 8)
 
             Spacer()
         }

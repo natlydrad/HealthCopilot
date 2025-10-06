@@ -4,8 +4,9 @@ import SwiftUI
 struct HealthCopilotApp: App {
     // ⬇️ Use the same instance that SyncManager updates
     @StateObject private var mealStore = MealStore.shared
-
     @Environment(\.scenePhase) private var scenePhase
+
+
 
     init() {
         // Login to PocketBase on startup
@@ -37,6 +38,14 @@ struct HealthCopilotApp: App {
                 NavigationView { VerifyView(store: mealStore) }
                     .tabItem { Label("Verify", systemImage: "checkmark.circle") }
             }
+            
+            .onAppear {
+                            HealthKitManager.shared.requestPermissions { granted in
+                                print("🔐 HealthKit permission granted:", granted)
+                          }
+                HealthKitManager.shared.debugListAllTypes()
+                        }
+            
             .onChange(of: scenePhase) { phase in
                 print("🟦 scenePhase:", phase)
                 if phase == .active {
