@@ -976,3 +976,72 @@ extension SyncManager {
 
 
 }
+
+// MARK: - Raw Inputs
+extension SyncManager {
+
+    func pushRawInputs() {
+        let all = RawInputStore.shared.items.filter { $0.pendingSync }
+        for r in all {
+            if r.id == nil { uploadRawInput(r) } else { updateRawInput(r) }
+        }
+    }
+
+    private func uploadRawInput(_ r: RawInput) {
+        guard let token = token, let uid = userId else { return }
+        guard let url = URL(string: "\(baseURL)/api/collections/raw_inputs/records") else { return }
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let body: [String: Any] = [
+            "user": uid,
+            "timestamp": ISO8601DateFormatter().string(from: r.timestamp),
+            "text": r.text,
+            "status": "pending",
+            "localId": r.localId
+        ]
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        URLSession.shared.dataTask(with: req) { data, resp, _ in
+            guard let data = data,
+                  (resp as? HTTPURLResponse)?.statusCode == 200,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String:Any],
+                  let id = json["id"] as? String
+            else { return }
+            DispatchQueue.main.async {
+                if let i = RawInputStore.shared.items.firstIndex(where: { $0.localId == r.localId }) {
+                    RawInputStore.shared.items[i].id = id
+                    RawInputStore.shared.items[i].pendingSync = false
+                    RawInputStore.shared.save()
+                }
+            }
+        }.resume()
+    }
+
+    private func updateRawInput(_ r: RawInput) {
+        guard let token = token, let id = r.id else { return }
+        guard let url = URL(string: "\(baseURL)/api/collections/raw_inputs/records/\(id)") else { return }
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "PATCH"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let body: [String: Any] = ["text": r.text, "status": r.status]
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        URLSession.shared.dataTask(with: req) { _, resp, _ in
+            if (resp as? HTTPURLResponse)?.statusCode == 200 {
+                DispatchQueue.main.async {
+                    if let i = RawInputStore.shared.items.firstIndex(where: { $0.localId == r.localId }) {
+                        RawInputStore.shared.items[i].pendingSync = false
+                        RawInputStore.shared.save()
+                    }
+                }
+            }
+        }.resume()
+    }
+}

@@ -86,30 +86,42 @@ struct LogView: View {
             Button(action: {
                 let typed = input.trimmingCharacters(in: .whitespacesAndNewlines)
                 let hasPhoto = (pickedImageData != nil)
-
-                print("📸 Add Meal tapped | typed:'\(typed)' | hasPhoto:\(hasPhoto)")
-
-                // If nothing at all, bail
                 guard hasPhoto || !typed.isEmpty else {
                     print("⛔️ No text and no photo — ignoring tap")
                     return
                 }
 
                 if let data = pickedImageData {
+                    // 🍽️ Photo → treat as MEAL
                     let takenAt = exifCaptureDate(from: data)
-                    print("🕒 EXIF takenAt:", takenAt?.description ?? "nil", "| bytes:", data.count)
-                    store.addMealWithImage(text: typed.isEmpty ? "" : typed, imageData: data, takenAt: takenAt)
+                    print("📸 Meal upload | \(typed)")
+                    store.addMealWithImage(text: typed, imageData: data, takenAt: takenAt)
                 } else {
-                    print("📝 Adding text-only meal")
-                    store.addMeal(text: typed)
+                    // 🧠 Text-only → treat as RAW_INPUT
+                    guard let userId = SyncManager.shared.userId else {
+                        print("❌ no userId; cannot create raw_input")
+                        return
+                    }
+                    print("🧠 Logging raw text: \(typed)")
+                    let raw = RawInput(
+                        user: userId,
+                        timestamp: Date(),
+                        text: typed,
+                        status: "pending",
+                        pendingSync: true
+                    )
+                    RawInputStore.shared.items.insert(raw, at: 0)
+                    RawInputStore.shared.save()
+                    SyncManager.shared.pushRawInputs()
                 }
 
                 // Reset UI
                 input = ""
                 pickedItem = nil
                 pickedImageData = nil
-            }) {
-                Text("Add Meal")
+            })
+            {
+                Text("Add anything >:)")
                     .frame(maxWidth: .infinity)
             
 
