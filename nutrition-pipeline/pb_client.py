@@ -51,3 +51,24 @@ def insert_ingredient(ingredient):
     r = requests.post(url, headers=headers, json=ingredient)
     r.raise_for_status()
     return r.json()
+
+def fetch_records(collection, filter=None, per_page=100):
+    """Generic fetch for any collection."""
+    headers = {"Authorization": f"Bearer {get_token()}"}
+    url = f"{PB_URL}/api/collections/{collection}/records?perPage={per_page}"
+    if filter:
+        url += f"&filter={filter}"
+    r = requests.get(url, headers=headers)
+    r.raise_for_status()
+    return r.json().get("items", [])
+
+def patch_record(collection, record_id, data):
+    """Generic PATCH update for any collection."""
+    headers = {
+        "Authorization": f"Bearer {get_token()}",
+        "Content-Type": "application/json",
+    }
+    url = f"{PB_URL}/api/collections/{collection}/records/{record_id}"
+    r = requests.patch(url, headers=headers, json=data)
+    r.raise_for_status()
+    return r.json()
