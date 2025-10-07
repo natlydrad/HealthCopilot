@@ -30,8 +30,8 @@ final class HealthSyncManager: ObservableObject {
         Task.detached {
             do {
                 let now = Date()
-                //let start = self.last(self.lastStepsKey) ?? self.cal.date(byAdding: .day, value: -7, to: now)!
-                let start = Calendar.current.date(byAdding: .day, value: -3, to: now)!
+                let start = self.last(self.lastStepsKey) ?? self.cal.date(byAdding: .day, value: -7, to: now)!
+                //let start = Calendar.current.date(byAdding: .day, value: -30, to: now)!
                 let raw = await withCheckedContinuation { cont in
                     self.hk.fetchStepData(start: start, end: now) { cont.resume(returning: $0) }
                 }
@@ -58,8 +58,8 @@ final class HealthSyncManager: ObservableObject {
         Task.detached {
             do {
                 let now = Date()
-                //let start = self.last(self.lastGlucoseKey) ?? self.cal.date(byAdding: .day, value: -7, to: now)!
-                let start = Calendar.current.date(byAdding: .day, value: -3, to: now)!
+                let start = self.last(self.lastGlucoseKey) ?? self.cal.date(byAdding: .day, value: -7, to: now)!
+                //let start = Calendar.current.date(byAdding: .day, value: -30, to: now)!
                 
                 print("🕒 [HealthSync] step query range:", start, "→", now, "| Δ", now.timeIntervalSince(start)/60, "minutes")
 
@@ -67,6 +67,11 @@ final class HealthSyncManager: ObservableObject {
                 let samples = await withCheckedContinuation { cont in
                     self.hk.fetchGlucoseData(start: start, end: now) { cont.resume(returning: $0) }
                 }
+
+                let unique = Dictionary(grouping: samples, by: \.date)
+                    .compactMapValues { $0.first }
+                    .values
+                    .sorted(by: { $0.date < $1.date })
                 
                 print("🩸 [HealthSync] fetched \(samples.count) glucose samples")
 
