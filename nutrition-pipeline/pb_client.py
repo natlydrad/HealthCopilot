@@ -51,3 +51,24 @@ def insert_ingredient(ingredient):
     r = requests.post(url, headers=headers, json=ingredient)
     r.raise_for_status()
     return r.json()
+
+def fetch_records(collection_name, per_page=200):
+    """Generic fetch helper for any PocketBase collection."""
+    headers = {"Authorization": f"Bearer {get_token()}"}
+    all_items = []
+    page = 1
+
+    while True:
+        url = f"{PB_URL}/api/collections/{collection_name}/records?page={page}&perPage={per_page}&sort=-created"
+        print(f"📡 Fetching {collection_name} page {page}...")
+        r = requests.get(url, headers=headers)
+        r.raise_for_status()
+        data = r.json()
+        items = data.get("items", [])
+        all_items.extend(items)
+        if len(items) < per_page:
+            break
+        page += 1
+
+    print(f"✅ Retrieved {len(all_items)} records from {collection_name}")
+    return all_items
