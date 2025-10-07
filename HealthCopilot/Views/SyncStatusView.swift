@@ -18,30 +18,49 @@ struct SyncBadge: View {
             case .idle:
                 Image(systemName: "clock")
             }
-            Text(title).font(.caption).opacity(0.8)
+            Text(title)
+                .font(.caption)
+                .opacity(0.8)
         }
-        .padding(8).background(Color.secondary.opacity(0.1))
+        .padding(8)
+        .background(Color.secondary.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     static func rel(_ d: Date) -> String {
-        let f = RelativeDateTimeFormatter(); f.unitsStyle = .abbreviated
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
         return f.localizedString(for: d, relativeTo: Date())
     }
 }
 
 struct SyncStatusBar: View {
     @ObservedObject var sync = HealthSyncManager.shared
+
     var body: some View {
         VStack(spacing: 12) {
             Spacer()
+
+            // 🔹 badges for each data stream
             SyncBadge(title: "Steps", state: sync.stepsState)
             SyncBadge(title: "Glucose", state: sync.glucoseState)
-            Button("Sync") {
-                HealthSyncManager.shared.syncSteps()
-                HealthSyncManager.shared.syncGlucose()
+            SyncBadge(title: "Sleep", state: sync.sleepState)
+            SyncBadge(title: "Energy", state: sync.energyState)
+            SyncBadge(title: "Heart", state: sync.heartState)
+
+            // 🔹 sync button
+            Button("Sync Health Data") {
+                let syncer = HealthSyncManager.shared
+                syncer.syncSteps()
+                syncer.syncGlucose()
+                syncer.syncSleep(monthsBack: 6)
+                syncer.syncEnergy(monthsBack: 6)
+                syncer.syncHeart(monthsBack: 6)
             }
             .buttonStyle(.borderedProminent)
+            .padding(.top, 4)
+
+            Spacer()
         }
         .padding(.horizontal)
     }

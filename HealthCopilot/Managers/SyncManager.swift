@@ -980,6 +980,23 @@ extension SyncManager {
             print("🌐 [uploadStep] network error:", error.localizedDescription)
         }
     }
+    
+    // inside SyncManager
+    func stepExists(timestamp: Date) async -> Bool {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime]
+        let t = iso.string(from: timestamp)
+        let url = "\(self.baseURL)/api/collections/steps/records?filter=timestamp='\(t)'"
+        do {
+            let (data, _) = try await URLSession.shared.data(from: URL(string: url)!)
+            if let res = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let items = res["items"] as? [[String: Any]] {
+                return !items.isEmpty
+            }
+        } catch { print("⚠️ stepExists error:", error) }
+        return false
+    }
+
 
 
     func uploadGlucose(timestamp: Date, mgdl: Double) async {
@@ -1020,3 +1037,159 @@ extension SyncManager {
 
 
 }
+
+// === SyncManager+DailyUploads.swift (you can paste into SyncManager.swift) ===
+
+extension SyncManager {
+    // Sleep daily
+    func uploadSleepDaily(date: Date,
+                          totalMin: Double,
+                          remMin: Double,
+                          deepMin: Double,
+                          coreMin: Double,
+                          inBedMin: Double) async {
+        // PB collection: "sleep_daily"
+        // fields: date (date), total_min, rem_min, deep_min, core_min, inbed_min
+        await upsertDaily(collection: "sleep_daily", date: date, payload: [
+            "total_min": totalMin,
+            "rem_min": remMin,
+            "deep_min": deepMin,
+            "core_min": coreMin,
+            "inbed_min": inBedMin
+        ])
+    }
+
+    // Energy daily
+    func uploadEnergyDaily(date: Date, activeKcal: Double, basalKcal: Double) async {
+        await upsertDaily(collection: "energy_daily", date: date, payload: [
+            "active_kcal": activeKcal,
+            "basal_kcal": basalKcal
+        ])
+    }
+
+    // Heart daily
+    func uploadHeartDaily(date: Date, restingHR: Double?, hrvSDNNms: Double?, vo2max: Double?) async {
+        await upsertDaily(collection: "heart_daily", date: date, payload: [
+            "resting_hr_bpm": restingHR as Any,
+            "hrv_sdnn_ms": hrvSDNNms as Any,
+            "vo2max_ml_kg_min": vo2max as Any
+        ])
+    }
+
+    // Body daily
+    func uploadBodyDaily(date: Date, weightKg: Double?, bodyFatPct: Double?) async {
+        await upsertDaily(collection: "body_daily", date: date, payload: [
+            "weight_kg": weightKg as Any,
+            "bodyfat_pct": bodyFatPct as Any
+        ])
+    }
+
+    // MARK: - Shared upsert helper for date-keyed daily collections
+    fileprivate func upsertDaily(collection: String, date: Date, payload: [String: Any]) async {
+    // Normalize to midnight for safety, then pass to pbUpsert
+    let day = Calendar.current.startOfDay(for: date)
+    await self.pbUpsert(collection: collection, date: day, payload: payload)
+}
+
+
+    // Stub to implement with your HTTP layer
+    fileprivate func pbUpsert(collection: String, date: Date, payload: [String: Any]) async {
+        guard let token = token, let userId = userId else {
+            print("❌ [pbUpsert] missing token/userId")
+            return
+        }
+
+        // Convert date to YYYY-MM-DD for PocketBase "date" fields
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "en_US_POSIX")
+        df.timeZone = TimeZone(secondsFromGMT: 0)
+        df.dateFormat = "yyyy-MM-dd"
+        let dateStr = df.string(from: Calendar.current.startOfDay(for: date))
+
+        // Build filter for this user + date
+        let dfFull = ISO8601DateFormatter()
+        dfFull.formatOptions = [.withInternetDateTime]
+        let start = dfFull.string(from: Calendar.current.startOfDay(for: date))
+        let end = dfFull.string(from: Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: date))!)
+        let filterRaw = "user='\(userId)' && date>='\(start)' && date<'\(end)'"
+
+
+        let filter = filterRaw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? filterRaw
+        let listURL = URL(string: "\(baseURL)/api/collections/\(collection)/records?filter=\(filter)&perPage=1")!
+
+        do {
+            // 🔍 Check if record exists
+            let (listData, listResp) = try await URLSession.shared.data(from: listURL)
+            let listCode = (listResp as? HTTPURLResponse)?.statusCode ?? -1
+            guard (200..<300).contains(listCode) else {
+                print("❌ [\(collection)] lookup HTTP \(listCode): \(String(data: listData, encoding: .utf8) ?? "")")
+                return
+            }
+
+            var recordId: String?
+            if let json = try? JSONSerialization.jsonObject(with: listData) as? [String: Any],
+               let items = json["items"] as? [[String: Any]],
+               let match = items.first(where: { rec in
+                   if let ds = rec["date"] as? String,
+                      let d = ISO8601DateFormatter().date(from: ds) {
+                       return d >= Calendar.current.startOfDay(for: date) &&
+                              d < Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: date))!
+                   }
+                   return false
+               }),
+               let id = match["id"] as? String {
+                recordId = id
+            }
+
+            // Merge body
+            let iso = ISO8601DateFormatter()
+            iso.formatOptions = [.withInternetDateTime]
+            let dateISO = iso.string(from: Calendar.current.startOfDay(for: date))
+            var body: [String: Any] = ["user": userId, "date": dateISO]
+
+            for (k, v) in payload { body[k] = v }
+
+            // Shared header setup
+            var headers: [String: String] = [
+                "Authorization": "Bearer \(token)",
+                "Content-Type": "application/json"
+            ]
+
+            if let id = recordId {
+                // ♻️ PATCH existing record
+                let patchURL = URL(string: "\(baseURL)/api/collections/\(collection)/records/\(id)")!
+                var patchReq = URLRequest(url: patchURL)
+                patchReq.httpMethod = "PATCH"
+                patchReq.allHTTPHeaderFields = headers
+                patchReq.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+                let (data, resp) = try await URLSession.shared.data(for: patchReq)
+                let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+                if (200..<300).contains(code) {
+                    print("♻️ [\(collection)] PATCH \(dateStr) ✓")
+                } else {
+                    print("❌ [\(collection)] PATCH HTTP \(code): \(String(data: data, encoding: .utf8) ?? "")")
+                }
+
+            } else {
+                // 🆕 POST new record
+                let postURL = URL(string: "\(baseURL)/api/collections/\(collection)/records")!
+                var postReq = URLRequest(url: postURL)
+                postReq.httpMethod = "POST"
+                postReq.allHTTPHeaderFields = headers
+                postReq.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+                let (data, resp) = try await URLSession.shared.data(for: postReq)
+                let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+                if (200..<300).contains(code) {
+                    print("✅ [\(collection)] POST \(dateStr) ✓")
+                } else {
+                    print("❌ [\(collection)] POST HTTP \(code): \(String(data: data, encoding: .utf8) ?? "")")
+                }
+            }
+        } catch {
+            print("🌐 [\(collection)] network error:", error.localizedDescription)
+        }
+    }
+}
+
