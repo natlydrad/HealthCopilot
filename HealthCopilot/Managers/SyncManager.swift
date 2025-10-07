@@ -904,39 +904,83 @@ extension SyncManager {
     func uploadStep(timestamp: Date, steps: Int) async {
         guard let token = token, let userId = userId else { return }
 
-        // Round to nearest minute for natural de-dupe
+        // Round to nearest minute for consistency
         let rounded = Date(timeIntervalSince1970:
             (timestamp.timeIntervalSince1970 / 60.0).rounded() * 60.0)
         let df = ISO8601DateFormatter()
         let ts = df.string(from: rounded)
 
-        let body: [String: Any] = [
-            "user": userId,
-            "timestamp": ts,
-            "steps": steps,
-            "source": "HealthKit"
+        // Prepare request headers
+        var headers: [String: String] = [
+            "Authorization": "Bearer \(token)",
+            "Content-Type": "application/json"
         ]
 
-        guard let url = URL(string: "\(baseURL)/api/collections/steps/records") else { return }
-
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        // 1️⃣ First: check if this timestamp already exists for this user
+        guard let filterURL = URL(string:
+            "\(baseURL)/api/collections/steps/records?filter=user='\(userId)'&&timestamp='\(ts)'")
+        else { return }
 
         do {
-            let (data, resp) = try await URLSession.shared.data(for: req)
+            let (data, resp) = try await URLSession.shared.data(from: filterURL)
             let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
-            if (200..<300).contains(code) {
-                print("✅ [uploadStep] created step @ \(ts)")
+            guard (200..<300).contains(code) else {
+                print("❌ [uploadStep] lookup HTTP \(code)")
+                return
+            }
+
+            // Try to decode PocketBase list response
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let items = json["items"] as? [[String: Any]],
+               let existing = items.first,
+               let recordId = existing["id"] as? String {
+
+                // 2️⃣ If record exists → PATCH update instead of creating duplicate
+                guard let patchURL = URL(string: "\(baseURL)/api/collections/steps/records/\(recordId)") else { return }
+
+                var patchReq = URLRequest(url: patchURL)
+                patchReq.httpMethod = "PATCH"
+                patchReq.allHTTPHeaderFields = headers
+                patchReq.httpBody = try? JSONSerialization.data(withJSONObject: [
+                    "steps": steps,
+                    "source": "HealthKit"
+                ])
+
+                let (_, patchResp) = try await URLSession.shared.data(for: patchReq)
+                let patchCode = (patchResp as? HTTPURLResponse)?.statusCode ?? -1
+                if (200..<300).contains(patchCode) {
+                    print("♻️ [uploadStep] updated existing step @ \(ts)")
+                } else {
+                    print("❌ [uploadStep] PATCH failed (\(patchCode))")
+                }
+
             } else {
-                print("❌ [uploadStep] HTTP \(code):", String(data: data, encoding: .utf8) ?? "")
+                // 3️⃣ Otherwise, POST new record
+                guard let postURL = URL(string: "\(baseURL)/api/collections/steps/records") else { return }
+                var postReq = URLRequest(url: postURL)
+                postReq.httpMethod = "POST"
+                postReq.allHTTPHeaderFields = headers
+                postReq.httpBody = try? JSONSerialization.data(withJSONObject: [
+                    "user": userId,
+                    "timestamp": ts,
+                    "steps": steps,
+                    "source": "HealthKit"
+                ])
+
+                let (data, postResp) = try await URLSession.shared.data(for: postReq)
+                let postCode = (postResp as? HTTPURLResponse)?.statusCode ?? -1
+                if (200..<300).contains(postCode) {
+                    print("✅ [uploadStep] created step @ \(ts)")
+                } else {
+                    print("❌ [uploadStep] POST HTTP \(postCode):",
+                          String(data: data, encoding: .utf8) ?? "")
+                }
             }
         } catch {
             print("🌐 [uploadStep] network error:", error.localizedDescription)
         }
     }
+
 
     func uploadGlucose(timestamp: Date, mgdl: Double) async {
         guard let token = token, let userId = userId else { return }

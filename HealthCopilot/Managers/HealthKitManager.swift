@@ -31,33 +31,84 @@ final class HealthKitManager {
 
     struct StepSample { let date: Date; let steps: Int }
 
-    func fetchStepData(start: Date, end: Date, completion: @escaping ([StepSample]) -> Void) {
+    func fetchStepData(start: Date, end: Date, intervalMinutes: Int = 5,
+                       completion: @escaping ([StepSample]) -> Void) {
         guard let qt = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return completion([]) }
+
+        var interval = DateComponents()
+        interval.minute = intervalMinutes
+
         let pred = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
-        let q = HKSampleQuery(sampleType: qt, predicate: pred, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
+
+        // separateBySource keeps iPhone/Watch counts distinct
+        let q = HKStatisticsCollectionQuery(
+            quantityType: qt,
+            quantitySamplePredicate: pred,
+            options: [.cumulativeSum, .separateBySource],
+            anchorDate: start,
+            intervalComponents: interval
+        )
+
+        q.initialResultsHandler = { _, results, _ in
             var out: [StepSample] = []
-            for s in samples as? [HKQuantitySample] ?? [] {
-                let steps = s.quantity.doubleValue(for: .count())
-                out.append(StepSample(date: s.startDate, steps: Int(steps)))
+            results?.enumerateStatistics(from: start, to: end) { stats, _ in
+                var chosen: HKQuantity?
+                var choseWatch = false
+
+                // examine each source independently
+                if let sources = stats.sources {
+                    for source in sources {
+                        guard let q = stats.sumQuantity(for: source) else { continue }
+                        let isWatch = source.name.localizedCaseInsensitiveContains("watch")
+                        // prefer Watch if present; otherwise pick max
+                        if isWatch && !choseWatch {
+                            chosen = q
+                            choseWatch = true
+                        } else if !choseWatch {
+                            if let c = chosen {
+                                if q.doubleValue(for: .count()) > c.doubleValue(for: .count()) {
+                                    chosen = q
+                                }
+                            } else {
+                                chosen = q
+                            }
+                        }
+                    }
+                }
+
+                if let q = chosen {
+                    let steps = Int(q.doubleValue(for: .count()))
+                    if steps > 0 {
+                        out.append(StepSample(date: stats.startDate, steps: steps))
+                    }
+                }
             }
-            DispatchQueue.main.async { completion(out.sorted{ $0.date < $1.date }) }
+            DispatchQueue.main.async {
+                completion(out.sorted { $0.date < $1.date })
+            }
         }
-        store.execute(q)
+
+        self.store.execute(q)
     }
 
+
     // 5-min binning to line up with CGM
+    // Deduped 5-min binning to align with CGM & prevent duplicates
     func binSteps(_ raw: [StepSample], intervalMinutes: Int = 5) -> [StepSample] {
-        guard let first = raw.first?.date, let last = raw.last?.date else { return [] }
-        var bins: [StepSample] = []
-        var cursor = first
-        while cursor < last {
-            let next = cursor.addingTimeInterval(TimeInterval(intervalMinutes * 60))
-            let sum = raw.lazy.filter { $0.date >= cursor && $0.date < next }.map(\.steps).reduce(0,+)
-            bins.append(StepSample(date: cursor, steps: sum))
-            cursor = next
+        guard !raw.isEmpty else { return [] }
+        let interval = TimeInterval(intervalMinutes * 60)
+        var buckets: [Date: Int] = [:]
+
+        for s in raw {
+            // Floor timestamp to nearest interval boundary
+            let floored = floor(s.date.timeIntervalSinceReferenceDate / interval) * interval
+            let bucketDate = Date(timeIntervalSinceReferenceDate: floored)
+            buckets[bucketDate, default: 0] += s.steps
         }
-        return bins
+
+        return buckets.keys.sorted().map { StepSample(date: $0, steps: buckets[$0] ?? 0) }
     }
+
     
     func debugListAllTypes() {
         let quantityTypes: [HKQuantityTypeIdentifier] = [

@@ -30,18 +30,27 @@ final class HealthSyncManager: ObservableObject {
         Task.detached {
             do {
                 let now = Date()
-                let start = self.last(self.lastStepsKey) ?? self.cal.date(byAdding: .day, value: -7, to: now)!
-                //let start = Calendar.current.date(byAdding: .day, value: -30, to: now)!
+                //let start = self.last(self.lastStepsKey) ?? self.cal.date(byAdding: .day, value: -30, to: now)!
+                let start = self.cal.date(byAdding: .day, value: -30, to: now)!
+
                 let raw = await withCheckedContinuation { cont in
-                    self.hk.fetchStepData(start: start, end: now) { cont.resume(returning: $0) }
+                    self.hk.fetchStepData(start: start, end: now, intervalMinutes: 5) { cont.resume(returning: $0) }
                 }
-                
-                print("📊 [HealthSync] fetched \(raw.count) step samples")
-                
-                let bins = self.hk.binSteps(raw)
+
+                print("📊 [HealthSync] fetched \(raw.count) step bins (source-deduped) from HK")
+
+                let bins = raw   // already 5-minute, deduped bins
+
+                // 3️⃣ Prevent re-upload within the same run
+                var uploadedTimestamps = Set<Date>()
+
                 for s in bins where s.steps > 0 {
+                    guard !uploadedTimestamps.contains(s.date) else { continue }
+                    uploadedTimestamps.insert(s.date)
                     await self.sync.uploadStep(timestamp: s.date, steps: s.steps)
                 }
+
+                // 4️⃣ Update sync status + last date
                 await MainActor.run {
                     self.set(self.lastStepsKey, now)
                     self.stepsState = .upToDate(now)
@@ -51,6 +60,7 @@ final class HealthSyncManager: ObservableObject {
             }
         }
     }
+
 
     // MARK: - Glucose
     func syncGlucose() {
