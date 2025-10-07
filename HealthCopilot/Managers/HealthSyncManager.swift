@@ -50,20 +50,30 @@ final class HealthSyncManager: ObservableObject {
         Task.detached {
             do {
                 let now = Date()
-                let start = await self.last(self.lastStepsKey)
-                    ?? self.cal.date(byAdding: .day, value: -30, to: now)!
+                // 🗓 Backfill 6 months instead of 30 days
+                let start = Calendar.current.date(byAdding: .day, value: -180, to: now)!
+                print("📆 [syncSteps] syncing from \(start) → \(now)")
 
+                // Fetch from HealthKit
                 let raw = await withCheckedContinuation { cont in
                     self.hk.fetchStepData(start: start, end: now, intervalMinutes: 5) {
                         cont.resume(returning: $0)
                     }
                 }
 
+                // ✅ Preload all existing timestamps from PocketBase
+                let existing = await self.sync.fetchExistingStepDates()
+                let existingSet = Set(existing.map { Calendar.current.startOfMinute(for: $0) })
                 var uploaded = Set<Date>()
-                for s in raw where s.steps > 0 {
-                    guard !uploaded.contains(s.date) else { continue }
-                    uploaded.insert(s.date)
-                    if await self.sync.stepExists(timestamp: s.date) { continue }
+
+                // Upload only new 5-min bins
+                for s in raw.sorted(by: { $0.date < $1.date }) where s.steps > 0 {
+                    let minute = Calendar.current.startOfMinute(for: s.date)
+                    guard !uploaded.contains(minute),
+                          !existingSet.contains(minute)
+                    else { continue }
+
+                    uploaded.insert(minute)
                     await self.sync.uploadStep(timestamp: s.date, steps: s.steps)
                 }
 
@@ -73,13 +83,17 @@ final class HealthSyncManager: ObservableObject {
                     }
                     self.stepsState = .upToDate(now)
                 }
+
+                print("✅ [syncSteps] uploaded \(uploaded.count) new records")
             } catch {
                 await MainActor.run {
                     self.stepsState = .error(error.localizedDescription)
                 }
+                print("❌ [syncSteps] error:", error.localizedDescription)
             }
         }
     }
+
 
 
     // MARK: - Glucose
@@ -95,15 +109,23 @@ final class HealthSyncManager: ObservableObject {
     private func runGlucoseSync() async {
         do {
             let now = Date()
-            let start = self.last(self.lastGlucoseKey) ?? self.cal.date(byAdding: .day, value: -30, to: now)!
+            let start = self.cal.date(byAdding: .day, value: -180, to: now)!
             let samples = await withCheckedContinuation { cont in
                 self.hk.fetchGlucoseData(start: start, end: now) { cont.resume(returning: $0) }
             }
 
-            var seen = Set<Date>()
+            // dedupe across PocketBase
+            let existing = await self.sync.fetchExistingGlucoseDates()
+            let existingSet = Set(existing.map { Calendar.current.startOfMinute(for: $0) })
+            var uploaded = Set<Date>()
+
             for g in samples.sorted(by: { $0.date < $1.date }) {
-                guard !seen.contains(g.date) else { continue }
-                seen.insert(g.date)
+                let minute = Calendar.current.startOfMinute(for: g.date)
+                guard !uploaded.contains(minute),
+                      !existingSet.contains(minute)
+                else { continue }
+
+                uploaded.insert(minute)
                 await self.sync.uploadGlucose(timestamp: g.date, mgdl: g.value)
             }
 
@@ -112,7 +134,9 @@ final class HealthSyncManager: ObservableObject {
                 self.glucoseState = .upToDate(now)
             }
         } catch {
-            await MainActor.run { self.glucoseState = .error(error.localizedDescription) }
+            await MainActor.run {
+                self.glucoseState = .error(error.localizedDescription)
+            }
         }
     }
 
@@ -275,5 +299,11 @@ final class HealthSyncManager: ObservableObject {
                 await MainActor.run { self.bodyState = .error(error.localizedDescription) }
             }
         }
+    }
+}
+
+extension Calendar {
+    func startOfMinute(for date: Date) -> Date {
+        return self.date(from: self.dateComponents([.year, .month, .day, .hour, .minute], from: date))!
     }
 }

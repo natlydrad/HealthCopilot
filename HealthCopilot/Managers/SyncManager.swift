@@ -996,7 +996,65 @@ extension SyncManager {
         } catch { print("⚠️ stepExists error:", error) }
         return false
     }
+    
+    func fetchExistingStepDates() async -> [Date] {
+        guard let token = token, let userId = userId else { return [] }
 
+        guard let url = URL(string:
+            "\(baseURL)/api/collections/steps/records?filter=(user=\"\(userId)\")&perPage=10000&fields=timestamp"
+        ) else { return [] }
+
+        var req = URLRequest(url: url)
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard (resp as? HTTPURLResponse)?.statusCode == 200 else { return [] }
+
+            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let items = json["items"] as? [[String: Any]] {
+                let df = ISO8601DateFormatter()
+                return items.compactMap {
+                    guard let ts = $0["timestamp"] as? String else { return nil }
+                    return df.date(from: ts)
+                }
+            }
+        } catch {
+            print("⚠️ [fetchExistingStepDates] error:", error.localizedDescription)
+        }
+
+        return []
+    }
+
+
+    func fetchExistingGlucoseDates() async -> [Date] {
+        guard let token = token, let userId = userId else { return [] }
+
+        guard let url = URL(string:
+            "\(baseURL)/api/collections/glucose/records?filter=(user=\"\(userId)\")&perPage=10000&fields=timestamp"
+        ) else { return [] }
+
+        var req = URLRequest(url: url)
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard (resp as? HTTPURLResponse)?.statusCode == 200 else { return [] }
+
+            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let items = json["items"] as? [[String: Any]] {
+                let df = ISO8601DateFormatter()
+                return items.compactMap {
+                    guard let ts = $0["timestamp"] as? String else { return nil }
+                    return df.date(from: ts)
+                }
+            }
+        } catch {
+            print("⚠️ [fetchExistingGlucoseDates] error:", error.localizedDescription)
+        }
+
+        return []
+    }
 
 
     func uploadGlucose(timestamp: Date, mgdl: Double) async {
