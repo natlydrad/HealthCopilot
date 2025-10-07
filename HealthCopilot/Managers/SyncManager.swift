@@ -304,15 +304,16 @@ class SyncManager {
                     }
                 }
 
+                
                 print("✅ Decoded meals:", decoded.count)
                 DispatchQueue.main.async {
                     MealStore.shared.mergeFetched(decoded)
                 }
-                
+                /*
                 for m in decoded {
                     print("   • PB item id=\(m.pbId ?? "nil") localId=\(m.localId) updatedAt=\(String(describing: m.updatedAt)) photo=\(m.photo ?? "nil") text.len=\(m.text.count)")
                 }
-
+                */
                 
             } else {
                 print("❌ fetchMeals: JSON parse failed. Body:",
@@ -896,4 +897,82 @@ extension SyncManager {
             try await self.uploadMealWithImage(meal: meal, imageData: compressed)
         }
     }
+}
+
+extension SyncManager {
+
+    func uploadStep(timestamp: Date, steps: Int) async {
+        guard let token = token, let userId = userId else { return }
+
+        // Round to nearest minute for natural de-dupe
+        let rounded = Date(timeIntervalSince1970:
+            (timestamp.timeIntervalSince1970 / 60.0).rounded() * 60.0)
+        let df = ISO8601DateFormatter()
+        let ts = df.string(from: rounded)
+
+        let body: [String: Any] = [
+            "user": userId,
+            "timestamp": ts,
+            "steps": steps,
+            "source": "HealthKit"
+        ]
+
+        guard let url = URL(string: "\(baseURL)/api/collections/steps/records") else { return }
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+            if (200..<300).contains(code) {
+                print("✅ [uploadStep] created step @ \(ts)")
+            } else {
+                print("❌ [uploadStep] HTTP \(code):", String(data: data, encoding: .utf8) ?? "")
+            }
+        } catch {
+            print("🌐 [uploadStep] network error:", error.localizedDescription)
+        }
+    }
+
+    func uploadGlucose(timestamp: Date, mgdl: Double) async {
+        guard let token = token, let userId = userId else { return }
+
+        let rounded = Date(timeIntervalSince1970:
+            (timestamp.timeIntervalSince1970 / 60.0).rounded() * 60.0)
+        let df = ISO8601DateFormatter()
+        let ts = df.string(from: rounded)
+
+        let body: [String: Any] = [
+            "user": userId,
+            "timestamp": ts,
+            "value_mgdl": mgdl,
+            "source": "HealthKit"
+        ]
+
+        guard let url = URL(string: "\(baseURL)/api/collections/glucose/records") else { return }
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+            if (200..<300).contains(code) {
+                print("✅ [uploadGlucose] created glucose @ \(ts)")
+            } else {
+                print("❌ [uploadGlucose] HTTP \(code):", String(data: data, encoding: .utf8) ?? "")
+            }
+        } catch {
+            print("🌐 [uploadGlucose] network error:", error.localizedDescription)
+        }
+    }
+
+
 }

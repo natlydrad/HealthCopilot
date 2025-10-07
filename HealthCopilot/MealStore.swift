@@ -282,6 +282,7 @@ class MealStore: ObservableObject {
             if var local = byLocal[server.localId] {
 
                 // 🧪 DEBUG: show merge inputs
+                /*
                 print("""
                 🔍 MERGE for localId=\(server.localId)
                    local.updatedAt=\(String(describing: local.updatedAt))
@@ -289,6 +290,7 @@ class MealStore: ObservableObject {
                    local.pbId=\(local.pbId ?? "nil"), server.pbId=\(server.pbId ?? "nil")
                    local.photo=\(local.photo ?? "nil"), server.photo=\(server.photo ?? "nil")
                 """)
+                */
 
                 // 🔒 Tombstone protection (unchanged)
                 if local.isDeleted {
@@ -319,7 +321,7 @@ class MealStore: ObservableObject {
                         local.photo = srvPhoto
                         print("   📸 local wins but missing photo → adopted server photo=\(srvPhoto)")
                     } else {
-                        print("   🟡 local wins; photo stays \(local.photo ?? "nil")")
+                        //print("   🟡 local wins; photo stays \(local.photo ?? "nil")")
                     }
                     byLocal[server.localId] = local
                 }
