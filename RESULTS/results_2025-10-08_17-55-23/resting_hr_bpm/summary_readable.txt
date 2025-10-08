@@ -1,0 +1,4 @@
+Target: resting_hr_bpm
+n=184  R²=0.043  adjR²=0.038
+Top effects (HAC):
+- dow_cos: ↓3.011 (p=0.009)

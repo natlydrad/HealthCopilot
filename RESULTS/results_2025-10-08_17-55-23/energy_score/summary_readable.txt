@@ -1,0 +1,8 @@
+Target: energy_score
+n=184  R²=0.021  adjR²=-0.030
+Top effects (HAC):
+- dow_cos: ↓30.479 (p=0.276)
+- inbed_min_lag3: ↑0.162 (p=0.276)
+- is_weekend: ↑61.545 (p=0.340)
+- rem_min_lag3: ↓0.262 (p=0.463)
+- dow_sin: ↑25.340 (p=0.469)

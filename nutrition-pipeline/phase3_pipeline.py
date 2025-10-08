@@ -348,9 +348,16 @@ def fit_models(feat: pd.DataFrame, preferred_target: Optional[str] = None):
     if not X_cols:
         raise RuntimeError("No candidate predictors after lag selection.")
 
-    data = feat[["date"]+X_cols+[y_name]].dropna()
+    data = feat[["date"]+X_cols+[y_name]].copy()
+    data = data[data[y_name].notna()]   # keep days with target
     if data.empty:
-        raise RuntimeError("No data rows after dropna.")
+        raise RuntimeError(f"No {y_name} data found.")
+
+    # simple imputation for predictors only
+    for c in X_cols:
+        if data[c].isna().any():
+            data[c] = data[c].fillna(data[c].median())
+
 
     keep_cols = drop_high_vif(data, X_cols, 10.0)
     if not keep_cols:
@@ -475,18 +482,23 @@ def main():
     feat.to_csv(outdir / "daily_features.csv", index=False)
 
     # choose targets
-    if args.targets:
-        targets = [t.strip() for t in args.targets.split(",") if t.strip()]
-    else:
-        exclude_keywords = ["lag", "ma", "sin", "cos"]
-        exclude_exact = {"dow", "month", "is_weekend"}
-        targets = [
-            c for c in feat.select_dtypes(include=[np.number]).columns
-            if not any(k in c for k in exclude_keywords)
-            and c not in exclude_exact
-            and not c.startswith("timestamp")
-        ]
-        print(f"🎯 Cleaned target list: {targets}")
+    # === Phase A: full predictability map ===
+    exclude_keywords = ["lag", "ma", "sin", "cos"]
+    exclude_exact = {"dow", "month", "is_weekend"}
+    targets = [
+        c for c in feat.select_dtypes(include=[np.number]).columns
+        if not any(k in c for k in exclude_keywords)
+        and c not in exclude_exact
+        and not c.startswith("timestamp")
+    ]
+
+    # === Phase B: ensure glucose_mean always runs ===
+    if "glucose_mean" in feat.columns and "glucose_mean" not in targets:
+        print("💉 Injecting glucose_mean into target list (Phase B).")
+        targets.insert(0, "glucose_mean")   # run glucose first
+
+    print(f"🎯 Final combined target list: {targets}")
+
 
     print(f"🎯 Targets to model: {targets}")
 

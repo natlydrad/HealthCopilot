@@ -1,0 +1,8 @@
+Target: basal_kcal
+n=184  R²=0.027  adjR²=-0.023
+Top effects (HAC):
+- inbed_min_lag3: ↑0.121 (p=0.051)
+- steps_sum_lag3: ↓0.002 (p=0.152)
+- rem_min_lag3: ↓0.125 (p=0.383)
+- dow_cos: ↓17.082 (p=0.402)
+- is_weekend: ↑28.976 (p=0.494)

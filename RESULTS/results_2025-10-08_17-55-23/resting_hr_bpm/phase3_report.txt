@@ -1,0 +1,8 @@
+Target: resting_hr_bpm
+Observations used: 184
+
+Top associations (by significance, OLS HC3):
+  dow_cos                   coef=-3.0109  p=0.0119
+
+Heuristic N-of-1 ideas (non-causal):
+- If you decrease dow_cos, target shifts -3.011 (p=0.012).

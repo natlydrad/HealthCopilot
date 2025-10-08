@@ -1,0 +1,26 @@
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:            hrv_sdnn_ms   R-squared:                       0.102
+Model:                            OLS   Adj. R-squared:                  0.092
+Method:                 Least Squares   F-statistic:                     20.37
+Date:                Wed, 08 Oct 2025   Prob (F-statistic):           1.05e-08
+Time:                        17:55:39   Log-Likelihood:                -871.61
+No. Observations:                 184   AIC:                             1749.
+Df Residuals:                     181   BIC:                             1759.
+Df Model:                           2                                         
+Covariance Type:                  HC3                                         
+==================================================================================
+                     coef    std err          z      P>|z|      [0.025      0.975]
+----------------------------------------------------------------------------------
+const            104.0819      2.077     50.107      0.000     100.011     108.153
+inbed_min_lag3     0.1611      0.033      4.936      0.000       0.097       0.225
+dow_cos            8.7921      2.779      3.164      0.002       3.346      14.238
+==============================================================================
+Omnibus:                        0.156   Durbin-Watson:                   1.097
+Prob(Omnibus):                  0.925   Jarque-Bera (JB):                0.063
+Skew:                           0.044   Prob(JB):                        0.969
+Kurtosis:                       3.019   Cond. No.                         56.2
+==============================================================================
+
+Notes:
+[1] Standard Errors are heteroscedasticity robust (HC3)

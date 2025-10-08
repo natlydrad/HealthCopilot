@@ -1,0 +1,4 @@
+Target: steps_sum
+n=181  R²=0.095  adjR²=0.090
+Top effects (HAC):
+- vo2max_ml_kg_min_lag3: ↑113.491 (p=0.007)

@@ -1,0 +1,20 @@
+Target: basal_kcal
+Observations used: 184
+
+Top associations (by significance, OLS HC3):
+  inbed_min_lag3            coef=+0.1212  p=0.1471
+  steps_sum_lag3            coef=-0.0020  p=0.1941
+  rem_min_lag3              coef=-0.1246  p=0.3979
+  dow_cos                   coef=-17.0819  p=0.4197
+  is_weekend                coef=+28.9762  p=0.5081
+  dow_sin                   coef=+13.4529  p=0.5681
+  deep_min_lag3             coef=-0.0952  p=0.6740
+  hrv_sdnn_ms_lag3          coef=-0.0198  p=0.9087
+  vo2max_ml_kg_min_lag3     coef=-0.0458  p=0.9291
+
+Heuristic N-of-1 ideas (non-causal):
+- If you increase inbed_min_lag3, target shifts +0.121 (p=0.147).
+- If you decrease steps_sum_lag3, target shifts -0.002 (p=0.194).
+- If you decrease rem_min_lag3, target shifts -0.125 (p=0.398).
+- If you decrease dow_cos, target shifts -17.082 (p=0.420).
+- If you increase is_weekend, target shifts +28.976 (p=0.508).

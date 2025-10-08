@@ -1,0 +1,8 @@
+Target: core_min
+Observations used: 179
+
+Top associations (by significance, OLS HC3):
+  vo2max_ml_kg_min_lag2     coef=+0.9453  p=0.0156
+
+Heuristic N-of-1 ideas (non-causal):
+- If you increase vo2max_ml_kg_min_lag2, target shifts +0.945 (p=0.016).
