@@ -1,0 +1,21 @@
+Target: active_kcal
+Observations used: 171
+
+Top associations (by significance, OLS HC3):
+  rem_min_lag1_lag3         coef=+0.4464  p=0.0838
+  deep_min_lag1_lag3        coef=-0.8516  p=0.1058
+  steps_sum_lag3            coef=+0.0021  p=0.2656
+  vo2max_ml_kg_min_lag1_lag3  coef=+0.6728  p=0.3220
+  is_weekend                coef=+32.0686  p=0.4241
+  dow_cos                   coef=-10.8450  p=0.4608
+  steps_sum_lag1_lag3       coef=-0.0016  p=0.4730
+  deep_min_lag3             coef=-0.2190  p=0.5817
+  inbed_min_lag1_lag3       coef=-0.1643  p=0.6353
+  inbed_min_lag3            coef=-0.0431  p=0.6853
+
+Heuristic N-of-1 ideas (non-causal):
+- If you increase rem_min (yesterday)_lag3, target shifts +0.446 (p=0.084).
+- If you decrease deep_min (yesterday)_lag3, target shifts -0.852 (p=0.106).
+- If you increase steps_sum_lag3, target shifts +0.002 (p=0.266).
+- If you increase vo2max_ml_kg_min (yesterday)_lag3, target shifts +0.673 (p=0.322).
+- If you increase is_weekend, target shifts +32.069 (p=0.424).

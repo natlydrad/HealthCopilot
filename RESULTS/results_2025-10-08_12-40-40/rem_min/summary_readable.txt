@@ -1,0 +1,8 @@
+Target: rem_min
+n=168  R²=0.023  adjR²=-0.052
+Top effects (HAC):
+- steps_sum_lag1_lag3: ↑0.001 (p=0.083)
+- rem_min_lag1_lag3: ↓0.109 (p=0.174)
+- is_weekend: ↓11.337 (p=0.226)
+- dow_sin: ↓5.514 (p=0.336)
+- steps_sum_lag3: ↓0.000 (p=0.537)

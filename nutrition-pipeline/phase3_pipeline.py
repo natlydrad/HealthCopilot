@@ -3,7 +3,7 @@
 
 import os, argparse, json
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 
 import pandas as pd
@@ -15,10 +15,14 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
-from pb_client import get_token, fetch_records, PB_URL
+from pb_client import get_token, fetch_records
 
 
-# ------------------------- UTILITIES -------------------------
+# =========================
+# -------- UTIL --------
+# =========================
+
+RESULTS_ROOT = Path("/Users/natalieradu/Desktop/HealthCopilot/RESULTS")
 
 def env(name: str, default: Optional[str] = None) -> Optional[str]:
     return os.environ.get(name, default)
@@ -35,118 +39,200 @@ def coalesce_number(d: Dict[str, Any], keys: List[str]) -> Optional[float]:
 def to_datetime_utc(s) -> pd.Timestamp:
     return pd.to_datetime(s, utc=True, errors="coerce")
 
+def ensure_daily_continuity(df: pd.DataFrame, date_col: str = "date") -> pd.DataFrame:
+    """Guarantee one row per day between min/max date; collapses duplicate days safely."""
+    if df is None or df.empty or date_col not in df.columns:
+        return df
+
+    out = df.copy()
+    out[date_col] = pd.to_datetime(out[date_col], utc=True, errors="coerce").dt.floor("D")
+    out = out.dropna(subset=[date_col])
+
+    # Collapse duplicate days: numeric -> mean, non-numeric -> first
+    num_cols = out.select_dtypes(include=[np.number]).columns.tolist()
+    agg = {c: "first" for c in out.columns if c not in num_cols + [date_col]}
+    for c in num_cols:
+        agg[c] = "mean"
+
+    out = (
+        out.groupby(date_col, as_index=False)
+           .agg(agg)
+           .sort_values(date_col)
+    )
+
+    start, end = out[date_col].min(), out[date_col].max()
+    idx = pd.date_range(start, end, freq="D", tz="UTC")
+
+    out = (
+        out.set_index(date_col)
+           .reindex(idx)
+           .rename_axis("date")
+           .reset_index()
+    )
+    out["date"] = pd.to_datetime(out["date"], utc=True).dt.floor("D")
+    return out
+
+
 def safe_group_daily(df: pd.DataFrame, ts_col: str, val_col: str, agg: str = "mean") -> pd.DataFrame:
     if ts_col not in df.columns:
         raise ValueError(f"Timestamp column '{ts_col}' not found in DataFrame.")
-    df = df.dropna(subset=[ts_col, val_col])
-    grouped = (
-        df.groupby(df[ts_col].dt.floor("D"), as_index=False)[val_col]
-        .agg(agg)
-        .rename(columns={ts_col: "date", val_col: val_col})
-    )
-    grouped["date"] = pd.to_datetime(grouped.iloc[:, 0], utc=True).dt.floor("D")
+    df = df.dropna(subset=[ts_col, val_col]).copy()
+    df["date"] = pd.to_datetime(df[ts_col], utc=True, errors="coerce").dt.floor("D")
+    grouped = df.groupby("date", as_index=False)[val_col].agg(agg)
+    grouped["date"] = pd.to_datetime(grouped["date"], utc=True).dt.floor("D")
     return grouped
 
 
-# ------------------------- AGGREGATORS -------------------------
+
+# =========================
+# ----- AGGREGATORS -----
+# =========================
 
 def aggregate_steps(raw: List[Dict[str, Any]]) -> pd.DataFrame:
     if not raw:
         return pd.DataFrame(columns=["date", "steps_sum"])
     df = pd.DataFrame(raw)
+
     ts_col = next((c for c in ["timestamp","date","created","updated"] if c in df.columns), None)
     if not ts_col:
         return pd.DataFrame(columns=["date", "steps_sum"])
+
     df["ts"] = to_datetime_utc(df[ts_col])
     df["steps_val"] = df.apply(lambda r: coalesce_number(r, ["steps","count","value"]), axis=1)
+    df = df.dropna(subset=["ts","steps_val"])
+    df = df[df["steps_val"] > 0]  # drop spurious zeros
+
     g = safe_group_daily(df, "ts", "steps_val", agg="sum")
     g.rename(columns={"steps_val":"steps_sum"}, inplace=True)
-    return g[["date","steps_sum"]].sort_values("date")
-
+    g = g[["date","steps_sum"]].sort_values("date")
+    return ensure_daily_continuity(g, "date")
 
 def aggregate_glucose(raw: List[Dict[str, Any]]) -> pd.DataFrame:
     if not raw:
         return pd.DataFrame(columns=["date","glucose_mean"])
     df = pd.DataFrame(raw)
+
     ts_col = next((c for c in ["timestamp","date","created","updated","time","recorded_at"] if c in df.columns), None)
-    val_col = next((c for c in ["glucose","value","value_mgdl","mgdl","mg_dL","mgdl_value","glucose_mgdl","reading"] if c in df.columns), None)
+    val_col = next((c for c in ["glucose","value","value_mgdl","mgdl","mg_dL","mgdl_value","glucose_mgdl","reading","value_mgdl"] if c in df.columns), None)
     if not ts_col or not val_col:
-        print("⚠️ Skipping glucose: missing timestamp or value col.")
+        print("⚠️ Skipping glucose: missing timestamp or value col.", list(df.columns))
         return pd.DataFrame(columns=["date","glucose_mean"])
+
     df["ts"] = to_datetime_utc(df[ts_col])
-    df["g"] = pd.to_numeric(df[val_col], errors="coerce")
+    df["g"]  = pd.to_numeric(df[val_col], errors="coerce")
+    df = df.dropna(subset=["ts","g"])
+    df = df[df["g"].between(40, 400)]  # sanity window
+
     g = safe_group_daily(df, "ts", "g", agg="mean")
     g.rename(columns={"g":"glucose_mean"}, inplace=True)
-    return g[["date","glucose_mean"]].sort_values("date")
-
+    g = g[["date","glucose_mean"]].sort_values("date")
+    return ensure_daily_continuity(g, "date")
 
 def aggregate_daily_table(raw, date_candidates, numeric_map):
     if not raw:
         return pd.DataFrame(columns=["date"]+list(numeric_map.keys()))
     df = pd.DataFrame(raw)
+
     date_col = next((c for c in date_candidates+["date","timestamp","created","updated"] if c in df.columns), None)
     if not date_col:
         return pd.DataFrame(columns=["date"]+list(numeric_map.keys()))
+
     df["date"] = pd.to_datetime(df[date_col], utc=True, errors="coerce").dt.floor("D")
     for out_col, cand in numeric_map.items():
         df[out_col] = df.apply(lambda r: coalesce_number(r, cand), axis=1)
+
     out = df.groupby("date",as_index=False)[list(numeric_map.keys())].mean().sort_values("date")
-    return out
+    out["date"] = pd.to_datetime(out["date"], utc=True).dt.floor("D")
+    out = ensure_daily_continuity(out, "date")
+    return out.sort_values("date")
 
 
-# ------------------------- FEATURE BUILDER -------------------------
+# =========================
+# ---- FEATURE BUILDER ----
+# =========================
 
 def make_daily_features(base_url, email, password, user_id, start, end,
                         map_steps, map_glucose, map_energy, map_heart, map_sleep):
 
-    token = get_token()
+    _ = get_token()
     print("🔑 PocketBase token acquired.")
-    filt = f'user="{user_id}"' if user_id else None
+    filt = f'user="{user_id}"' if user_id else None  # not used by fetch_records, but keeping for future
 
     def win(df):
         if df is None or df.empty: return df
         if start: df = df[df["date"]>=pd.to_datetime(start,utc=True)]
-        if end: df = df[df["date"]<=pd.to_datetime(end,utc=True)]
+        if end:   df = df[df["date"]<=pd.to_datetime(end,utc=True)]
         return df
 
-    steps_raw, glucose_raw = fetch_records(map_steps), fetch_records(map_glucose)
-    energy_raw, heart_raw, sleep_raw = fetch_records(map_energy), fetch_records(map_heart), fetch_records(map_sleep)
+    # fetch raw
+    steps_raw   = fetch_records(map_steps)
+    glucose_raw = fetch_records(map_glucose)
+    energy_raw  = fetch_records(map_energy)
+    heart_raw   = fetch_records(map_heart)
+    sleep_raw   = fetch_records(map_sleep)
 
-    steps = win(aggregate_steps(steps_raw))
+    # aggregate
+    steps   = win(aggregate_steps(steps_raw))
     glucose = win(aggregate_glucose(glucose_raw))
-    energy = win(aggregate_daily_table(energy_raw,["date","timestamp"],{"active_kcal":["active_kcal"],"basal_kcal":["basal_kcal"]}))
-    heart  = win(aggregate_daily_table(heart_raw,["date","timestamp"],{
+    energy  = win(aggregate_daily_table(energy_raw,["date","timestamp"],{
+        "active_kcal":["active_kcal"],
+        "basal_kcal":["basal_kcal"],
+    }))
+    heart   = win(aggregate_daily_table(heart_raw,["date","timestamp"],{
         "resting_hr_bpm":["resting_hr_bpm","rhr","resting_hr","restingHeartRate"],
         "hrv_sdnn_ms":["hrv_sdnn_ms","hrv","rmssd"],
-        "vo2max_ml_kg_min":["vo2max_ml_kg_min","vo2max"]
+        "vo2max_ml_kg_min":["vo2max_ml_kg_min","vo2max"],
     }))
-    sleep = win(aggregate_daily_table(sleep_raw,["date","timestamp"],{
+    sleep   = win(aggregate_daily_table(sleep_raw,["date","timestamp"],{
         "total_min":["total_min","sleep_duration_min","duration_min","minutes"],
-        "core_min":["core_min"],"deep_min":["deep_min"],
-        "rem_min":["rem_min"],"inbed_min":["inbed_min"]
+        "core_min":["core_min"],
+        "deep_min":["deep_min"],
+        "rem_min":["rem_min"],
+        "inbed_min":["inbed_min"],
     }))
 
+    # mini data-quality printout
+    def contrib(name, df):
+        if df is None or df.empty:
+            print(f"📦 {name}: 0 days")
+            return
+        days = int(df['date'].notna().sum())
+        start = str(df['date'].min())
+        end   = str(df['date'].max())
+        cols  = [c for c in df.columns if c!='date']
+        print(f"📦 {name}: {days} days, {start} → {end}, cols={cols}")
+
+    contrib("steps", steps)
+    contrib("glucose", glucose)
+    contrib("energy", energy)
+    contrib("heart", heart)
+    contrib("sleep", sleep)
+
+    # merge all
     dfs=[steps,glucose,energy,heart,sleep]
     base=None
     for d in dfs:
         if d is not None and not d.empty:
             base=d if base is None else pd.merge(base,d,on="date",how="outer")
 
-    if base is None: return pd.DataFrame(columns=["date"])
-    base=base.sort_values("date").reset_index(drop=True)
+    if base is None:
+        return pd.DataFrame(columns=["date"])
 
-    # lags
+    base = base.sort_values("date").reset_index(drop=True)
+
+    # lags 1..3 for numeric columns (but not for glucose_mean itself)
     for lag in [1,2,3]:
         for c in base.select_dtypes(include=[np.number]).columns:
             if c!="glucose_mean":
                 base[f"{c}_lag{lag}"]=base[c].shift(lag)
 
-    # moving averages
+    # moving averages (glucose)
     if "glucose_mean" in base.columns:
         base["glucose_mean_3d_ma"]=base["glucose_mean"].rolling(3,min_periods=2).mean()
         base["glucose_mean_7d_ma"]=base["glucose_mean"].rolling(7,min_periods=3).mean()
 
-    if {"active_kcal","basal_kcal"}<=set(base.columns):
+    # synthetic energy_score as total burn
+    if {"active_kcal","basal_kcal"} <= set(base.columns):
         base["energy_score"]=base["active_kcal"]+base["basal_kcal"]
 
     # calendar context
@@ -159,114 +245,168 @@ def make_daily_features(base_url, email, password, user_id, start, end,
     return base
 
 
-# ------------------------- MODEL HELPERS -------------------------
+# =========================
+# ---- MODEL HELPERS ----
+# =========================
 
-def drop_high_vif(data, X_cols, thresh=10.0):
-    X=data[X_cols].copy().dropna()
-    keep=list(X.columns)
+def drop_high_vif(data: pd.DataFrame, X_cols: List[str], thresh: float = 10.0) -> List[str]:
+    """Greedy VIF pruning; safe for tiny or empty sets."""
+    if not X_cols:
+        return []
+    X = data[X_cols].copy().dropna()
+    keep = list(X.columns)
+    # If < 2 columns, VIF not meaningful; just return as is
+    if len(keep) < 2:
+        return keep
+    # loop with guards
     while True:
-        vifs=pd.Series([variance_inflation_factor(X[keep].values,i)
-                        for i in range(len(keep))],index=keep)
-        worst=vifs.idxmax()
-        if vifs.max()<=thresh or len(keep)<=2:
+        if len(keep) < 2:
+            break
+        vifs = pd.Series([variance_inflation_factor(X[keep].values, i)
+                          for i in range(len(keep))], index=keep)
+        if vifs.empty:
+            break
+        worst = vifs.idxmax()
+        if vifs.max() <= thresh:
             break
         keep.remove(worst)
     return keep
 
-def lasso_screen(data, X_cols, y_name):
-    scaler=StandardScaler()
-    Xs=scaler.fit_transform(data[X_cols])
-    y=data[y_name].values
-    lcv=LassoCV(cv=5,random_state=0).fit(Xs,y)
-    nonzero=[c for c,w in zip(X_cols,lcv.coef_) if abs(w)>1e-8]
-    return nonzero,lcv.alpha_,lcv.score(Xs,y)
+def lasso_screen(data: pd.DataFrame, X_cols: List[str], y_name: str) -> Tuple[List[str], Optional[float], Optional[float]]:
+    """LASSO feature screen; safe if <2 features."""
+    if not X_cols:
+        return [], None, None
+    if len(X_cols) < 2:
+        return X_cols, None, None
+    scaler = StandardScaler()
+    Xs = scaler.fit_transform(data[X_cols])
+    y = data[y_name].values
+    try:
+        lcv = LassoCV(cv=5, random_state=0).fit(Xs, y)
+        nonzero = [c for c,w in zip(X_cols,lcv.coef_) if abs(w)>1e-8]
+        return (nonzero if nonzero else X_cols), float(lcv.alpha_), float(lcv.score(Xs,y))
+    except Exception:
+        # fallback if LASSO fails due to degeneracy
+        return X_cols, None, None
 
-def best_lag_set(feat, base_cols, y_name, max_lag=3):
-    candidates=[]
-    for lag in range(1,max_lag+1):
-        cols=[]
+def best_lag_set(feat: pd.DataFrame, base_cols: List[str], y_name: str, max_lag: int = 3):
+    """Pick lag (1..max_lag) by best AIC; returns (lag, aic, cols)."""
+    candidates = []
+    for lag in range(1, max_lag+1):
+        cols = []
         for c in base_cols:
-            lagc=f"{c}_lag{lag}"
-            if lagc in feat.columns: cols.append(lagc)
+            lagc = f"{c}_lag{lag}"
+            # avoid double suffixes like _lag1_lag2
+            if c.endswith(f"_lag{lag}") or "_lag" in c:
+                continue
+            if lagc in feat.columns:
+                cols.append(lagc)
+
+        # add calendar features
         for c in ["is_weekend","dow_sin","dow_cos","month"]:
             if c in feat.columns: cols.append(c)
-        df=feat[["date",y_name]+cols].dropna()
-        if df.empty: continue
-        X=sm.add_constant(df[cols])
-        y=df[y_name]
-        res=sm.OLS(y,X).fit(cov_type="HAC",cov_kwds={"maxlags":3})
-        candidates.append((lag,res.aic,cols))
-    return min(candidates,key=lambda x:x[1]) if candidates else (1,None,[])
+        df = feat[["date", y_name]+cols].dropna()
+        if df.empty or not cols:
+            continue
+        try:
+            X = sm.add_constant(df[cols])
+            y = df[y_name]
+            res = sm.OLS(y,X).fit(cov_type="HAC",cov_kwds={"maxlags":3})
+            candidates.append((lag, res.aic, cols))
+        except Exception:
+            continue
+    return min(candidates, key=lambda x:x[1]) if candidates else (1, None, [])
 
 
-# ------------------------- MODEL FIT -------------------------
+# =========================
+# ------ MODEL FIT -------
+# =========================
 
-def fit_models(feat: pd.DataFrame, preferred_target=None):
-    y_name=preferred_target or ("glucose_mean" if "glucose_mean" in feat else "energy_score")
-    if y_name not in feat: raise RuntimeError("No suitable target found.")
-    base_cols=[c for c in feat.columns if c not in ["date",y_name] and not c.endswith(("_ma","_lag2","_lag3"))]
-    best_lag,_,X_cols=best_lag_set(feat,base_cols,y_name,3)
+def fit_models(feat: pd.DataFrame, preferred_target: Optional[str] = None):
+    y_name = preferred_target or ("glucose_mean" if "glucose_mean" in feat else "energy_score")
+    if y_name not in feat:
+        raise RuntimeError("No suitable target found.")
+
+    # base_cols: numeric non-target, not pre-averages or later lags
+    base_cols = [c for c in feat.columns
+                 if c not in ["date", y_name]
+                 and feat[c].dtype.kind in "fi"
+                 and not any(s in c for s in ["_ma","_lag2","_lag3"])]
+
+    best_lag,_,X_cols = best_lag_set(feat, base_cols, y_name, 3)
     print(f"ℹ️ Using lag={best_lag}")
-    data=feat[["date"]+X_cols+[y_name]].dropna()
-    if data.empty: raise RuntimeError("No data rows after dropna")
+    if not X_cols:
+        raise RuntimeError("No candidate predictors after lag selection.")
 
-    keep_cols=drop_high_vif(data,X_cols,10.0)
+    data = feat[["date"]+X_cols+[y_name]].dropna()
+    if data.empty:
+        raise RuntimeError("No data rows after dropna.")
+
+    keep_cols = drop_high_vif(data, X_cols, 10.0)
+    if not keep_cols:
+        raise RuntimeError("No predictors remain after VIF pruning.")
     if set(keep_cols)!=set(X_cols):
-        print("ℹ️ Dropped high-VIF:",set(X_cols)-set(keep_cols))
+        dropped = set(X_cols)-set(keep_cols)
+        print(f"ℹ️ Dropped high-VIF: {dropped}")
         X_cols=keep_cols
-    nz,alpha,r2cv=lasso_screen(data,X_cols,y_name)
-    if nz:
-        print(f"ℹ️ LASSO kept {len(nz)}/{len(X_cols)} (alpha={alpha:.3f},cvR²={r2cv:.3f})")
-        X_cols=nz
 
-    X=sm.add_constant(data[X_cols])
-    y=data[y_name]
-    ols=sm.OLS(y,X).fit(cov_type="HC3")
-    hac=sm.OLS(y,X).fit(cov_type="HAC",cov_kwds={"maxlags":3})
+    nz, alpha, r2cv = lasso_screen(data, X_cols, y_name)
+    if nz and set(nz)!=set(X_cols):
+        print(f"ℹ️ LASSO kept {len(nz)}/{len(X_cols)}" + (f" (alpha={alpha:.3f}, cvR²={r2cv:.3f})" if alpha is not None else ""))
+        X_cols = nz
+
+    X = sm.add_constant(data[X_cols])
+    y = data[y_name]
+    ols = sm.OLS(y, X).fit(cov_type="HC3")
+    hac = sm.OLS(y, X).fit(cov_type="HAC", cov_kwds={"maxlags":3})
     return {"target":y_name,"X_cols":X_cols,"n_obs":len(data),"ols":ols,"hac":hac,"data":data}
 
 
-# ------------------------- OUTPUT -------------------------
+# =========================
+# -------- OUTPUT --------
+# =========================
 
-RESULTS_ROOT=Path("/Users/natalieradu/Desktop/HealthCopilot/RESULTS")
+def create_results_dir() -> Tuple[Path, str]:
+    ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    d = RESULTS_ROOT / f"results_{ts}"
+    d.mkdir(parents=True, exist_ok=True)
+    return d, ts
 
-def create_results_dir():
-    ts=datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    d=RESULTS_ROOT/f"results_{ts}"
-    d.mkdir(parents=True,exist_ok=True)
-    return d,ts
-
-def save_metrics(res,d,ts):
-    m={res["target"]:{
+def save_metrics(res: dict, d: Path, ts: str) -> Path:
+    m = {res["target"]:{
         "n_obs":res["n_obs"],
         "r2_ols":float(res["ols"].rsquared),
         "r2_adj":float(res["ols"].rsquared_adj),
         "aic":float(res["ols"].aic),
         "bic":float(res["ols"].bic)
     }}
-    p=d/"metrics.json"
+    p = d/"metrics.json"
     p.write_text(json.dumps(m,indent=2))
     print(f"📊 Saved metrics to {p}")
     return p
 
-def write_human_summary(res,outdir):
-    ols=res["hac"]
-    coefs=ols.params.drop("const",errors="ignore")
-    pvals=ols.pvalues.drop("const",errors="ignore")
-    eff=(pd.DataFrame({"coef":coefs,"p":pvals}).sort_values("p").head(5))
-    lines=[f"Target: {res['target']}",f"n={res['n_obs']} R²={ols.rsquared:.3f} adjR²={ols.rsquared_adj:.3f}","Top effects (HAC):"]
+def write_human_summary(res: dict, outdir: Path) -> None:
+    model = res["hac"]
+    coefs = model.params.drop("const",errors="ignore")
+    pvals = model.pvalues.drop("const",errors="ignore")
+    eff = (pd.DataFrame({"coef":coefs,"p":pvals}).sort_values("p").head(5))
+    lines = [
+        f"Target: {res['target']}",
+        f"n={res['n_obs']}  R²={model.rsquared:.3f}  adjR²={model.rsquared_adj:.3f}",
+        "Top effects (HAC):"
+    ]
     for i,r in eff.iterrows():
-        direction="↑" if r["coef"]>0 else "↓"
+        direction = "↑" if r["coef"]>0 else "↓"
         lines.append(f"- {i}: {direction}{abs(r['coef']):.3f} (p={r['p']:.3f})")
     (outdir/"summary_readable.txt").write_text("\n".join(lines))
 
-def make_pdf_report(d,ts,metrics_path):
-    pdfp=d/f"model_report_{ts}.pdf"
-    metrics=json.load(open(metrics_path))
+def make_pdf_report(d: Path, ts: str, metrics_path: Path) -> None:
+    pdfp = d / f"model_report_{ts}.pdf"
+    metrics = json.load(open(metrics_path))
     with PdfPages(pdfp) as pdf:
-        fig,ax=plt.subplots(figsize=(8.5,11))
+        fig,ax = plt.subplots(figsize=(8.5,11))
         ax.axis("off")
-        ax.text(0.05,0.95,f"HealthCopilot Phase3 Report {ts}",fontsize=18,weight="bold",va="top")
+        ax.text(0.05,0.95,f"HealthCopilot Phase 3 Report {ts}",fontsize=18,weight="bold",va="top")
         y=0.9
         for t,vals in metrics.items():
             txt=f"{t}: "+", ".join(f"{k}={v:.3f}" if isinstance(v,(int,float)) else f"{k}={v}" for k,v in vals.items())
@@ -292,7 +432,9 @@ def write_summaries(res,outdir):
     write_human_summary(res,outdir)
 
 
-# ------------------------- MAIN -------------------------
+# =========================
+# --------- MAIN ---------
+# =========================
 
 def main():
     p = argparse.ArgumentParser(description="Phase 3 analytics for multiple targets")
@@ -313,7 +455,7 @@ def main():
     outdir, ts = create_results_dir()
     print(f"📁 Created results folder: {outdir}")
 
-    # --- build features ---
+    # build features
     feat = make_daily_features(
         args.pb_url, args.pb_email, args.pb_password, args.pb_user_id,
         args.start, args.end,
@@ -322,49 +464,60 @@ def main():
     )
     feat.to_csv(outdir / "daily_features.csv", index=False)
 
-    # --- select targets ---
+    # choose targets
     if args.targets:
         targets = [t.strip() for t in args.targets.split(",") if t.strip()]
     else:
-        numeric_cols = feat.select_dtypes(include=[np.number]).columns
-        exclude = {"steps_sum_lag1", "active_kcal_lag1", "basal_kcal_lag1"}  # just some junk filters
-        targets = [c for c in numeric_cols if not c.endswith("_lag1") and c not in exclude]
+        exclude_keywords = ["lag", "ma", "sin", "cos"]
+        exclude_exact = {"dow", "month", "is_weekend"}
+        targets = [
+            c for c in feat.select_dtypes(include=[np.number]).columns
+            if not any(k in c for k in exclude_keywords)
+            and c not in exclude_exact
+            and not c.startswith("timestamp")
+        ]
+        print(f"🎯 Cleaned target list: {targets}")
+
     print(f"🎯 Targets to model: {targets}")
 
     all_metrics = {}
 
-    # --- fit models for each target ---
     for tgt in targets:
         try:
             print(f"\n🚀 Running model for target: {tgt}")
             res = fit_models(feat, tgt)
+
             subdir = outdir / tgt
             subdir.mkdir(exist_ok=True)
 
+            # write per-target artifacts
+            (subdir/"daily_features.columns.txt").write_text("\n".join(feat.columns))
             write_summaries(res, subdir)
             metrics_path = save_metrics(res, subdir, ts)
             make_pdf_report(subdir, ts, metrics_path)
 
             all_metrics[tgt] = {
                 "n_obs": res["n_obs"],
-                "r2": res["ols"].rsquared,
-                "adj_r2": res["ols"].rsquared_adj,
-                "aic": res["ols"].aic,
-                "bic": res["ols"].bic,
+                "r2": float(res["ols"].rsquared),
+                "adj_r2": float(res["ols"].rsquared_adj),
+                "aic": float(res["ols"].aic),
+                "bic": float(res["ols"].bic),
             }
-
             print(f"✅ Done: {tgt} (n={res['n_obs']})")
 
         except Exception as e:
             print(f"❌ Failed {tgt}: {e}")
 
-    # --- combined summary dashboard ---
+    # combined summary
     dashboard_path = outdir / "summary_dashboard.txt"
     with open(dashboard_path, "w") as f:
         f.write(f"📊 HealthCopilot Phase 3 Dashboard {ts}\n")
         f.write("=" * 60 + "\n\n")
-        for tgt, vals in all_metrics.items():
-            f.write(f"{tgt:24s} | n={vals['n_obs']:3d} | R²={vals['r2']:.3f} | adjR²={vals['adj_r2']:.3f} | AIC={vals['aic']:.1f}\n")
+        if not all_metrics:
+            f.write("No successful models. Check data coverage and logs.\n")
+        else:
+            for tgt, vals in all_metrics.items():
+                f.write(f"{tgt:24s} | n={vals['n_obs']:3d} | R²={vals['r2']:.3f} | adjR²={vals['adj_r2']:.3f} | AIC={vals['aic']:.1f}\n")
     print(f"\n📄 Combined dashboard saved: {dashboard_path}")
 
     print("\n✅ ALL DONE")

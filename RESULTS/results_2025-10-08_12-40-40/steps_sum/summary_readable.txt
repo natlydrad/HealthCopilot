@@ -1,0 +1,8 @@
+Target: steps_sum
+n=172  R²=0.316  adjR²=0.260
+Top effects (HAC):
+- steps_sum_lag1_lag2: ↑0.413 (p=0.000)
+- inbed_min_lag2: ↑11.275 (p=0.002)
+- vo2max_ml_kg_min_lag2: ↑68.725 (p=0.018)
+- rem_min_lag1_lag2: ↓18.797 (p=0.132)
+- is_weekend: ↑1589.891 (p=0.170)
