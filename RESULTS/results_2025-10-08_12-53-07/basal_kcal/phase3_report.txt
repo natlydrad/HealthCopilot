@@ -1,0 +1,10 @@
+Target: basal_kcal
+Observations used: 175
+
+Top associations (by significance, OLS HC3):
+  vo2max_ml_kg_min_lag3     coef=-0.5481  p=0.1124
+  steps_sum_lag3            coef=-0.0019  p=0.2120
+
+Heuristic N-of-1 ideas (non-causal):
+- If you decrease vo2max_ml_kg_min_lag3, target shifts -0.548 (p=0.112).
+- If you decrease steps_sum_lag3, target shifts -0.002 (p=0.212).

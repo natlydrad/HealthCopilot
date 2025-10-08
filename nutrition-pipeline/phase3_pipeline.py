@@ -14,6 +14,7 @@ from sklearn.linear_model import LassoCV
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+import re
 
 from pb_client import get_token, fetch_records
 
@@ -220,6 +221,12 @@ def make_daily_features(base_url, email, password, user_id, start, end,
 
     base = base.sort_values("date").reset_index(drop=True)
 
+        # 🔹 Drop columns that are entirely empty (all NaNs)
+    base = base.dropna(axis=1, how="all")
+
+    # 🔹 Remove any duplicated column names that might appear after merges
+    base = base.loc[:, ~base.columns.duplicated()]
+
     # lags 1..3 for numeric columns (but not for glucose_mean itself)
     for lag in [1,2,3]:
         for c in base.select_dtypes(include=[np.number]).columns:
@@ -291,31 +298,34 @@ def lasso_screen(data: pd.DataFrame, X_cols: List[str], y_name: str) -> Tuple[Li
 
 def best_lag_set(feat: pd.DataFrame, base_cols: List[str], y_name: str, max_lag: int = 3):
     """Pick lag (1..max_lag) by best AIC; returns (lag, aic, cols)."""
+    # Filter out already-lagged columns so we don't double-lag
+    base_cols = [c for c in base_cols if "_lag" not in c]
     candidates = []
-    for lag in range(1, max_lag+1):
+
+    for lag in range(1, max_lag + 1):
         cols = []
         for c in base_cols:
             lagc = f"{c}_lag{lag}"
-            # avoid double suffixes like _lag1_lag2
-            if c.endswith(f"_lag{lag}") or "_lag" in c:
-                continue
             if lagc in feat.columns:
                 cols.append(lagc)
 
-        # add calendar features
-        for c in ["is_weekend","dow_sin","dow_cos","month"]:
-            if c in feat.columns: cols.append(c)
-        df = feat[["date", y_name]+cols].dropna()
+        # Always include stable calendar covariates
+        for c in ["is_weekend", "dow_sin", "dow_cos", "month"]:
+            if c in feat.columns:
+                cols.append(c)
+
+        df = feat[["date", y_name] + cols].dropna()
         if df.empty or not cols:
             continue
         try:
             X = sm.add_constant(df[cols])
             y = df[y_name]
-            res = sm.OLS(y,X).fit(cov_type="HAC",cov_kwds={"maxlags":3})
+            res = sm.OLS(y, X).fit(cov_type="HAC", cov_kwds={"maxlags": 3})
             candidates.append((lag, res.aic, cols))
         except Exception:
             continue
-    return min(candidates, key=lambda x:x[1]) if candidates else (1, None, [])
+
+    return min(candidates, key=lambda x: x[1]) if candidates else (1, None, [])
 
 
 # =========================
@@ -519,6 +529,32 @@ def main():
             for tgt, vals in all_metrics.items():
                 f.write(f"{tgt:24s} | n={vals['n_obs']:3d} | R²={vals['r2']:.3f} | adjR²={vals['adj_r2']:.3f} | AIC={vals['aic']:.1f}\n")
     print(f"\n📄 Combined dashboard saved: {dashboard_path}")
+
+        # === Extended readable summary across models ===
+    extended = outdir / "summary_top_effects.txt"
+    with open(extended, "w") as f:
+        f.write(f"📊 HealthCopilot Phase 3 — Top Predictors per Model ({ts})\n")
+        f.write("="*70 + "\n\n")
+        for tgt in all_metrics.keys():
+            summ_path = outdir / tgt / "model_ols.txt"
+            if not summ_path.exists():
+                continue
+            lines = [ln.strip() for ln in open(summ_path) if ln.strip()]
+            header = f"[{tgt}] — n={all_metrics[tgt]['n_obs']}, R²={all_metrics[tgt]['r2']:.3f}\n"
+            f.write(header)
+            # extract top 5 coef lines quickly
+            found = False
+            for ln in lines:
+                if re.match(r"^[A-Za-z_].*\s+[-+]?\d", ln):
+                    f.write("  " + ln + "\n")
+                    found = True
+                    if lines.index(ln) > 5:
+                        break
+            if not found:
+                f.write("  (no predictors found)\n")
+            f.write("\n")
+    print(f"📄 Extended summary saved: {extended}")
+
 
     print("\n✅ ALL DONE")
     print(f"📦 Results folder: {outdir}")

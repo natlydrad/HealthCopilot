@@ -1,0 +1,20 @@
+Target: energy_score
+Observations used: 175
+
+Top associations (by significance, OLS HC3):
+  inbed_min_lag3            coef=+0.1259  p=0.4413
+  rem_min_lag3              coef=-0.2176  p=0.5650
+  dow_cos                   coef=-7.9791  p=0.6931
+  steps_sum_lag3            coef=-0.0009  p=0.7238
+  vo2max_ml_kg_min_lag3     coef=-0.3297  p=0.7321
+  deep_min_lag3             coef=-0.1206  p=0.8211
+  dow_sin                   coef=-5.1328  p=0.8555
+  is_weekend                coef=+3.9580  p=0.9390
+  hrv_sdnn_ms_lag3          coef=+0.0302  p=0.9469
+
+Heuristic N-of-1 ideas (non-causal):
+- If you increase inbed_min_lag3, target shifts +0.126 (p=0.441).
+- If you decrease rem_min_lag3, target shifts -0.218 (p=0.565).
+- If you decrease dow_cos, target shifts -7.979 (p=0.693).
+- If you decrease steps_sum_lag3, target shifts -0.001 (p=0.724).
+- If you decrease vo2max_ml_kg_min_lag3, target shifts -0.330 (p=0.732).

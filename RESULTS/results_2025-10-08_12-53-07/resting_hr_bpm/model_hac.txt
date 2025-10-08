@@ -1,0 +1,25 @@
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:         resting_hr_bpm   R-squared:                       0.029
+Model:                            OLS   Adj. R-squared:                  0.024
+Method:                 Least Squares   F-statistic:                     4.897
+Date:                Wed, 08 Oct 2025   Prob (F-statistic):             0.0282
+Time:                        12:53:23   Log-Likelihood:                -639.84
+No. Observations:                 175   AIC:                             1284.
+Df Residuals:                     173   BIC:                             1290.
+Df Model:                           1                                         
+Covariance Type:                  HAC                                         
+==============================================================================
+                 coef    std err          z      P>|z|      [0.025      0.975]
+------------------------------------------------------------------------------
+const         58.9374      0.735     80.241      0.000      57.498      60.377
+dow_cos       -2.3127      1.045     -2.213      0.027      -4.361      -0.264
+==============================================================================
+Omnibus:                      177.319   Durbin-Watson:                   1.948
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):             3908.833
+Skew:                          -3.853   Prob(JB):                         0.00
+Kurtosis:                      24.833   Cond. No.                         1.42
+==============================================================================
+
+Notes:
+[1] Standard Errors are heteroscedasticity and autocorrelation robust (HAC) using 3 lags and without small sample correction

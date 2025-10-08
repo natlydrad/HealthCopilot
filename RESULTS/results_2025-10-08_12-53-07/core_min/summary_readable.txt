@@ -1,0 +1,8 @@
+Target: core_min
+n=173  R²=0.073  adjR²=0.022
+Top effects (HAC):
+- vo2max_ml_kg_min_lag2: ↑1.306 (p=0.019)
+- rem_min_lag2: ↑0.372 (p=0.029)
+- inbed_min_lag2: ↑0.116 (p=0.080)
+- steps_sum_lag2: ↓0.002 (p=0.255)
+- deep_min_lag2: ↓0.343 (p=0.261)

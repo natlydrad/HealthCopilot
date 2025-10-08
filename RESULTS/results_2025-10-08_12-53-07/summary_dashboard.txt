@@ -1,0 +1,14 @@
+📊 HealthCopilot Phase 3 Dashboard 2025-10-08_12-53-07
+============================================================
+
+steps_sum                | n=176 | R²=0.086 | adjR²=0.081 | AIC=3551.6
+active_kcal              | n=175 | R²=0.012 | adjR²=-0.042 | AIC=2184.1
+basal_kcal               | n=175 | R²=0.058 | adjR²=0.047 | AIC=1991.3
+resting_hr_bpm           | n=175 | R²=0.029 | adjR²=0.024 | AIC=1283.7
+hrv_sdnn_ms              | n=175 | R²=0.102 | adjR²=0.091 | AIC=1670.5
+total_min                | n=172 | R²=0.050 | adjR²=-0.003 | AIC=2098.4
+core_min                 | n=173 | R²=0.073 | adjR²=0.022 | AIC=2056.7
+deep_min                 | n=172 | R²=0.042 | adjR²=-0.005 | AIC=1572.0
+rem_min                  | n=174 | R²=0.138 | adjR²=0.128 | AIC=1737.4
+inbed_min                | n=172 | R²=0.066 | adjR²=0.021 | AIC=1770.0
+energy_score             | n=175 | R²=0.011 | adjR²=-0.043 | AIC=2295.0

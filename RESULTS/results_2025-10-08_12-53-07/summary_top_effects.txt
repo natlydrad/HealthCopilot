@@ -1,0 +1,80 @@
+📊 HealthCopilot Phase 3 — Top Predictors per Model (2025-10-08_12-53-07)
+======================================================================
+
+[steps_sum] — n=176, R²=0.086
+  Dep. Variable:              steps_sum   R-squared:                       0.086
+  Model:                            OLS   Adj. R-squared:                  0.081
+  Method:                 Least Squares   F-statistic:                     12.01
+  Date:                Wed, 08 Oct 2025   Prob (F-statistic):           0.000665
+  Time:                        12:53:21   Log-Likelihood:                -1773.8
+
+[active_kcal] — n=175, R²=0.012
+  Dep. Variable:            active_kcal   R-squared:                       0.012
+  Model:                            OLS   Adj. R-squared:                 -0.042
+  Method:                 Least Squares   F-statistic:                    0.4516
+  Date:                Wed, 08 Oct 2025   Prob (F-statistic):              0.905
+  Time:                        12:53:22   Log-Likelihood:                -1082.1
+
+[basal_kcal] — n=175, R²=0.058
+  Dep. Variable:             basal_kcal   R-squared:                       0.058
+  Model:                            OLS   Adj. R-squared:                  0.047
+  Method:                 Least Squares   F-statistic:                     2.983
+  Date:                Wed, 08 Oct 2025   Prob (F-statistic):             0.0533
+  Time:                        12:53:22   Log-Likelihood:                -992.65
+
+[resting_hr_bpm] — n=175, R²=0.029
+  Dep. Variable:         resting_hr_bpm   R-squared:                       0.029
+  Model:                            OLS   Adj. R-squared:                  0.024
+  Method:                 Least Squares   F-statistic:                     4.505
+  Date:                Wed, 08 Oct 2025   Prob (F-statistic):             0.0352
+  Time:                        12:53:23   Log-Likelihood:                -639.84
+
+[hrv_sdnn_ms] — n=175, R²=0.102
+  Dep. Variable:            hrv_sdnn_ms   R-squared:                       0.102
+  Model:                            OLS   Adj. R-squared:                  0.091
+  Method:                 Least Squares   F-statistic:                     19.96
+  Date:                Wed, 08 Oct 2025   Prob (F-statistic):           1.60e-08
+  Time:                        12:53:23   Log-Likelihood:                -832.25
+
+[total_min] — n=172, R²=0.050
+  Dep. Variable:              total_min   R-squared:                       0.050
+  Model:                            OLS   Adj. R-squared:                 -0.003
+  Method:                 Least Squares   F-statistic:                     1.196
+  Date:                Wed, 08 Oct 2025   Prob (F-statistic):              0.301
+  Time:                        12:53:23   Log-Likelihood:                -1039.2
+
+[core_min] — n=173, R²=0.073
+  Dep. Variable:               core_min   R-squared:                       0.073
+  Model:                            OLS   Adj. R-squared:                  0.022
+  Method:                 Least Squares   F-statistic:                     1.359
+  Date:                Wed, 08 Oct 2025   Prob (F-statistic):              0.211
+  Time:                        12:53:23   Log-Likelihood:                -1018.3
+
+[deep_min] — n=172, R²=0.042
+  Dep. Variable:               deep_min   R-squared:                       0.042
+  Model:                            OLS   Adj. R-squared:                 -0.005
+  Method:                 Least Squares   F-statistic:                    0.8943
+  Date:                Wed, 08 Oct 2025   Prob (F-statistic):              0.523
+  Time:                        12:53:23   Log-Likelihood:                -777.02
+
+[rem_min] — n=174, R²=0.138
+  Dep. Variable:                rem_min   R-squared:                       0.138
+  Model:                            OLS   Adj. R-squared:                  0.128
+  Method:                 Least Squares   F-statistic:                     11.44
+  Date:                Wed, 08 Oct 2025   Prob (F-statistic):           2.18e-05
+  Time:                        12:53:24   Log-Likelihood:                -865.70
+
+[inbed_min] — n=172, R²=0.066
+  Dep. Variable:              inbed_min   R-squared:                       0.066
+  Model:                            OLS   Adj. R-squared:                  0.021
+  Method:                 Least Squares   F-statistic:                    0.2587
+  Date:                Wed, 08 Oct 2025   Prob (F-statistic):              0.978
+  Time:                        12:53:24   Log-Likelihood:                -876.01
+
+[energy_score] — n=175, R²=0.011
+  Dep. Variable:           energy_score   R-squared:                       0.011
+  Model:                            OLS   Adj. R-squared:                 -0.043
+  Method:                 Least Squares   F-statistic:                    0.5978
+  Date:                Wed, 08 Oct 2025   Prob (F-statistic):              0.798
+  Time:                        12:53:24   Log-Likelihood:                -1137.5
+

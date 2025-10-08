@@ -1,0 +1,8 @@
+Target: steps_sum
+Observations used: 176
+
+Top associations (by significance, OLS HC3):
+  vo2max_ml_kg_min_lag3     coef=+107.4809  p=0.0005
+
+Heuristic N-of-1 ideas (non-causal):
+- If you increase vo2max_ml_kg_min_lag3, target shifts +107.481 (p=0.001).
