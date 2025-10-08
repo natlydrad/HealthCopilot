@@ -295,32 +295,81 @@ def write_summaries(res,outdir):
 # ------------------------- MAIN -------------------------
 
 def main():
-    p=argparse.ArgumentParser(description="Phase3 analytics")
-    p.add_argument("--pb-url",default=env("PB_URL","http://127.0.0.1:8090"))
-    p.add_argument("--pb-email",default=env("PB_EMAIL"))
-    p.add_argument("--pb-password",default=env("PB_PASSWORD"))
-    p.add_argument("--pb-user-id",default=env("PB_USER_ID"))
-    p.add_argument("--start",default=None); p.add_argument("--end",default=None)
-    p.add_argument("--map-steps",default="steps"); p.add_argument("--map-glucose",default="glucose")
-    p.add_argument("--map-energy",default="energy_daily"); p.add_argument("--map-heart",default="heart_daily")
-    p.add_argument("--map-sleep",default="sleep_daily")
-    p.add_argument("--target",default=None)
-    args=p.parse_args()
+    p = argparse.ArgumentParser(description="Phase 3 analytics for multiple targets")
+    p.add_argument("--pb-url", default=env("PB_URL", "http://127.0.0.1:8090"))
+    p.add_argument("--pb-email", default=env("PB_EMAIL"))
+    p.add_argument("--pb-password", default=env("PB_PASSWORD"))
+    p.add_argument("--pb-user-id", default=env("PB_USER_ID"))
+    p.add_argument("--start", default=None)
+    p.add_argument("--end", default=None)
+    p.add_argument("--map-steps", default="steps")
+    p.add_argument("--map-glucose", default="glucose")
+    p.add_argument("--map-energy", default="energy_daily")
+    p.add_argument("--map-heart", default="heart_daily")
+    p.add_argument("--map-sleep", default="sleep_daily")
+    p.add_argument("--targets", default=None, help="Comma-separated list of target columns (optional)")
+    args = p.parse_args()
 
-    outdir,ts=create_results_dir()
+    outdir, ts = create_results_dir()
     print(f"📁 Created results folder: {outdir}")
 
-    feat=make_daily_features(args.pb_url,args.pb_email,args.pb_password,args.pb_user_id,
-                             args.start,args.end,args.map_steps,args.map_glucose,
-                             args.map_energy,args.map_heart,args.map_sleep)
-    feat.to_csv(outdir/"daily_features.csv",index=False)
-    if feat.dropna(how="all",axis=1).shape[0]<7:
-        print("⚠️ Not enough rows to fit model."); return
-    res=fit_models(feat,args.target)
-    write_summaries(res,outdir)
-    mp=save_metrics(res,outdir,ts)
-    make_pdf_report(outdir,ts,mp)
-    print(f"✅ Target: {res['target']} n={res['n_obs']}")
+    # --- build features ---
+    feat = make_daily_features(
+        args.pb_url, args.pb_email, args.pb_password, args.pb_user_id,
+        args.start, args.end,
+        args.map_steps, args.map_glucose, args.map_energy,
+        args.map_heart, args.map_sleep
+    )
+    feat.to_csv(outdir / "daily_features.csv", index=False)
+
+    # --- select targets ---
+    if args.targets:
+        targets = [t.strip() for t in args.targets.split(",") if t.strip()]
+    else:
+        numeric_cols = feat.select_dtypes(include=[np.number]).columns
+        exclude = {"steps_sum_lag1", "active_kcal_lag1", "basal_kcal_lag1"}  # just some junk filters
+        targets = [c for c in numeric_cols if not c.endswith("_lag1") and c not in exclude]
+    print(f"🎯 Targets to model: {targets}")
+
+    all_metrics = {}
+
+    # --- fit models for each target ---
+    for tgt in targets:
+        try:
+            print(f"\n🚀 Running model for target: {tgt}")
+            res = fit_models(feat, tgt)
+            subdir = outdir / tgt
+            subdir.mkdir(exist_ok=True)
+
+            write_summaries(res, subdir)
+            metrics_path = save_metrics(res, subdir, ts)
+            make_pdf_report(subdir, ts, metrics_path)
+
+            all_metrics[tgt] = {
+                "n_obs": res["n_obs"],
+                "r2": res["ols"].rsquared,
+                "adj_r2": res["ols"].rsquared_adj,
+                "aic": res["ols"].aic,
+                "bic": res["ols"].bic,
+            }
+
+            print(f"✅ Done: {tgt} (n={res['n_obs']})")
+
+        except Exception as e:
+            print(f"❌ Failed {tgt}: {e}")
+
+    # --- combined summary dashboard ---
+    dashboard_path = outdir / "summary_dashboard.txt"
+    with open(dashboard_path, "w") as f:
+        f.write(f"📊 HealthCopilot Phase 3 Dashboard {ts}\n")
+        f.write("=" * 60 + "\n\n")
+        for tgt, vals in all_metrics.items():
+            f.write(f"{tgt:24s} | n={vals['n_obs']:3d} | R²={vals['r2']:.3f} | adjR²={vals['adj_r2']:.3f} | AIC={vals['aic']:.1f}\n")
+    print(f"\n📄 Combined dashboard saved: {dashboard_path}")
+
+    print("\n✅ ALL DONE")
+    print(f"📦 Results folder: {outdir}")
+
 
 if __name__=="__main__":
     main()
