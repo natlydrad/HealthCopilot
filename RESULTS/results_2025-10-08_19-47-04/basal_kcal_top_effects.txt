@@ -1,0 +1,8 @@
+Target: basal_kcal
+n=184
+
+- inbed_min_lag3: ↑0.1212 (p=0.147)
+- steps_sum_lag3: ↓0.0020 (p=0.194)
+- rem_min_lag3: ↓0.1246 (p=0.398)
+- dow_cos: ↓17.0819 (p=0.420)
+- is_weekend: ↑28.9762 (p=0.508)

@@ -1,0 +1,8 @@
+Target: energy_score
+n=184
+
+- dow_cos: ↓30.4793 (p=0.313)
+- inbed_min_lag3: ↑0.1618 (p=0.343)
+- is_weekend: ↑61.5446 (p=0.376)
+- rem_min_lag3: ↓0.2620 (p=0.496)
+- dow_sin: ↑25.3404 (p=0.496)

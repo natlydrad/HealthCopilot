@@ -509,14 +509,29 @@ def main():
             print(f"\n🚀 Running model for target: {tgt}")
             res = fit_models(feat, tgt)
 
-            subdir = outdir / tgt
-            subdir.mkdir(exist_ok=True)
+            subdir = outdir  # ✅ keep all outputs flat
 
             # write per-target artifacts
-            (subdir/"daily_features.columns.txt").write_text("\n".join(feat.columns))
-            write_summaries(res, subdir)
-            metrics_path = save_metrics(res, subdir, ts)
-            make_pdf_report(subdir, ts, metrics_path)
+            (subdir / "daily_features.columns.txt").write_text("\n".join(feat.columns))
+
+            # === compact per-target outputs ===
+            # write the OLS and HAC summaries into unified flat files
+            (subdir / f"{tgt}_model_ols.txt").write_text(str(res["ols"].summary()))
+            (subdir / f"{tgt}_model_hac.txt").write_text(str(res["hac"].summary()))
+
+            # also keep a quick human summary of top effects
+            coefs = res["ols"].params.drop("const", errors="ignore")
+            pvals = res["ols"].pvalues.drop("const", errors="ignore")
+            top = (
+                pd.DataFrame({"coef": coefs, "p": pvals})
+                .sort_values("p")
+                .head(5)
+            )
+            lines = [f"Target: {tgt}", f"n={res['n_obs']}", ""]
+            for i, row in top.iterrows():
+                direction = "↑" if row["coef"] > 0 else "↓"
+                lines.append(f"- {i}: {direction}{abs(row['coef']):.4f} (p={row['p']:.3f})")
+            (subdir / f"{tgt}_top_effects.txt").write_text("\n".join(lines))
 
             all_metrics[tgt] = {
                 "n_obs": res["n_obs"],
@@ -529,6 +544,7 @@ def main():
 
         except Exception as e:
             print(f"❌ Failed {tgt}: {e}")
+
 
     # combined summary
     dashboard_path = outdir / "summary_dashboard.txt"
@@ -566,6 +582,50 @@ def main():
                 f.write("  (no predictors found)\n")
             f.write("\n")
     print(f"📄 Extended summary saved: {extended}")
+
+    # === PHASE C: Consolidate all models into one JSON ===
+    combined = []
+    for tgt, vals in all_metrics.items():
+        entry = {"target": tgt, "metrics": vals}
+        top_path = outdir / f"{tgt}_top_effects.txt"
+        if top_path.exists():
+            try:
+                lines = open(top_path).read().splitlines()
+                top = [ln for ln in lines if "coef=" in ln][:5]
+                entry["top_effects"] = top
+            except Exception as e:
+                entry["top_effects"] = [f"(error reading {top_path.name}: {e})"]
+        else:
+            entry["top_effects"] = []
+        combined.append(entry)
+
+    import json
+    with open(outdir / "combined_models.json", "w") as f:
+        json.dump(combined, f, indent=2)
+    print(f"📦 Consolidated summary saved to {outdir/'combined_models.json'}")
+
+
+    # === PHASE D: Human-readable experiment ideas ===
+    md_path = outdir / "n_of_1_experiments.md"
+    with open(md_path, "w") as f:
+        f.write(f"# N-of-1 Experiment Suggestions ({ts})\n\n")
+        for entry in combined:
+            tgt = entry["target"]
+            f.write(f"## Target: {tgt}\n")
+            f.write(f"R²={entry['metrics']['r2']:.3f}, adjR²={entry['metrics']['adj_r2']:.3f}\n\n")
+            if not entry.get("top_effects"):
+                f.write("*(no usable coefficients found)*\n\n")
+                continue
+            for eff in entry["top_effects"]:
+                f.write(f"- {eff}\n")
+            f.write(
+                "\n_Interpretation: use these coefficients' direction and p-values to "
+                "draft small lifestyle or behavior experiments (e.g., change sleep, steps, "
+                "weekend habits) and monitor effects on this target._\n\n"
+            )
+    print(f"🧠 N-of-1 experiment summary saved to {md_path}")
+
+
 
 
     print("\n✅ ALL DONE")

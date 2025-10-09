@@ -1,0 +1,4 @@
+Target: resting_hr_bpm
+n=184
+
+- dow_cos: ↓3.0109 (p=0.012)

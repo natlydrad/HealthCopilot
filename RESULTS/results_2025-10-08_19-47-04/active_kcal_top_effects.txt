@@ -1,0 +1,8 @@
+Target: active_kcal
+n=184
+
+- dow_cos: ↓13.3974 (p=0.350)
+- is_weekend: ↑32.5685 (p=0.383)
+- vo2max_ml_kg_min_lag3: ↑0.4695 (p=0.512)
+- dow_sin: ↑11.8875 (p=0.546)
+- rem_min_lag3: ↓0.1374 (p=0.633)

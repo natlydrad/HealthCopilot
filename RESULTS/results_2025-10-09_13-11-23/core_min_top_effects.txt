@@ -1,0 +1,4 @@
+Target: core_min
+n=179
+
+- vo2max_ml_kg_min_lag2: ↑0.9453 (p=0.016)
