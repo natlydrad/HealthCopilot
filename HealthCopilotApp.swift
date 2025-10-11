@@ -1,91 +1,59 @@
-//
-//  HealthCopilotApp.swift
-//  HealthCopilot
-//
-//  Created by Natalie Radu on 7/3/25.
-//
-
-/*
 import SwiftUI
 
 @main
 struct HealthCopilotApp: App {
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-        }
-    }
-}
-*/
+    // ⬇️ Use the same instance that SyncManager updates
+    @StateObject private var mealStore = MealStore.shared
+    @Environment(\.scenePhase) private var scenePhase
 
-// Spezi + HealthKit Minimal Starter App
 
-import SwiftUI
-import HealthKit
 
-@main
-struct HealthCopilotApp: App {
-    @StateObject private var healthManager = HealthManager()
-
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-                .environmentObject(healthManager)
-                .onAppear {
-                    healthManager.requestAuthorization()
-                }
-        }
-    }
-}
-
-class HealthManager: ObservableObject {
-    private var healthStore = HKHealthStore()
-
-    @Published var stepCount: Double = 0
-    @Published var heartRate: Double = 0
-
-    func requestAuthorization() {
-        let readTypes: Set = [
-            HKObjectType.quantityType(forIdentifier: .stepCount)!,
-            HKObjectType.quantityType(forIdentifier: .heartRate)!
-        ]
-
-        healthStore.requestAuthorization(toShare: [], read: readTypes) { success, error in
+    init() {
+        // Login to PocketBase on startup
+        SyncManager.shared.login(email: "natradalie@gmail.com",
+                                 password: "London303!") { success in
             if success {
-                self.fetchStepCount()
-                self.fetchHeartRate()
-            } else if let error = error {
-                print("HealthKit Authorization Failed: \(error.localizedDescription)")
+                print("✅ Logged in to PocketBase; initial fetch")
+                
+                let key = "didRunReconcileV1"
+                if !UserDefaults.standard.bool(forKey: key) {
+                    SyncManager.shared.reconcileLocalWithServer()
+                    UserDefaults.standard.set(true, forKey: key)
+                }
+                
+                SyncManager.shared.pushDirty()
+                SyncManager.shared.fetchMeals()   // pull from PB on launch
+            } else {
+                print("❌ Login failed")
             }
         }
     }
 
-    func fetchStepCount() {
-        let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
-        let startOfDay = Calendar.current.startOfDay(for: Date())
-        let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: Date(), options: .strictStartDate)
+    var body: some Scene {
+        WindowGroup {
+            TabView {
+                NavigationView { LogView(store: mealStore) }
+                    .tabItem { Label("Log Meal", systemImage: "plus.circle") }
 
-        let query = HKStatisticsQuery(quantityType: stepType, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, result, _ in
-            DispatchQueue.main.async {
-                self.stepCount = result?.sumQuantity()?.doubleValue(for: .count()) ?? 0
+                NavigationView { VerifyView(store: mealStore) }
+                    .tabItem { Label("Verify", systemImage: "checkmark.circle") }
             }
-        }
-
-        healthStore.execute(query)
-    }
-
-    func fetchHeartRate() {
-        let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate)!
-        let mostRecentPredicate = HKQuery.predicateForSamples(withStart: Calendar.current.date(byAdding: .day, value: -1, to: Date()), end: Date(), options: .strictStartDate)
-
-        let query = HKSampleQuery(sampleType: hrType, predicate: mostRecentPredicate, limit: 1, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)]) { _, results, _ in
-            DispatchQueue.main.async {
-                if let sample = results?.first as? HKQuantitySample {
-                    self.heartRate = sample.quantity.doubleValue(for: HKUnit(from: "count/min"))
+            
+            .onAppear {
+                            HealthKitManager.shared.requestPermissions { granted in
+                                print("🔐 HealthKit permission granted:", granted)
+                          }
+                HealthKitManager.shared.debugListAllTypes()
+                        }
+            
+            .onChange(of: scenePhase) { phase in
+                print("🟦 scenePhase:", phase)
+                if phase == .active {
+                    print("🟩 Foreground → fetchMeals()")
+                    SyncManager.shared.pushDirty()
+                    SyncManager.shared.fetchMeals()
                 }
             }
         }
-
-        healthStore.execute(query)
     }
 }
