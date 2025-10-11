@@ -6,10 +6,8 @@ interpret_insights.py
 Turns HealthCopilot Phase 3 outputs into human-readable insights.
 """
 
-import json
-import pandas as pd
+import json, pandas as pd, numpy as np
 from pathlib import Path
-import numpy as np
 
 # === CONFIG ===
 RESULTS_DIR = sorted(Path("RESULTS").glob("results_*"))[-1]  # latest run
@@ -20,12 +18,19 @@ combined = json.load(open(RESULTS_DIR / "combined_models.json"))
 sig_corrs = json.load(open(RESULTS_DIR / "significant_correlations.json"))
 effects = pd.read_csv(RESULTS_DIR / "all_effects.csv")
 
+# ------------------------------------------------------------
+# 🔹 Step 2 — helper to filter out self-derived features
+# ------------------------------------------------------------
+def is_self_derivation(tgt: str, pred: str) -> bool:
+    """Treat variations of the target (lags / moving-averages) as self-derivations."""
+    base = tgt.replace("_mean", "")
+    return pred.startswith(base)
+
 # === INSIGHT ENGINE ===
 lines = [f"# 🧠 HealthCopilot Insight Report\n", f"Source folder: `{RESULTS_DIR.name}`\n"]
 
 # 1️⃣ Predictability ranking
-dfm = pd.DataFrame([x["metrics"] | {"target": x["target"]} for x in combined])
-dfm = dfm.sort_values("adj_r2", ascending=False)
+dfm = pd.DataFrame([x["metrics"] | {"target": x["target"]} for x in combined]).sort_values("adj_r2", ascending=False)
 lines.append("\n## 📊 Model Predictability\n")
 lines.append("| Rank | Target | R² | adjR² | AIC |\n|------|---------|----|--------|------|")
 for i, row in enumerate(dfm.head(15).itertuples(), 1):
@@ -38,7 +43,14 @@ lines.append(f"\n**Mean R²:** {mean_r2:.3f} **Median R²:** {med_r2:.3f}\n")
 lines.append("\n## 🔍 Top Model Insights\n")
 for row in dfm.head(10).itertuples():
     tgt = row.target
-    sub = effects[effects["target"] == tgt].sort_values("q").head(5)
+    sub = (
+        effects[effects["target"] == tgt]
+        .sort_values("q")
+        .query("q < 0.10")  # optional tighter filter
+    )
+    # remove self-derivatives
+    sub = sub[~sub["predictor"].apply(lambda p: is_self_derivation(tgt, p))].head(5)
+
     lines.append(f"\n### 🎯 {tgt} (adjR²={row.adj_r2:.3f})")
     if sub.empty:
         lines.append("_No significant predictors found._\n")
@@ -54,12 +66,16 @@ lines.append("\n## 🔗 Network-Like Correlations\n")
 top_corrs = sorted(sig_corrs.items(),
                    key=lambda kv: len(kv[1]['top_pos']) + len(kv[1]['top_neg']),
                    reverse=True)[:10]
+
 for tgt, d in top_corrs:
     lines.append(f"\n### {tgt}")
-    for name, r, p, q in d["top_pos"][:3]:
-        lines.append(f"- Positive: **{name}** (r={r:+.2f}, q={q:.3f})")
-    for name, r, p, q in d["top_neg"][:3]:
-        lines.append(f"- Negative: **{name}** (r={r:+.2f}, q={q:.3f})")
+    # filter out trivial self-features
+    pos = [(n, r, q) for (n, r, _, q) in d["top_pos"] if not is_self_derivation(tgt, n)][:3]
+    neg = [(n, r, q) for (n, r, _, q) in d["top_neg"] if not is_self_derivation(tgt, n)][:3]
+    for n, r, q in pos:
+        lines.append(f"- Positive: **{n}** (r={r:+.2f}, q={q:.3f})")
+    for n, r, q in neg:
+        lines.append(f"- Negative: **{n}** (r={r:+.2f}, q={q:.3f})")
 
 # 4️⃣ Save report
 out_path = RESULTS_DIR / "insight_report.md"

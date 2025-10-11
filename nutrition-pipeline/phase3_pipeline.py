@@ -312,8 +312,9 @@ def significant_correlations(feat: pd.DataFrame,
             out[tgt] = {"top_pos": [], "top_neg": []}
             continue
 
-        sig_pos = sig.sort_values(["r"], ascending=False).head(per_target_top_k)
-        sig_neg = sig.sort_values(["r"], ascending=True).head(per_target_top_k)
+        # 🔧 split by sign explicitly
+        sig_pos = sig[sig["r"] > 0].sort_values("r", ascending=False).head(per_target_top_k)
+        sig_neg = sig[sig["r"] < 0].sort_values("r", ascending=True).head(per_target_top_k)
 
         out[tgt] = {
             "top_pos": [(row["feature"], float(row["r"]), float(row["p"]), float(row["q"])) for _, row in sig_pos.iterrows()],
