@@ -1,0 +1,21 @@
+Target: total_min
+Observations used: 168
+
+Top associations (by significance, OLS HC3):
+  rem_min_lag3              coef=-0.4055  p=0.0769
+  dow_cos                   coef=+21.9025  p=0.0988
+  steps_sum_lag3            coef=+0.0017  p=0.1891
+  dow_sin                   coef=+21.5722  p=0.2548
+  deep_min_lag1_lag3        coef=+0.4388  p=0.2901
+  deep_min_lag3             coef=+0.3863  p=0.3321
+  vo2max_ml_kg_min_lag1_lag3  coef=-0.5246  p=0.3333
+  steps_sum_lag1_lag3       coef=+0.0014  p=0.3766
+  vo2max_ml_kg_min_lag3     coef=-0.3132  p=0.6607
+  inbed_min_lag3            coef=-0.0518  p=0.7316
+
+Heuristic N-of-1 ideas (non-causal):
+- If you decrease rem_min_lag3, target shifts -0.405 (p=0.077).
+- If you increase dow_cos, target shifts +21.903 (p=0.099).
+- If you increase steps_sum_lag3, target shifts +0.002 (p=0.189).
+- If you increase dow_sin, target shifts +21.572 (p=0.255).
+- If you increase deep_min (yesterday)_lag3, target shifts +0.439 (p=0.290).

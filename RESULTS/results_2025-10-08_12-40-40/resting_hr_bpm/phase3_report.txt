@@ -1,0 +1,10 @@
+Target: resting_hr_bpm
+Observations used: 172
+
+Top associations (by significance, OLS HC3):
+  dow_cos                   coef=-2.3112  p=0.0324
+  steps_sum_lag2            coef=-0.0002  p=0.0862
+
+Heuristic N-of-1 ideas (non-causal):
+- If you decrease dow_cos, target shifts -2.311 (p=0.032).
+- If you decrease steps_sum_lag2, target shifts -0.000 (p=0.086).

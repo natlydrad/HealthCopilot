@@ -1,0 +1,5 @@
+Target: rem_min
+n=179  R²=0.136  adjR²=0.126
+Top effects (HAC):
+- deep_min_lag1: ↑0.502 (p=0.000)
+- core_min_lag1: ↑0.057 (p=0.082)

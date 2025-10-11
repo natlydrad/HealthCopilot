@@ -1,0 +1,5 @@
+Target: hrv_sdnn_ms
+n=184
+
+- inbed_min_lag3: ↑0.1611 (p=0.000)
+- dow_cos: ↑8.7921 (p=0.002)

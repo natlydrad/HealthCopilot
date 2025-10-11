@@ -1,0 +1,28 @@
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:         resting_hr_bpm   R-squared:                       0.055
+Model:                            OLS   Adj. R-squared:                  0.043
+Method:                 Least Squares   F-statistic:                     3.329
+Date:                Wed, 08 Oct 2025   Prob (F-statistic):             0.0382
+Time:                        12:40:56   Log-Likelihood:                -627.99
+No. Observations:                 172   AIC:                             1262.
+Df Residuals:                     169   BIC:                             1271.
+Df Model:                           2                                         
+Covariance Type:                  HAC                                         
+==================================================================================
+                     coef    std err          z      P>|z|      [0.025      0.975]
+----------------------------------------------------------------------------------
+const             61.4193      1.506     40.790      0.000      58.468      64.371
+steps_sum_lag2    -0.0002      0.000     -1.946      0.052      -0.000    1.83e-06
+dow_cos           -2.3112      1.030     -2.244      0.025      -4.330      -0.292
+==============================================================================
+Omnibus:                      175.718   Durbin-Watson:                   1.945
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):             3841.239
+Skew:                          -3.887   Prob(JB):                         0.00
+Kurtosis:                      24.807   Cond. No.                     2.29e+04
+==============================================================================
+
+Notes:
+[1] Standard Errors are heteroscedasticity and autocorrelation robust (HAC) using 3 lags and without small sample correction
+[2] The condition number is large, 2.29e+04. This might indicate that there are
+strong multicollinearity or other numerical problems.

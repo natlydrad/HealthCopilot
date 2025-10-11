@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# Xcode user-specific data
+*.xcuserdatad/
+*.xcscheme
+*.xcworkspace/
+DerivedData/
+
+# Swift Package Manager
+.build/
+
+# PocketBase / app secrets
+.env
+*.json
+pb_data/

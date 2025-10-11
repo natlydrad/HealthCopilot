@@ -1,0 +1,31 @@
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:           energy_score   R-squared:                       0.006
+Model:                            OLS   Adj. R-squared:                 -0.022
+Method:                 Least Squares   F-statistic:                    0.3062
+Date:                Fri, 10 Oct 2025   Prob (F-statistic):              0.909
+Time:                        21:24:55   Log-Likelihood:                -1233.0
+No. Observations:                 184   AIC:                             2478.
+Df Residuals:                     178   BIC:                             2497.
+Df Model:                           5                                         
+Covariance Type:                  HAC                                         
+=========================================================================================
+                            coef    std err          z      P>|z|      [0.025      0.975]
+-----------------------------------------------------------------------------------------
+const                  2023.5546     60.435     33.483      0.000    1905.104    2142.005
+steps_sum_lag3           -0.0013      0.002     -0.532      0.595      -0.006       0.004
+hrv_sdnn_ms_lag3          0.1784      0.451      0.395      0.693      -0.706       1.063
+vo2max_ml_kg_min_lag3     0.3644      1.107      0.329      0.742      -1.805       2.534
+deep_min_lag3            -0.1334      0.528     -0.253      0.801      -1.169       0.902
+rem_min_lag3             -0.3232      0.323     -1.002      0.316      -0.955       0.309
+==============================================================================
+Omnibus:                      144.853   Durbin-Watson:                   1.593
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):             2894.783
+Skew:                          -2.660   Prob(JB):                         0.00
+Kurtosis:                      21.689   Cond. No.                     5.46e+04
+==============================================================================
+
+Notes:
+[1] Standard Errors are heteroscedasticity and autocorrelation robust (HAC) using 3 lags and without small sample correction
+[2] The condition number is large, 5.46e+04. This might indicate that there are
+strong multicollinearity or other numerical problems.

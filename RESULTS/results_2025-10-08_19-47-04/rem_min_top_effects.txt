@@ -1,0 +1,5 @@
+Target: rem_min
+n=179
+
+- deep_min_lag1: ↑0.5018 (p=0.000)
+- core_min_lag1: ↑0.0572 (p=0.103)

@@ -1,0 +1,8 @@
+Target: total_min
+n=179
+
+- steps_sum_lag3: ↑0.0020 (p=0.090)
+- dow_cos: ↑15.9398 (p=0.217)
+- rem_min_lag3: ↓0.2606 (p=0.253)
+- dow_sin: ↑19.7283 (p=0.285)
+- deep_min_lag3: ↑0.2303 (p=0.535)

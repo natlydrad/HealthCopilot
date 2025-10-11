@@ -1,0 +1,5 @@
+Target: hrv_sdnn_ms
+n=184  R²=0.102  adjR²=0.092
+Top effects (HAC):
+- inbed_min_lag3: ↑0.161 (p=0.000)
+- dow_cos: ↑8.792 (p=0.004)

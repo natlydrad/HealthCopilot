@@ -1,0 +1,8 @@
+Target: active_kcal
+n=171  R²=0.057  adjR²=-0.021
+Top effects (HAC):
+- rem_min_lag1_lag3: ↑0.446 (p=0.055)
+- deep_min_lag1_lag3: ↓0.852 (p=0.097)
+- steps_sum_lag3: ↑0.002 (p=0.170)
+- vo2max_ml_kg_min_lag1_lag3: ↑0.673 (p=0.313)
+- steps_sum_lag1_lag3: ↓0.002 (p=0.330)

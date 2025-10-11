@@ -1,0 +1,8 @@
+Target: total_min
+n=168  R²=0.073  adjR²=-0.006
+Top effects (HAC):
+- rem_min_lag3: ↓0.405 (p=0.061)
+- dow_cos: ↑21.903 (p=0.066)
+- steps_sum_lag3: ↑0.002 (p=0.176)
+- dow_sin: ↑21.572 (p=0.194)
+- deep_min_lag1_lag3: ↑0.439 (p=0.236)

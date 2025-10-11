@@ -1,0 +1,31 @@
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:         resting_hr_bpm   R-squared:                       0.005
+Model:                            OLS   Adj. R-squared:                 -0.022
+Method:                 Least Squares   F-statistic:                    0.6173
+Date:                Fri, 10 Oct 2025   Prob (F-statistic):              0.687
+Time:                        21:37:44   Log-Likelihood:                -689.78
+No. Observations:                 184   AIC:                             1392.
+Df Residuals:                     178   BIC:                             1411.
+Df Model:                           5                                         
+Covariance Type:                  HC3                                         
+=========================================================================================
+                            coef    std err          z      P>|z|      [0.025      0.975]
+-----------------------------------------------------------------------------------------
+const                    57.2327      4.091     13.989      0.000      49.214      65.252
+steps_sum_lag3        -4.484e-05      0.000     -0.313      0.754      -0.000       0.000
+hrv_sdnn_ms_lag3          0.0039      0.029      0.134      0.893      -0.053       0.061
+vo2max_ml_kg_min_lag3     0.0115      0.067      0.172      0.864      -0.120       0.143
+deep_min_lag3             0.0325      0.024      1.365      0.172      -0.014       0.079
+rem_min_lag3             -0.0012      0.028     -0.042      0.966      -0.057       0.054
+==============================================================================
+Omnibus:                      182.693   Durbin-Watson:                   1.750
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):             3527.002
+Skew:                          -3.864   Prob(JB):                         0.00
+Kurtosis:                      23.008   Cond. No.                     5.46e+04
+==============================================================================
+
+Notes:
+[1] Standard Errors are heteroscedasticity robust (HC3)
+[2] The condition number is large, 5.46e+04. This might indicate that there are
+strong multicollinearity or other numerical problems.

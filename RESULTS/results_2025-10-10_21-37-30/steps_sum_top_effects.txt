@@ -1,0 +1,4 @@
+Target: steps_sum
+n=181
+
+- vo2max_ml_kg_min_lag3: ↑113.4910 (p=0.000)

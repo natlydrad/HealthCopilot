@@ -1,0 +1,39 @@
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:           energy_score   R-squared:                       0.061
+Model:                            OLS   Adj. R-squared:                 -0.017
+Method:                 Least Squares   F-statistic:                     4.311
+Date:                Wed, 08 Oct 2025   Prob (F-statistic):           3.57e-06
+Time:                        12:40:59   Log-Likelihood:                -1108.2
+No. Observations:                 171   AIC:                             2244.
+Df Residuals:                     157   BIC:                             2288.
+Df Model:                          13                                         
+Covariance Type:                  HAC                                         
+==============================================================================================
+                                 coef    std err          z      P>|z|      [0.025      0.975]
+----------------------------------------------------------------------------------------------
+const                       2001.8491     63.066     31.742      0.000    1878.242    2125.456
+steps_sum_lag3                 0.0014      0.002      0.577      0.564      -0.003       0.006
+vo2max_ml_kg_min_lag3         -0.5003      0.952     -0.526      0.599      -2.365       1.365
+deep_min_lag3                 -0.3133      0.523     -0.599      0.549      -1.338       0.711
+rem_min_lag3                  -0.1292      0.375     -0.345      0.730      -0.863       0.605
+inbed_min_lag3                -0.0105      0.149     -0.070      0.944      -0.302       0.281
+steps_sum_lag1_lag3           -0.0029      0.003     -1.107      0.268      -0.008       0.002
+vo2max_ml_kg_min_lag1_lag3     0.7249      0.845      0.858      0.391      -0.931       2.381
+deep_min_lag1_lag3            -1.0291      0.684     -1.505      0.132      -2.370       0.311
+rem_min_lag1_lag3              0.8388      0.343      2.443      0.015       0.166       1.512
+inbed_min_lag1_lag3           -0.0357      0.256     -0.140      0.889      -0.538       0.466
+is_weekend                    32.6885     50.335      0.649      0.516     -65.966     131.343
+dow_sin                        5.1373     28.269      0.182      0.856     -50.269      60.543
+dow_cos                      -12.8117     18.764     -0.683      0.495     -49.588      23.964
+==============================================================================
+Omnibus:                       13.420   Durbin-Watson:                   1.865
+Prob(Omnibus):                  0.001   Jarque-Bera (JB):               21.277
+Skew:                          -0.424   Prob(JB):                     2.40e-05
+Kurtosis:                       4.505   Cond. No.                     8.49e+04
+==============================================================================
+
+Notes:
+[1] Standard Errors are heteroscedasticity and autocorrelation robust (HAC) using 3 lags and without small sample correction
+[2] The condition number is large, 8.49e+04. This might indicate that there are
+strong multicollinearity or other numerical problems.

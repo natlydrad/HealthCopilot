@@ -1,0 +1,8 @@
+Target: glucose_mean
+n=89  R²=0.053  adjR²=-0.029
+Top effects (HAC):
+- inbed_min_lag1: ↑0.000 (p=0.015)
+- is_weekend: ↑3.460 (p=0.085)
+- rem_min_lag1: ↑0.022 (p=0.154)
+- vo2max_ml_kg_min_lag1: ↓0.058 (p=0.395)
+- dow_cos: ↓0.544 (p=0.694)

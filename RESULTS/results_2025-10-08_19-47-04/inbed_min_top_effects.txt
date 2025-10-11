@@ -1,0 +1,8 @@
+Target: inbed_min
+n=179
+
+- dow_cos: ↓6.1613 (p=0.170)
+- steps_sum_lag3: ↓0.0004 (p=0.196)
+- hrv_sdnn_ms_lag3: ↑0.1391 (p=0.282)
+- rem_min_lag3: ↑0.1263 (p=0.323)
+- deep_min_lag3: ↑0.0564 (p=0.330)

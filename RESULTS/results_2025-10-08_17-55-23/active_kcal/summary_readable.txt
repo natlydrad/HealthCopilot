@@ -1,0 +1,8 @@
+Target: active_kcal
+n=184  R²=0.019  adjR²=-0.032
+Top effects (HAC):
+- dow_cos: ↓13.397 (p=0.298)
+- is_weekend: ↑32.568 (p=0.313)
+- dow_sin: ↑11.887 (p=0.525)
+- vo2max_ml_kg_min_lag3: ↑0.470 (p=0.572)
+- rem_min_lag3: ↓0.137 (p=0.595)

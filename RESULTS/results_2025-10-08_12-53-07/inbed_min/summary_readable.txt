@@ -1,0 +1,8 @@
+Target: inbed_min
+n=172  R²=0.066  adjR²=0.021
+Top effects (HAC):
+- dow_cos: ↓6.681 (p=0.135)
+- steps_sum_lag3: ↓0.000 (p=0.146)
+- deep_min_lag3: ↑0.056 (p=0.212)
+- hrv_sdnn_ms_lag3: ↑0.138 (p=0.236)
+- rem_min_lag3: ↑0.127 (p=0.290)

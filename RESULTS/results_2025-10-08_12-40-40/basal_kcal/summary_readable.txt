@@ -1,0 +1,7 @@
+Target: basal_kcal
+n=171  R²=0.092  adjR²=0.071
+Top effects (HAC):
+- vo2max_ml_kg_min_lag3: ↓0.634 (p=0.026)
+- rem_min_lag1_lag3: ↑0.320 (p=0.088)
+- steps_sum_lag1_lag3: ↓0.001 (p=0.323)
+- steps_sum_lag3: ↓0.001 (p=0.655)

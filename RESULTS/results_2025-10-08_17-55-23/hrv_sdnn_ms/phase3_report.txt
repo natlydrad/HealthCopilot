@@ -1,0 +1,10 @@
+Target: hrv_sdnn_ms
+Observations used: 184
+
+Top associations (by significance, OLS HC3):
+  inbed_min_lag3            coef=+0.1611  p=0.0000
+  dow_cos                   coef=+8.7921  p=0.0016
+
+Heuristic N-of-1 ideas (non-causal):
+- If you increase inbed_min_lag3, target shifts +0.161 (p=0.000).
+- If you increase dow_cos, target shifts +8.792 (p=0.002).

@@ -1,0 +1,8 @@
+Target: energy_score
+n=184
+
+- rem_min_lag3: ↓0.3232 (p=0.358)
+- steps_sum_lag3: ↓0.0013 (p=0.613)
+- hrv_sdnn_ms_lag3: ↑0.1784 (p=0.682)
+- vo2max_ml_kg_min_lag3: ↑0.3644 (p=0.722)
+- deep_min_lag3: ↓0.1334 (p=0.803)

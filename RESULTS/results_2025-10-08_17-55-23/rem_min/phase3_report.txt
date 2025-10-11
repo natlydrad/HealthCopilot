@@ -1,0 +1,10 @@
+Target: rem_min
+Observations used: 179
+
+Top associations (by significance, OLS HC3):
+  deep_min_lag1             coef=+0.5018  p=0.0000
+  core_min_lag1             coef=+0.0572  p=0.1028
+
+Heuristic N-of-1 ideas (non-causal):
+- If you increase deep_min (yesterday), target shifts +0.502 (p=0.000).
+- If you increase core_min (yesterday), target shifts +0.057 (p=0.103).

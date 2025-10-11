@@ -1,0 +1,19 @@
+Target: glucose_mean
+Observations used: 89
+
+Top associations (by significance, OLS HC3):
+  inbed_min_lag1            coef=+0.0000  p=0.0791
+  rem_min_lag1              coef=+0.0221  p=0.2640
+  is_weekend                coef=+3.4603  p=0.3340
+  vo2max_ml_kg_min_lag1     coef=-0.0582  p=0.3554
+  dow_cos                   coef=-0.5436  p=0.6758
+  dow_sin                   coef=+0.5748  p=0.7979
+  steps_sum_lag1            coef=-0.0000  p=0.8599
+  deep_min_lag1             coef=-0.0019  p=0.9641
+
+Heuristic N-of-1 ideas (non-causal):
+- If you increase inbed_min (yesterday), target shifts +0.000 (p=0.079).
+- If you increase rem_min (yesterday), target shifts +0.022 (p=0.264).
+- If you increase is_weekend, target shifts +3.460 (p=0.334).
+- If you decrease vo2max_ml_kg_min (yesterday), target shifts -0.058 (p=0.355).
+- If you decrease dow_cos, target shifts -0.544 (p=0.676).

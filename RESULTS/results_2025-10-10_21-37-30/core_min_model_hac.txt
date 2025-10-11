@@ -1,0 +1,25 @@
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:               core_min   R-squared:                       0.030
+Model:                            OLS   Adj. R-squared:                  0.025
+Method:                 Least Squares   F-statistic:                     5.129
+Date:                Fri, 10 Oct 2025   Prob (F-statistic):             0.0247
+Time:                        21:37:44   Log-Likelihood:                -1055.3
+No. Observations:                 179   AIC:                             2115.
+Df Residuals:                     177   BIC:                             2121.
+Df Model:                           1                                         
+Covariance Type:                  HAC                                         
+=========================================================================================
+                            coef    std err          z      P>|z|      [0.025      0.975]
+-----------------------------------------------------------------------------------------
+const                   245.4816     10.216     24.030      0.000     225.460     265.504
+vo2max_ml_kg_min_lag2     0.9453      0.417      2.265      0.024       0.127       1.763
+==============================================================================
+Omnibus:                       43.859   Durbin-Watson:                   1.573
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):               74.290
+Skew:                          -1.247   Prob(JB):                     7.38e-17
+Kurtosis:                       4.935   Cond. No.                         26.3
+==============================================================================
+
+Notes:
+[1] Standard Errors are heteroscedasticity and autocorrelation robust (HAC) using 3 lags and without small sample correction

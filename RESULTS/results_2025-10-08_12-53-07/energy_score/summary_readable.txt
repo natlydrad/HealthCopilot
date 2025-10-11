@@ -1,0 +1,8 @@
+Target: energy_score
+n=175  R²=0.011  adjR²=-0.043
+Top effects (HAC):
+- inbed_min_lag3: ↑0.126 (p=0.379)
+- rem_min_lag3: ↓0.218 (p=0.527)
+- dow_cos: ↓7.979 (p=0.662)
+- steps_sum_lag3: ↓0.001 (p=0.707)
+- vo2max_ml_kg_min_lag3: ↓0.330 (p=0.740)

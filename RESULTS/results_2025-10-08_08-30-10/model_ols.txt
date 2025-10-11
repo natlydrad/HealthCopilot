@@ -1,0 +1,36 @@
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:              total_min   R-squared:                       0.123
+Model:                            OLS   Adj. R-squared:                  0.070
+Method:                 Least Squares   F-statistic:                     3.831
+Date:                Wed, 08 Oct 2025   Prob (F-statistic):           0.000114
+Time:                        08:30:24   Log-Likelihood:                -1042.9
+No. Observations:                 174   AIC:                             2108.
+Df Residuals:                     163   BIC:                             2143.
+Df Model:                          10                                         
+Covariance Type:                  HC3                                         
+=========================================================================================
+                            coef    std err          z      P>|z|      [0.025      0.975]
+-----------------------------------------------------------------------------------------
+const                   438.4796    151.212      2.900      0.004     142.109     734.850
+active_kcal_lag1         -0.0271      0.065     -0.417      0.677      -0.155       0.100
+basal_kcal_lag1          -0.1271      0.084     -1.513      0.130      -0.292       0.038
+resting_hr_bpm_lag1       1.7724      0.991      1.788      0.074      -0.170       3.715
+hrv_sdnn_ms_lag1          0.3040      0.301      1.010      0.313      -0.286       0.894
+vo2max_ml_kg_min_lag1     0.1497      0.497      0.301      0.763      -0.824       1.123
+total_min_lag1            0.1996      0.074      2.686      0.007       0.054       0.345
+core_min_lag1             0.1321      0.132      1.003      0.316      -0.126       0.390
+deep_min_lag1             0.6751      0.424      1.591      0.112      -0.156       1.507
+rem_min_lag1             -0.7642      0.347     -2.204      0.028      -1.444      -0.085
+inbed_min_lag1            0.0542      0.073      0.741      0.459      -0.089       0.197
+==============================================================================
+Omnibus:                       46.667   Durbin-Watson:                   1.961
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):              184.176
+Skew:                          -0.950   Prob(JB):                     1.02e-40
+Kurtosis:                       7.669   Cond. No.                     4.58e+04
+==============================================================================
+
+Notes:
+[1] Standard Errors are heteroscedasticity robust (HC3)
+[2] The condition number is large, 4.58e+04. This might indicate that there are
+strong multicollinearity or other numerical problems.

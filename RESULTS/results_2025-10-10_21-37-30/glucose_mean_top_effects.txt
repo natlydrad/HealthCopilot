@@ -1,0 +1,8 @@
+Target: glucose_mean
+n=89
+
+- vo2max_ml_kg_min_lag1: ↓0.0674 (p=0.293)
+- rem_min_lag1: ↑0.0194 (p=0.312)
+- active_kcal_lag1: ↓0.0080 (p=0.335)
+- steps_sum_lag1: ↑0.0001 (p=0.666)
+- deep_min_lag1: ↓0.0190 (p=0.682)

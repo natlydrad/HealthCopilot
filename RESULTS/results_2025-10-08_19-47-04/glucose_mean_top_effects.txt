@@ -1,0 +1,8 @@
+Target: glucose_mean
+n=89
+
+- inbed_min_lag1: ↑0.0000 (p=0.079)
+- rem_min_lag1: ↑0.0221 (p=0.264)
+- is_weekend: ↑3.4603 (p=0.334)
+- vo2max_ml_kg_min_lag1: ↓0.0582 (p=0.355)
+- dow_cos: ↓0.5436 (p=0.676)
