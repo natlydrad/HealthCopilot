@@ -847,5 +847,9 @@ def interpret_results(outdir: Path):
         print(f"\n⚠️ Auto-interpreter failed: {e}")
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     main()
+    # After stats finish, generate the human report automatically
+    import os
+    os.system("python3 unified_experiments.py")
+

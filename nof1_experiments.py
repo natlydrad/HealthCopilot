@@ -20,8 +20,75 @@ from datetime import datetime, timedelta
 import numpy as np, pandas as pd
 import statsmodels.api as sm
 
-# ---------- Paths ----------
+# ============================================================
+#  🔍 Load results + shared helpers (from interpret_insights)
+# ============================================================
+
 RESULTS_DIR = sorted(Path("RESULTS").glob("results_*"))[-1]
+print(f"📂 Using latest results: {RESULTS_DIR}")
+
+effects = pd.read_csv(RESULTS_DIR / "all_effects.csv")
+combined = json.load(open(RESULTS_DIR / "combined_models.json"))
+sig_corrs = json.load(open(RESULTS_DIR / "significant_correlations.json"))
+try:
+    daily = pd.read_csv(RESULTS_DIR / "daily_features.csv", parse_dates=["date"])
+except Exception:
+    daily = None
+
+# ---------- Helper functions ----------
+
+def _base_name(name: str) -> str:
+    for tok in ["_3d_ma", "_7d_ma", "_3d_ma_7d_ma", "_lag1", "_lag2", "_lag3"]:
+        name = name.replace(tok, "")
+    return name
+
+def _latency_days(name: str) -> int:
+    lags = [int(p[3:]) for p in name.split("_") if p.startswith("lag") and p[3:].isdigit()]
+    return min(lags) if lags else 0
+
+def _pretty(name: str) -> str:
+    out = name.replace("_", " ")
+    out = out.replace("vo2max ml kg min", "VO₂max")
+    out = out.replace("hrv sdnn ms", "HRV (SDNN)")
+    out = out.replace("resting hr bpm", "Resting HR")
+    lat = _latency_days(name)
+    if lat:
+        out += f" (lag {lat}d)"
+    return out
+
+def is_controllable(base: str) -> bool:
+    CONTROLLABLE = {
+        "steps_sum", "sleep_hours", "fiber_g", "protein_g", "added_sugar_g",
+        "sat_fat_g", "water_l", "eating_window_h", "alcohol_units",
+        "outdoor_minutes", "meditation_min", "screen_time_h",
+        "total_min", "core_min", "deep_min", "rem_min"
+    }
+    return base in CONTROLLABLE
+
+def _suggest_magnitude(col: str) -> str:
+    if daily is None or col not in daily.columns:
+        return "by a **meaningful but sustainable** amount"
+    s = daily[col].dropna()
+    if s.empty:
+        return "by a **meaningful but sustainable** amount"
+    step = np.nanpercentile(s, 75) - np.nanpercentile(s, 25)
+    if step <= 0 or not np.isfinite(step):
+        return "by a **meaningful but sustainable** amount"
+    if "steps" in col:
+        step = int(round(step / 500.0) * 500) or 500
+        return f"by **~{step} steps/day**"
+    if "kcal" in col:
+        step = int(round(step / 50.0) * 50) or 50
+        return f"by **~{step} kcal/day**"
+    if col.endswith("_min") or "min" in col:
+        step = int(round(step / 10.0) * 10) or 10
+        return f"by **~{step} min/day**"
+    return "by **~15%**"
+
+# ============================================================
+#  🧠 Experiment generation core (your existing logic)
+# ============================================================
+
 DF_PATH = RESULTS_DIR / "daily_features.csv"
 CONF_PATH = Path("experiments_config.json")
 
@@ -53,10 +120,8 @@ LEVER_NAME = {
     "late_meal_count": "late meals", "alcohol_units": "alcohol",
     "outdoor_minutes": "outdoor time", "meditation_min": "meditation",
     "screen_time_h": "evening screen time",
-    # non-behavioral metrics that may appear in data:
     "active_kcal": "active kcal", "basal_kcal": "basal kcal", "energy_score": "energy score",
-    "glucose_mean": "glucose mean", "glucose_mean_3d_ma": "glucose mean 3d ma", "glucose_mean_7d_ma": "glucose mean 7d ma",
-    "steps_sum_3d_ma": "steps sum 3d ma", "steps_sum_7d_ma": "steps sum 7d ma",
+    "glucose_mean": "glucose mean",
 }
 
 TARGET_INFO = {
@@ -81,6 +146,8 @@ TARGET_INFO = {
         "external_levers": ["sleep, stress reduction, moderate cardio, alcohol moderation"],
     },
 }
+
+# ... [keep the rest of your code (filters, evaluation, write_markdown, main)] ...
 
 # Actionable levers (we can instruct user to change these)
 BEHAVIORAL_LEVERS = {
