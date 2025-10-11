@@ -1,0 +1,8 @@
+Target: active_kcal
+n=184
+
+- vo2max_ml_kg_min_lag3: ↑0.4495 (p=0.524)
+- rem_min_lag3: ↓0.1509 (p=0.564)
+- steps_sum_lag3: ↑0.0007 (p=0.690)
+- hrv_sdnn_ms_lag3: ↑0.1135 (p=0.727)
+- deep_min_lag3: ↓0.0437 (p=0.908)

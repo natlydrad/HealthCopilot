@@ -1,0 +1,7 @@
+Target: deep_min
+n=179
+
+- steps_sum_lag3: ↑0.0004 (p=0.249)
+- vo2max_ml_kg_min_lag3: ↓0.1134 (p=0.361)
+- rem_min_lag3: ↓0.0261 (p=0.543)
+- resting_hr_bpm_lag3: ↑0.0032 (p=0.992)

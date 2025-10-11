@@ -509,6 +509,32 @@ def main():
         if feat[c].nunique() < 10:
             feat.drop(columns=[c], inplace=True)
 
+        # === PHASE 0: Descriptive Correlation Explorer ===
+    print("📈 Running descriptive correlation analysis...")
+    numeric_cols = feat.select_dtypes(include=[np.number]).columns
+    corr = feat[numeric_cols].corr(numeric_only=True)
+
+    # Save full correlation matrix
+    corr.to_csv(outdir / "correlation_matrix.csv")
+    print(f"💾 correlation_matrix.csv saved ({corr.shape[0]}×{corr.shape[1]})")
+
+    # Save top correlations per target
+    topfile = outdir / "top_correlations.txt"
+    with open(topfile, "w") as f:
+        for tgt in numeric_cols:
+            others = corr[tgt].drop(tgt).dropna()
+            top_pos = others.sort_values(ascending=False).head(5)
+            top_neg = others.sort_values(ascending=True).head(5)
+            f.write(f"\n=== {tgt} ===\n")
+            f.write("Top positive correlations:\n")
+            for k,v in top_pos.items():
+                f.write(f"  + {k:25s} r={v:+.3f}\n")
+            f.write("Top negative correlations:\n")
+            for k,v in top_neg.items():
+                f.write(f"  - {k:25s} r={v:+.3f}\n")
+    print(f"💾 top_correlations.txt saved ({len(numeric_cols)} targets)")
+    
+
     # choose targets
     # === Phase A: full predictability map ===
     exclude_keywords = ["lag", "ma", "sin", "cos"]
