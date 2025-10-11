@@ -770,11 +770,80 @@ def main():
             )
     print(f"🧠 N-of-1 experiment summary saved to {md_path}")
 
-
-
-
     print("\n✅ ALL DONE")
     print(f"📦 Results folder: {outdir}")
+
+    interpret_results(outdir)   # <-- add this line
+
+# =========================
+# ----- AUTO INTERPRET ----
+# =========================
+
+def interpret_results(outdir: Path):
+    """Summarize and sanity-check the outputs automatically."""
+    try:
+        import json, pandas as pd
+        print("\n🧠 Auto-interpreting Phase 3 results...\n")
+
+        daily = pd.read_csv(outdir / "daily_features.csv")
+        corr = pd.read_csv(outdir / "correlation_matrix.csv", index_col=0)
+        sig_corrs = json.load(open(outdir / "significant_correlations.json"))
+        combined = json.load(open(outdir / "combined_models.json"))
+
+        print(f"✅ Loaded {daily.shape[0]} days × {daily.shape[1]} features")
+        print(f"✅ Correlation matrix: {corr.shape}")
+        print(f"✅ {len(sig_corrs)} targets with significant correlations")
+        print(f"✅ {len(combined)} modeled targets\n")
+
+        # --- 1. Correlation summary ---
+        total_sig = sum(len(v["top_pos"]) + len(v["top_neg"]) for v in sig_corrs.values())
+        avg_sig = total_sig / max(len(sig_corrs), 1)
+        print(f"📈 Total significant correlations: {total_sig}")
+        print(f"   Average per target: {avg_sig:.2f}")
+
+        top_corrs = sorted(sig_corrs.items(),
+            key=lambda kv: len(kv[1]["top_pos"]) + len(kv[1]["top_neg"]),
+            reverse=True)[:5]
+        print("   Top 5 correlation-dense targets:")
+        for t, d in top_corrs:
+            print(f"   - {t:20s} ({len(d['top_pos'])+len(d['top_neg'])} total sig)")
+
+        # --- 2. Model metrics overview ---
+        dfm = pd.DataFrame([x["metrics"] | {"target": x["target"]} for x in combined])
+        print("\n🏗️ Model performance (top 10 by adjR²):")
+        print(dfm.sort_values("adj_r2", ascending=False)
+              .head(10)[["target","r2","adj_r2","aic"]].to_string(index=False))
+
+        print(f"\n📊 Mean R² = {dfm['r2'].mean():.3f}, Median = {dfm['r2'].median():.3f}")
+
+        bad = dfm[dfm["r2"] < 0]
+        if not bad.empty:
+            print(f"\n⚠️ {len(bad)} models with negative R² (possible overfit):")
+            print(bad[["target","r2"]].to_string(index=False))
+
+        # --- 3. Data quality quick check ---
+        null_cols = daily.isna().sum()
+        nulls = null_cols[null_cols > 0].sort_values(ascending=False)
+        if not nulls.empty:
+            print(f"\n⚠️ Columns with missing values ({len(nulls)}):")
+            print(nulls.head(10).to_string())
+
+        # --- 4. Save compact JSON summary ---
+        summary = {
+            "n_days": int(daily.shape[0]),
+            "n_features": int(daily.shape[1]),
+            "n_targets": int(len(combined)),
+            "total_significant_correlations": int(total_sig),
+            "mean_r2": float(dfm["r2"].mean()),
+            "median_r2": float(dfm["r2"].median()),
+            "top_targets": [t for t,_ in top_corrs],
+        }
+        with open(outdir / "auto_summary.json", "w") as f:
+            json.dump(summary, f, indent=2)
+        print(f"\n💾 Summary written to {outdir/'auto_summary.json'}")
+
+    except Exception as e:
+        print(f"\n⚠️ Auto-interpreter failed: {e}")
 
 
 if __name__=="__main__":

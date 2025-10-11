@@ -1,0 +1,4550 @@
+
+=== steps_sum ===
+Top positive correlations:
+  + steps_sum_3d_ma           r=+0.832
+  + steps_sum_7d_ma           r=+0.717
+  + steps_sum_3d_ma_7d_ma     r=+0.645
+  + steps_sum_lag1_3d_ma      r=+0.624
+  + steps_sum_lag1_7d_ma      r=+0.606
+Top negative correlations:
+  - rem_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.215
+  - glucose_mean_7d_ma        r=-0.188
+  - rem_min_lag1_3d_ma        r=-0.187
+  - rem_min_lag1_lag2_lag3_7d_ma r=-0.183
+  - core_min_lag1_3d_ma       r=-0.182
+
+=== glucose_mean ===
+Top positive correlations:
+  + glucose_mean_3d_ma        r=+0.881
+  + glucose_mean_7d_ma        r=+0.720
+  + glucose_mean_3d_ma_7d_ma  r=+0.614
+  + hrv_sdnn_ms_lag1_lag2_lag3_3d_ma_7d_ma r=+0.603
+  + hrv_sdnn_ms_lag2_lag3_3d_ma_7d_ma r=+0.583
+Top negative correlations:
+  - vo2max_ml_kg_min_lag1_lag3_3d_ma_7d_ma r=-0.433
+  - vo2max_ml_kg_min_lag1_lag3_7d_ma r=-0.431
+  - vo2max_ml_kg_min_lag1_lag2_3d_ma_7d_ma r=-0.429
+  - vo2max_ml_kg_min_lag3_3d_ma_7d_ma r=-0.429
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma r=-0.427
+
+=== active_kcal ===
+Top positive correlations:
+  + energy_score              r=+0.837
+  + active_kcal_3d_ma         r=+0.676
+  + steps_sum                 r=+0.502
+  + active_kcal_7d_ma         r=+0.470
+  + basal_kcal                r=+0.391
+Top negative correlations:
+  - hrv_sdnn_ms_3d_ma         r=-0.190
+  - glucose_mean_3d_ma        r=-0.173
+  - hrv_sdnn_ms_lag2          r=-0.167
+  - glucose_mean_3d_ma_7d_ma  r=-0.162
+  - glucose_mean_7d_ma        r=-0.152
+
+=== basal_kcal ===
+Top positive correlations:
+  + energy_score              r=+0.831
+  + basal_kcal_3d_ma          r=+0.398
+  + active_kcal               r=+0.391
+  + resting_hr_bpm            r=+0.347
+  + deep_min_lag2_lag3        r=+0.201
+Top negative correlations:
+  - vo2max_ml_kg_min_3d_ma    r=-0.286
+  - steps_sum_lag1_lag2_7d_ma r=-0.272
+  - steps_sum_lag3_7d_ma      r=-0.272
+  - vo2max_ml_kg_min_lag3_7d_ma r=-0.271
+  - vo2max_ml_kg_min_lag1_lag2_7d_ma r=-0.271
+
+=== resting_hr_bpm ===
+Top positive correlations:
+  + resting_hr_bpm_3d_ma      r=+0.547
+  + basal_kcal                r=+0.347
+  + resting_hr_bpm_7d_ma      r=+0.337
+  + energy_score              r=+0.264
+  + resting_hr_bpm_lag2_lag3  r=+0.172
+Top negative correlations:
+  - hrv_sdnn_ms               r=-0.318
+  - hrv_sdnn_ms_3d_ma         r=-0.232
+  - steps_sum_lag2_lag3       r=-0.199
+  - active_kcal_lag2          r=-0.195
+  - active_kcal_lag1_7d_ma    r=-0.180
+
+=== hrv_sdnn_ms ===
+Top positive correlations:
+  + hrv_sdnn_ms_3d_ma         r=+0.746
+  + hrv_sdnn_ms_7d_ma         r=+0.581
+  + hrv_sdnn_ms_3d_ma_7d_ma   r=+0.452
+  + hrv_sdnn_ms_lag1          r=+0.431
+  + hrv_sdnn_ms_lag1_7d_ma    r=+0.408
+Top negative correlations:
+  - resting_hr_bpm            r=-0.318
+  - resting_hr_bpm_3d_ma      r=-0.309
+  - resting_hr_bpm_7d_ma      r=-0.268
+  - resting_hr_bpm_3d_ma_7d_ma r=-0.263
+  - resting_hr_bpm_lag1_7d_ma r=-0.237
+
+=== vo2max_ml_kg_min ===
+Top positive correlations:
+  + vo2max_ml_kg_min_3d_ma    r=+0.764
+  + vo2max_ml_kg_min_7d_ma    r=+0.642
+  + vo2max_ml_kg_min_3d_ma_7d_ma r=+0.533
+  + vo2max_ml_kg_min_lag1_7d_ma r=+0.485
+  + vo2max_ml_kg_min_lag1_3d_ma r=+0.477
+Top negative correlations:
+  - basal_kcal_3d_ma          r=-0.225
+  - basal_kcal_lag1_lag2_lag3_3d_ma_7d_ma r=-0.219
+  - rem_min_lag2_3d_ma        r=-0.218
+  - hrv_sdnn_ms_lag1_lag2_lag3_3d_ma_7d_ma r=-0.205
+  - basal_kcal_lag1           r=-0.204
+
+=== total_min ===
+Top positive correlations:
+  + total_min_3d_ma           r=+0.664
+  + core_min                  r=+0.581
+  + rem_min                   r=+0.479
+  + total_min_7d_ma           r=+0.479
+  + core_min_3d_ma            r=+0.374
+Top negative correlations:
+  - glucose_mean              r=-0.214
+  - glucose_mean_7d_ma        r=-0.164
+  - glucose_mean_3d_ma        r=-0.162
+  - glucose_mean_3d_ma_7d_ma  r=-0.138
+  - resting_hr_bpm_lag2       r=-0.117
+
+=== core_min ===
+Top positive correlations:
+  + rem_min                   r=+0.746
+  + core_min_3d_ma            r=+0.664
+  + total_min                 r=+0.581
+  + total_min_3d_ma           r=+0.511
+  + rem_min_3d_ma             r=+0.491
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.201
+  - glucose_mean_7d_ma        r=-0.177
+  - deep_min_lag2_lag3_3d_ma  r=-0.143
+  - deep_min_lag2_3d_ma_7d_ma r=-0.126
+  - deep_min_lag1_lag2_7d_ma  r=-0.123
+
+=== deep_min ===
+Top positive correlations:
+  + deep_min_3d_ma            r=+0.533
+  + deep_min_7d_ma            r=+0.355
+  + core_min                  r=+0.282
+  + rem_min                   r=+0.265
+  + total_min                 r=+0.197
+Top negative correlations:
+  - basal_kcal_lag2_lag3_7d_ma r=-0.199
+  - basal_kcal_lag1_lag3_3d_ma_7d_ma r=-0.178
+  - basal_kcal_lag1_lag2      r=-0.157
+  - basal_kcal_lag3           r=-0.157
+  - rem_min_lag1              r=-0.154
+
+=== rem_min ===
+Top positive correlations:
+  + core_min                  r=+0.746
+  + rem_min_3d_ma             r=+0.623
+  + core_min_3d_ma            r=+0.532
+  + total_min                 r=+0.479
+  + rem_min_7d_ma             r=+0.407
+Top negative correlations:
+  - deep_min_lag2_lag3_3d_ma  r=-0.137
+  - basal_kcal_lag1_3d_ma_7d_ma r=-0.116
+  - basal_kcal_lag1_lag3      r=-0.111
+  - deep_min_lag1_lag2_lag3   r=-0.109
+  - basal_kcal_lag1_7d_ma     r=-0.107
+
+=== steps_sum_lag1 ===
+Top positive correlations:
+  + steps_sum_3d_ma           r=+0.836
+  + steps_sum_lag1_3d_ma      r=+0.836
+  + steps_sum_7d_ma           r=+0.747
+  + steps_sum_lag1_7d_ma      r=+0.709
+  + steps_sum_3d_ma_7d_ma     r=+0.690
+Top negative correlations:
+  - glucose_mean_7d_ma        r=-0.203
+  - rem_min_lag2_3d_ma        r=-0.200
+  - glucose_mean_3d_ma_7d_ma  r=-0.196
+  - core_min_lag2_3d_ma       r=-0.190
+  - rem_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.190
+
+=== active_kcal_lag1 ===
+Top positive correlations:
+  + active_kcal_lag1_3d_ma    r=+0.683
+  + active_kcal_3d_ma         r=+0.616
+  + steps_sum_lag1            r=+0.503
+  + active_kcal_7d_ma         r=+0.501
+  + active_kcal_lag1_7d_ma    r=+0.470
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.208
+  - glucose_mean_7d_ma        r=-0.195
+  - hrv_sdnn_ms_lag1_3d_ma    r=-0.192
+  - hrv_sdnn_ms_lag3          r=-0.167
+  - hrv_sdnn_ms_lag1_lag2     r=-0.167
+
+=== basal_kcal_lag1 ===
+Top positive correlations:
+  + basal_kcal_3d_ma          r=+0.728
+  + basal_kcal_7d_ma          r=+0.611
+  + active_kcal_lag1          r=+0.410
+  + basal_kcal_lag1_3d_ma     r=+0.365
+  + resting_hr_bpm_lag1       r=+0.360
+Top negative correlations:
+  - vo2max_ml_kg_min_lag1_3d_ma r=-0.284
+  - vo2max_ml_kg_min_lag2_3d_ma r=-0.261
+  - vo2max_ml_kg_min_3d_ma_7d_ma r=-0.251
+  - vo2max_ml_kg_min_lag3     r=-0.246
+  - vo2max_ml_kg_min_lag1_lag2 r=-0.246
+
+=== resting_hr_bpm_lag1 ===
+Top positive correlations:
+  + resting_hr_bpm_3d_ma      r=+0.654
+  + resting_hr_bpm_lag1_3d_ma r=+0.548
+  + resting_hr_bpm_7d_ma      r=+0.505
+  + basal_kcal_lag1           r=+0.360
+  + resting_hr_bpm_lag1_7d_ma r=+0.337
+Top negative correlations:
+  - hrv_sdnn_ms_lag1          r=-0.320
+  - hrv_sdnn_ms_3d_ma         r=-0.250
+  - hrv_sdnn_ms_lag1_3d_ma    r=-0.233
+  - steps_sum_lag1_lag2_lag3  r=-0.206
+  - active_kcal_lag3          r=-0.196
+
+=== hrv_sdnn_ms_lag1 ===
+Top positive correlations:
+  + hrv_sdnn_ms_3d_ma         r=+0.809
+  + hrv_sdnn_ms_lag1_3d_ma    r=+0.746
+  + hrv_sdnn_ms_7d_ma         r=+0.619
+  + hrv_sdnn_ms_lag1_7d_ma    r=+0.579
+  + hrv_sdnn_ms_3d_ma_7d_ma   r=+0.546
+Top negative correlations:
+  - resting_hr_bpm_lag1       r=-0.320
+  - resting_hr_bpm_3d_ma      r=-0.318
+  - resting_hr_bpm_lag1_3d_ma r=-0.308
+  - resting_hr_bpm_3d_ma_7d_ma r=-0.274
+  - resting_hr_bpm_lag1_7d_ma r=-0.269
+
+=== vo2max_ml_kg_min_lag1 ===
+Top positive correlations:
+  + vo2max_ml_kg_min_3d_ma    r=+0.774
+  + vo2max_ml_kg_min_lag1_3d_ma r=+0.763
+  + vo2max_ml_kg_min_7d_ma    r=+0.665
+  + vo2max_ml_kg_min_lag1_7d_ma r=+0.638
+  + vo2max_ml_kg_min_3d_ma_7d_ma r=+0.604
+Top negative correlations:
+  - basal_kcal                r=-0.249
+  - basal_kcal_3d_ma          r=-0.225
+  - rem_min_lag1_lag2_3d_ma   r=-0.224
+  - rem_min_lag3_3d_ma        r=-0.224
+  - basal_kcal_lag1_3d_ma     r=-0.213
+
+=== total_min_lag1 ===
+Top positive correlations:
+  + total_min_3d_ma           r=+0.679
+  + total_min_lag1_3d_ma      r=+0.665
+  + core_min_lag1             r=+0.581
+  + total_min_7d_ma           r=+0.509
+  + rem_min_lag1              r=+0.479
+Top negative correlations:
+  - glucose_mean_3d_ma        r=-0.193
+  - glucose_mean              r=-0.184
+  - glucose_mean_7d_ma        r=-0.183
+  - glucose_mean_3d_ma_7d_ma  r=-0.169
+  - deep_min                  r=-0.132
+
+=== core_min_lag1 ===
+Top positive correlations:
+  + rem_min_lag1              r=+0.746
+  + core_min_3d_ma            r=+0.677
+  + core_min_lag1_3d_ma       r=+0.663
+  + total_min_lag1            r=+0.581
+  + rem_min_3d_ma             r=+0.547
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.218
+  - glucose_mean_7d_ma        r=-0.188
+  - deep_min_lag1_lag2_lag3_3d_ma r=-0.144
+  - steps_sum                 r=-0.137
+  - deep_min_lag3_3d_ma_7d_ma r=-0.131
+
+=== deep_min_lag1 ===
+Top positive correlations:
+  + deep_min_lag1_3d_ma       r=+0.536
+  + deep_min_3d_ma            r=+0.533
+  + deep_min_lag1_7d_ma       r=+0.359
+  + rem_min                   r=+0.348
+  + deep_min_7d_ma            r=+0.347
+Top negative correlations:
+  - basal_kcal_lag1_lag2_lag3_7d_ma r=-0.204
+  - basal_kcal_lag2_lag3_3d_ma_7d_ma r=-0.184
+  - basal_kcal_lag1_lag3      r=-0.159
+  - rem_min_lag2              r=-0.150
+  - basal_kcal_lag1_lag2_lag3_3d_ma_7d_ma r=-0.136
+
+=== rem_min_lag1 ===
+Top positive correlations:
+  + core_min_lag1             r=+0.746
+  + rem_min_3d_ma             r=+0.637
+  + rem_min_lag1_3d_ma        r=+0.622
+  + core_min_lag1_3d_ma       r=+0.530
+  + core_min_3d_ma            r=+0.518
+Top negative correlations:
+  - deep_min                  r=-0.154
+  - steps_sum                 r=-0.141
+  - deep_min_lag1_lag2_lag3_3d_ma r=-0.139
+  - basal_kcal_lag2_3d_ma_7d_ma r=-0.113
+  - basal_kcal_lag2_lag3      r=-0.112
+
+=== steps_sum_lag2 ===
+Top positive correlations:
+  + steps_sum_lag2_3d_ma      r=+0.838
+  + steps_sum_lag1_3d_ma      r=+0.836
+  + steps_sum_3d_ma           r=+0.834
+  + steps_sum_7d_ma           r=+0.778
+  + steps_sum_3d_ma_7d_ma     r=+0.763
+Top negative correlations:
+  - resting_hr_bpm_3d_ma      r=-0.213
+  - rem_min_lag3_3d_ma        r=-0.201
+  - rem_min_lag1_lag2_3d_ma   r=-0.201
+  - glucose_mean_7d_ma        r=-0.191
+  - core_min_lag3_3d_ma       r=-0.190
+
+=== active_kcal_lag2 ===
+Top positive correlations:
+  + active_kcal_3d_ma         r=+0.690
+  + active_kcal_lag2_3d_ma    r=+0.683
+  + active_kcal_lag1_3d_ma    r=+0.617
+  + active_kcal_7d_ma         r=+0.537
+  + active_kcal_3d_ma_7d_ma   r=+0.530
+Top negative correlations:
+  - resting_hr_bpm            r=-0.195
+  - hrv_sdnn_ms_lag2_3d_ma    r=-0.192
+  - glucose_mean_3d_ma_7d_ma  r=-0.179
+  - hrv_sdnn_ms_lag1_lag3     r=-0.167
+  - glucose_mean_7d_ma        r=-0.155
+
+=== basal_kcal_lag2 ===
+Top positive correlations:
+  + basal_kcal_3d_ma          r=+0.756
+  + basal_kcal_lag1_3d_ma     r=+0.740
+  + basal_kcal_3d_ma_7d_ma    r=+0.616
+  + basal_kcal_lag1_7d_ma     r=+0.613
+  + basal_kcal_7d_ma          r=+0.569
+Top negative correlations:
+  - vo2max_ml_kg_min_lag2_3d_ma r=-0.284
+  - vo2max_ml_kg_min_lag3_3d_ma r=-0.262
+  - vo2max_ml_kg_min_lag1_lag2_3d_ma r=-0.262
+  - vo2max_ml_kg_min_lag1_3d_ma_7d_ma r=-0.253
+  - vo2max_ml_kg_min_lag1_lag3 r=-0.247
+
+=== resting_hr_bpm_lag2 ===
+Top positive correlations:
+  + resting_hr_bpm_lag1_3d_ma r=+0.653
+  + resting_hr_bpm_3d_ma      r=+0.635
+  + resting_hr_bpm_lag2_3d_ma r=+0.548
+  + resting_hr_bpm_lag1_7d_ma r=+0.505
+  + resting_hr_bpm_3d_ma_7d_ma r=+0.502
+Top negative correlations:
+  - hrv_sdnn_ms_lag2          r=-0.320
+  - hrv_sdnn_ms_3d_ma         r=-0.250
+  - hrv_sdnn_ms_lag1_3d_ma    r=-0.250
+  - hrv_sdnn_ms_lag2_3d_ma    r=-0.233
+  - active_kcal_lag1_lag3     r=-0.193
+
+=== hrv_sdnn_ms_lag2 ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag1_3d_ma    r=+0.809
+  + hrv_sdnn_ms_lag2_3d_ma    r=+0.746
+  + hrv_sdnn_ms_3d_ma         r=+0.746
+  + hrv_sdnn_ms_7d_ma         r=+0.641
+  + hrv_sdnn_ms_3d_ma_7d_ma   r=+0.626
+Top negative correlations:
+  - resting_hr_bpm_lag2       r=-0.320
+  - resting_hr_bpm_lag1_3d_ma r=-0.318
+  - resting_hr_bpm_lag2_3d_ma r=-0.308
+  - resting_hr_bpm_3d_ma      r=-0.291
+  - resting_hr_bpm_3d_ma_7d_ma r=-0.290
+
+=== vo2max_ml_kg_min_lag2 ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag1_3d_ma r=+0.773
+  + vo2max_ml_kg_min_lag2_3d_ma r=+0.762
+  + vo2max_ml_kg_min_3d_ma    r=+0.759
+  + vo2max_ml_kg_min_7d_ma    r=+0.670
+  + vo2max_ml_kg_min_3d_ma_7d_ma r=+0.666
+Top negative correlations:
+  - basal_kcal_3d_ma          r=-0.247
+  - glucose_mean_7d_ma        r=-0.232
+  - basal_kcal_lag1           r=-0.231
+  - rem_min_lag1_lag3_3d_ma   r=-0.230
+  - hrv_sdnn_ms_lag1_lag2_lag3_3d_ma_7d_ma r=-0.214
+
+=== total_min_lag2 ===
+Top positive correlations:
+  + total_min_lag1_3d_ma      r=+0.679
+  + total_min_3d_ma           r=+0.667
+  + total_min_lag2_3d_ma      r=+0.664
+  + core_min_lag2             r=+0.580
+  + total_min_7d_ma           r=+0.523
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.189
+  - glucose_mean_3d_ma        r=-0.181
+  - glucose_mean_7d_ma        r=-0.173
+  - deep_min_lag1             r=-0.131
+  - resting_hr_bpm_lag1_lag3  r=-0.117
+
+=== core_min_lag2 ===
+Top positive correlations:
+  + rem_min_lag2              r=+0.746
+  + core_min_lag1_3d_ma       r=+0.677
+  + core_min_3d_ma            r=+0.667
+  + core_min_lag2_3d_ma       r=+0.663
+  + total_min_lag2            r=+0.580
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.209
+  - glucose_mean_7d_ma        r=-0.170
+  - steps_sum_lag1            r=-0.143
+  - deep_min_lag1_lag3_3d_ma_7d_ma r=-0.133
+  - deep_min_lag2_lag3_7d_ma  r=-0.130
+
+=== deep_min_lag2 ===
+Top positive correlations:
+  + deep_min_lag2_3d_ma       r=+0.535
+  + deep_min_lag1_3d_ma       r=+0.533
+  + deep_min_3d_ma            r=+0.532
+  + deep_min_3d_ma_7d_ma      r=+0.362
+  + deep_min_lag2_7d_ma       r=+0.356
+Top negative correlations:
+  - basal_kcal_lag1_lag2_lag3_3d_ma_7d_ma r=-0.182
+  - basal_kcal_lag2_lag3      r=-0.160
+  - basal_kcal_3d_ma          r=-0.153
+  - rem_min_lag3              r=-0.152
+  - rem_min_lag1_lag2         r=-0.152
+
+=== rem_min_lag2 ===
+Top positive correlations:
+  + core_min_lag2             r=+0.746
+  + rem_min_lag1_3d_ma        r=+0.636
+  + rem_min_3d_ma             r=+0.625
+  + rem_min_lag2_3d_ma        r=+0.620
+  + core_min_lag2_3d_ma       r=+0.529
+Top negative correlations:
+  - vo2max_ml_kg_min          r=-0.165
+  - steps_sum_lag1            r=-0.152
+  - deep_min_lag1             r=-0.150
+  - steps_sum_3d_ma           r=-0.119
+  - deep_min_lag1_lag3_7d_ma  r=-0.117
+
+=== steps_sum_lag1_lag2 ===
+Top positive correlations:
+  + steps_sum_lag3            r=+1.000
+  + steps_sum_lag1_lag2_3d_ma r=+0.861
+  + steps_sum_lag3_3d_ma      r=+0.861
+  + steps_sum_lag2_3d_ma      r=+0.847
+  + steps_sum_lag1_3d_ma      r=+0.838
+Top negative correlations:
+  - basal_kcal_3d_ma          r=-0.241
+  - resting_hr_bpm_lag1_3d_ma r=-0.215
+  - rem_min_lag1_lag3_3d_ma   r=-0.199
+  - basal_kcal                r=-0.193
+  - core_min_lag1_lag3_3d_ma  r=-0.190
+
+=== active_kcal_lag1_lag2 ===
+Top positive correlations:
+  + active_kcal_lag3          r=+1.000
+  + active_kcal_lag3_3d_ma    r=+0.702
+  + active_kcal_lag1_lag2_3d_ma r=+0.702
+  + active_kcal_lag1_3d_ma    r=+0.688
+  + active_kcal_lag2_3d_ma    r=+0.622
+Top negative correlations:
+  - hrv_sdnn_ms_lag1_lag2_3d_ma r=-0.197
+  - hrv_sdnn_ms_lag3_3d_ma    r=-0.197
+  - resting_hr_bpm_lag1       r=-0.196
+  - glucose_mean_3d_ma_7d_ma  r=-0.188
+  - resting_hr_bpm_3d_ma      r=-0.179
+
+=== basal_kcal_lag1_lag2 ===
+Top positive correlations:
+  + basal_kcal_lag3           r=+1.000
+  + basal_kcal_lag1_3d_ma     r=+0.758
+  + basal_kcal_lag2_3d_ma     r=+0.739
+  + basal_kcal_lag2_7d_ma     r=+0.615
+  + basal_kcal_lag1_3d_ma_7d_ma r=+0.614
+Top negative correlations:
+  - deep_min_7d_ma            r=-0.285
+  - vo2max_ml_kg_min_lag3_3d_ma r=-0.278
+  - vo2max_ml_kg_min_lag1_lag2_3d_ma r=-0.278
+  - vo2max_ml_kg_min_lag1_lag3_3d_ma r=-0.246
+  - vo2max_ml_kg_min_lag2_3d_ma_7d_ma r=-0.237
+
+=== resting_hr_bpm_lag1_lag2 ===
+Top positive correlations:
+  + resting_hr_bpm_lag3       r=+1.000
+  + resting_hr_bpm_lag2_3d_ma r=+0.653
+  + resting_hr_bpm_lag1_3d_ma r=+0.634
+  + resting_hr_bpm_lag1_lag2_3d_ma r=+0.549
+  + resting_hr_bpm_lag3_3d_ma r=+0.549
+Top negative correlations:
+  - hrv_sdnn_ms_lag3          r=-0.320
+  - hrv_sdnn_ms_lag1_lag2     r=-0.320
+  - hrv_sdnn_ms_lag2_3d_ma    r=-0.250
+  - hrv_sdnn_ms_lag1_3d_ma    r=-0.249
+  - hrv_sdnn_ms_lag1_lag2_3d_ma r=-0.233
+
+=== hrv_sdnn_ms_lag1_lag2 ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag3          r=+1.000
+  + hrv_sdnn_ms_lag2_3d_ma    r=+0.809
+  + hrv_sdnn_ms_lag1_lag2_3d_ma r=+0.746
+  + hrv_sdnn_ms_lag3_3d_ma    r=+0.746
+  + hrv_sdnn_ms_lag1_3d_ma    r=+0.746
+Top negative correlations:
+  - resting_hr_bpm_lag1_lag2  r=-0.320
+  - resting_hr_bpm_lag3       r=-0.320
+  - resting_hr_bpm_lag2_3d_ma r=-0.318
+  - resting_hr_bpm_lag3_3d_ma r=-0.308
+  - resting_hr_bpm_lag1_lag2_3d_ma r=-0.308
+
+=== vo2max_ml_kg_min_lag1_lag2 ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag3     r=+1.000
+  + vo2max_ml_kg_min_lag2_3d_ma r=+0.779
+  + vo2max_ml_kg_min_lag1_lag2_3d_ma r=+0.769
+  + vo2max_ml_kg_min_lag3_3d_ma r=+0.769
+  + vo2max_ml_kg_min_lag1_3d_ma r=+0.765
+Top negative correlations:
+  - basal_kcal_3d_ma          r=-0.340
+  - basal_kcal_lag1_3d_ma     r=-0.268
+  - basal_kcal_lag1           r=-0.246
+  - basal_kcal_7d_ma          r=-0.233
+  - basal_kcal_lag2           r=-0.231
+
+=== total_min_lag1_lag2 ===
+Top positive correlations:
+  + total_min_lag3            r=+1.000
+  + total_min_lag2_3d_ma      r=+0.678
+  + total_min_lag1_3d_ma      r=+0.666
+  + total_min_lag3_3d_ma      r=+0.664
+  + total_min_lag1_lag2_3d_ma r=+0.664
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.193
+  - glucose_mean_7d_ma        r=-0.166
+  - glucose_mean_3d_ma        r=-0.135
+  - deep_min_lag2             r=-0.134
+  - resting_hr_bpm_lag2_lag3  r=-0.120
+
+=== core_min_lag1_lag2 ===
+Top positive correlations:
+  + core_min_lag3             r=+1.000
+  + rem_min_lag1_lag2         r=+0.746
+  + rem_min_lag3              r=+0.746
+  + core_min_lag2_3d_ma       r=+0.677
+  + core_min_lag1_3d_ma       r=+0.666
+Top negative correlations:
+  - steps_sum_3d_ma           r=-0.150
+  - steps_sum_lag2            r=-0.145
+  - deep_min_lag2_lag3_3d_ma_7d_ma r=-0.137
+  - deep_min_lag1_lag2_lag3_7d_ma r=-0.133
+  - deep_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.126
+
+=== deep_min_lag1_lag2 ===
+Top positive correlations:
+  + deep_min_lag3             r=+1.000
+  + deep_min_lag3_3d_ma       r=+0.533
+  + deep_min_lag1_lag2_3d_ma  r=+0.533
+  + deep_min_lag1_3d_ma       r=+0.531
+  + deep_min_lag2_3d_ma       r=+0.531
+Top negative correlations:
+  - basal_kcal_lag1_lag2_lag3 r=-0.159
+  - rem_min_lag1_lag3         r=-0.155
+  - deep_min_lag1_lag3_7d_ma  r=-0.150
+  - basal_kcal_lag1_3d_ma     r=-0.143
+  - basal_kcal_7d_ma          r=-0.139
+
+=== rem_min_lag1_lag2 ===
+Top positive correlations:
+  + rem_min_lag3              r=+1.000
+  + core_min_lag3             r=+0.746
+  + core_min_lag1_lag2        r=+0.746
+  + rem_min_lag2_3d_ma        r=+0.635
+  + rem_min_lag1_3d_ma        r=+0.625
+Top negative correlations:
+  - vo2max_ml_kg_min          r=-0.194
+  - vo2max_ml_kg_min_lag1     r=-0.169
+  - vo2max_ml_kg_min_3d_ma    r=-0.165
+  - steps_sum_lag2            r=-0.153
+  - deep_min_lag2             r=-0.152
+
+=== steps_sum_lag3 ===
+Top positive correlations:
+  + steps_sum_lag1_lag2       r=+1.000
+  + steps_sum_lag1_lag2_3d_ma r=+0.861
+  + steps_sum_lag3_3d_ma      r=+0.861
+  + steps_sum_lag2_3d_ma      r=+0.847
+  + steps_sum_lag1_3d_ma      r=+0.838
+Top negative correlations:
+  - basal_kcal_3d_ma          r=-0.241
+  - resting_hr_bpm_lag1_3d_ma r=-0.215
+  - rem_min_lag1_lag3_3d_ma   r=-0.199
+  - basal_kcal                r=-0.193
+  - core_min_lag1_lag3_3d_ma  r=-0.190
+
+=== active_kcal_lag3 ===
+Top positive correlations:
+  + active_kcal_lag1_lag2     r=+1.000
+  + active_kcal_lag3_3d_ma    r=+0.702
+  + active_kcal_lag1_lag2_3d_ma r=+0.702
+  + active_kcal_lag1_3d_ma    r=+0.688
+  + active_kcal_lag2_3d_ma    r=+0.622
+Top negative correlations:
+  - hrv_sdnn_ms_lag1_lag2_3d_ma r=-0.197
+  - hrv_sdnn_ms_lag3_3d_ma    r=-0.197
+  - resting_hr_bpm_lag1       r=-0.196
+  - glucose_mean_3d_ma_7d_ma  r=-0.188
+  - resting_hr_bpm_3d_ma      r=-0.179
+
+=== basal_kcal_lag3 ===
+Top positive correlations:
+  + basal_kcal_lag1_lag2      r=+1.000
+  + basal_kcal_lag1_3d_ma     r=+0.758
+  + basal_kcal_lag2_3d_ma     r=+0.739
+  + basal_kcal_lag2_7d_ma     r=+0.615
+  + basal_kcal_lag1_3d_ma_7d_ma r=+0.614
+Top negative correlations:
+  - deep_min_7d_ma            r=-0.285
+  - vo2max_ml_kg_min_lag1_lag2_3d_ma r=-0.278
+  - vo2max_ml_kg_min_lag3_3d_ma r=-0.278
+  - vo2max_ml_kg_min_lag1_lag3_3d_ma r=-0.246
+  - vo2max_ml_kg_min_lag2_3d_ma_7d_ma r=-0.237
+
+=== resting_hr_bpm_lag3 ===
+Top positive correlations:
+  + resting_hr_bpm_lag1_lag2  r=+1.000
+  + resting_hr_bpm_lag2_3d_ma r=+0.653
+  + resting_hr_bpm_lag1_3d_ma r=+0.634
+  + resting_hr_bpm_lag3_3d_ma r=+0.549
+  + resting_hr_bpm_lag1_lag2_3d_ma r=+0.549
+Top negative correlations:
+  - hrv_sdnn_ms_lag3          r=-0.320
+  - hrv_sdnn_ms_lag1_lag2     r=-0.320
+  - hrv_sdnn_ms_lag2_3d_ma    r=-0.250
+  - hrv_sdnn_ms_lag1_3d_ma    r=-0.249
+  - hrv_sdnn_ms_lag1_lag2_3d_ma r=-0.233
+
+=== hrv_sdnn_ms_lag3 ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag1_lag2     r=+1.000
+  + hrv_sdnn_ms_lag2_3d_ma    r=+0.809
+  + hrv_sdnn_ms_lag1_lag2_3d_ma r=+0.746
+  + hrv_sdnn_ms_lag3_3d_ma    r=+0.746
+  + hrv_sdnn_ms_lag1_3d_ma    r=+0.746
+Top negative correlations:
+  - resting_hr_bpm_lag1_lag2  r=-0.320
+  - resting_hr_bpm_lag3       r=-0.320
+  - resting_hr_bpm_lag2_3d_ma r=-0.318
+  - resting_hr_bpm_lag1_lag2_3d_ma r=-0.308
+  - resting_hr_bpm_lag3_3d_ma r=-0.308
+
+=== vo2max_ml_kg_min_lag3 ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag1_lag2 r=+1.000
+  + vo2max_ml_kg_min_lag2_3d_ma r=+0.779
+  + vo2max_ml_kg_min_lag1_lag2_3d_ma r=+0.769
+  + vo2max_ml_kg_min_lag3_3d_ma r=+0.769
+  + vo2max_ml_kg_min_lag1_3d_ma r=+0.765
+Top negative correlations:
+  - basal_kcal_3d_ma          r=-0.340
+  - basal_kcal_lag1_3d_ma     r=-0.268
+  - basal_kcal_lag1           r=-0.246
+  - basal_kcal_7d_ma          r=-0.233
+  - basal_kcal_lag2           r=-0.231
+
+=== total_min_lag3 ===
+Top positive correlations:
+  + total_min_lag1_lag2       r=+1.000
+  + total_min_lag2_3d_ma      r=+0.678
+  + total_min_lag1_3d_ma      r=+0.666
+  + total_min_lag3_3d_ma      r=+0.664
+  + total_min_lag1_lag2_3d_ma r=+0.664
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.193
+  - glucose_mean_7d_ma        r=-0.166
+  - glucose_mean_3d_ma        r=-0.135
+  - deep_min_lag2             r=-0.134
+  - resting_hr_bpm_lag2_lag3  r=-0.120
+
+=== core_min_lag3 ===
+Top positive correlations:
+  + core_min_lag1_lag2        r=+1.000
+  + rem_min_lag1_lag2         r=+0.746
+  + rem_min_lag3              r=+0.746
+  + core_min_lag2_3d_ma       r=+0.677
+  + core_min_lag1_3d_ma       r=+0.666
+Top negative correlations:
+  - steps_sum_3d_ma           r=-0.150
+  - steps_sum_lag2            r=-0.145
+  - deep_min_lag2_lag3_3d_ma_7d_ma r=-0.137
+  - deep_min_lag1_lag2_lag3_7d_ma r=-0.133
+  - deep_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.126
+
+=== deep_min_lag3 ===
+Top positive correlations:
+  + deep_min_lag1_lag2        r=+1.000
+  + deep_min_lag3_3d_ma       r=+0.533
+  + deep_min_lag1_lag2_3d_ma  r=+0.533
+  + deep_min_lag1_3d_ma       r=+0.531
+  + deep_min_lag2_3d_ma       r=+0.531
+Top negative correlations:
+  - basal_kcal_lag1_lag2_lag3 r=-0.159
+  - rem_min_lag1_lag3         r=-0.155
+  - deep_min_lag1_lag3_7d_ma  r=-0.150
+  - basal_kcal_lag1_3d_ma     r=-0.143
+  - basal_kcal_7d_ma          r=-0.139
+
+=== rem_min_lag3 ===
+Top positive correlations:
+  + rem_min_lag1_lag2         r=+1.000
+  + core_min_lag1_lag2        r=+0.746
+  + core_min_lag3             r=+0.746
+  + rem_min_lag2_3d_ma        r=+0.635
+  + rem_min_lag1_3d_ma        r=+0.625
+Top negative correlations:
+  - vo2max_ml_kg_min          r=-0.194
+  - vo2max_ml_kg_min_lag1     r=-0.169
+  - vo2max_ml_kg_min_3d_ma    r=-0.165
+  - steps_sum_lag2            r=-0.153
+  - deep_min_lag2             r=-0.152
+
+=== steps_sum_lag1_lag3 ===
+Top positive correlations:
+  + steps_sum_lag2_3d_ma      r=+0.850
+  + steps_sum_lag1_lag3_3d_ma r=+0.849
+  + steps_sum_lag3_3d_ma      r=+0.846
+  + steps_sum_lag1_lag2_3d_ma r=+0.846
+  + steps_sum_3d_ma_7d_ma     r=+0.802
+Top negative correlations:
+  - rem_min_lag2_lag3_3d_ma   r=-0.224
+  - resting_hr_bpm_lag2_3d_ma r=-0.216
+  - core_min_lag2_lag3_3d_ma  r=-0.215
+  - basal_kcal_7d_ma          r=-0.212
+  - rem_min_lag2_3d_ma_7d_ma  r=-0.207
+
+=== active_kcal_lag1_lag3 ===
+Top positive correlations:
+  + active_kcal_lag2_3d_ma    r=+0.702
+  + active_kcal_lag1_lag3_3d_ma r=+0.695
+  + active_kcal_lag3_3d_ma    r=+0.626
+  + active_kcal_lag1_lag2_3d_ma r=+0.626
+  + active_kcal_lag1_7d_ma    r=+0.582
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.235
+  - glucose_mean_7d_ma        r=-0.209
+  - hrv_sdnn_ms_lag1_lag3_3d_ma r=-0.201
+  - resting_hr_bpm_lag2       r=-0.193
+  - hrv_sdnn_ms_lag1_lag2_lag3 r=-0.183
+
+=== basal_kcal_lag1_lag3 ===
+Top positive correlations:
+  + basal_kcal_lag2_3d_ma     r=+0.759
+  + basal_kcal_lag3_3d_ma     r=+0.739
+  + basal_kcal_lag1_lag2_3d_ma r=+0.739
+  + basal_kcal_lag1_lag2_7d_ma r=+0.615
+  + basal_kcal_lag3_7d_ma     r=+0.615
+Top negative correlations:
+  - deep_min_lag1_7d_ma       r=-0.284
+  - vo2max_ml_kg_min_lag1_lag3_3d_ma r=-0.274
+  - deep_min_3d_ma_7d_ma      r=-0.256
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma r=-0.242
+  - vo2max_ml_kg_min_lag3_3d_ma_7d_ma r=-0.232
+
+=== resting_hr_bpm_lag1_lag3 ===
+Top positive correlations:
+  + resting_hr_bpm_lag3_3d_ma r=+0.653
+  + resting_hr_bpm_lag1_lag2_3d_ma r=+0.653
+  + resting_hr_bpm_lag2_3d_ma r=+0.635
+  + resting_hr_bpm_lag1_lag3_3d_ma r=+0.549
+  + resting_hr_bpm_lag3_7d_ma r=+0.506
+Top negative correlations:
+  - hrv_sdnn_ms_lag1_lag3     r=-0.320
+  - hrv_sdnn_ms_lag1_lag2_3d_ma r=-0.250
+  - hrv_sdnn_ms_lag3_3d_ma    r=-0.250
+  - hrv_sdnn_ms_lag2_3d_ma    r=-0.249
+  - hrv_sdnn_ms_lag1_lag3_3d_ma r=-0.234
+
+=== hrv_sdnn_ms_lag1_lag3 ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag3_3d_ma    r=+0.810
+  + hrv_sdnn_ms_lag1_lag2_3d_ma r=+0.810
+  + hrv_sdnn_ms_lag1_lag3_3d_ma r=+0.746
+  + hrv_sdnn_ms_lag2_3d_ma    r=+0.746
+  + hrv_sdnn_ms_3d_ma_7d_ma   r=+0.649
+Top negative correlations:
+  - resting_hr_bpm_lag1_lag3  r=-0.320
+  - resting_hr_bpm_lag3_3d_ma r=-0.318
+  - resting_hr_bpm_lag1_lag2_3d_ma r=-0.318
+  - resting_hr_bpm_lag1_lag3_3d_ma r=-0.308
+  - resting_hr_bpm_lag1_3d_ma_7d_ma r=-0.294
+
+=== vo2max_ml_kg_min_lag1_lag3 ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag1_lag2_3d_ma r=+0.778
+  + vo2max_ml_kg_min_lag3_3d_ma r=+0.778
+  + vo2max_ml_kg_min_lag1_lag3_3d_ma r=+0.766
+  + vo2max_ml_kg_min_lag2_3d_ma r=+0.764
+  + vo2max_ml_kg_min_3d_ma_7d_ma r=+0.693
+Top negative correlations:
+  - basal_kcal_lag1_3d_ma     r=-0.327
+  - basal_kcal_7d_ma          r=-0.291
+  - glucose_mean              r=-0.277
+  - basal_kcal_lag2_3d_ma     r=-0.262
+  - basal_kcal_3d_ma          r=-0.259
+
+=== total_min_lag1_lag3 ===
+Top positive correlations:
+  + total_min_lag1_lag2_3d_ma r=+0.679
+  + total_min_lag3_3d_ma      r=+0.679
+  + total_min_lag2_3d_ma      r=+0.668
+  + total_min_lag1_lag3_3d_ma r=+0.665
+  + core_min_lag1_lag3        r=+0.578
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.186
+  - glucose_mean_7d_ma        r=-0.152
+  - deep_min_lag3             r=-0.133
+  - deep_min_lag1_lag2        r=-0.133
+  - resting_hr_bpm_lag1_lag2_lag3 r=-0.121
+
+=== core_min_lag1_lag3 ===
+Top positive correlations:
+  + rem_min_lag1_lag3         r=+0.748
+  + core_min_lag3_3d_ma       r=+0.678
+  + core_min_lag1_lag2_3d_ma  r=+0.678
+  + core_min_lag2_3d_ma       r=+0.667
+  + core_min_lag1_lag3_3d_ma  r=+0.663
+Top negative correlations:
+  - steps_sum_lag1_3d_ma      r=-0.148
+  - steps_sum_lag3            r=-0.146
+  - steps_sum_lag1_lag2       r=-0.146
+  - deep_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.136
+  - deep_min_lag2_lag3_3d_ma_7d_ma r=-0.123
+
+=== deep_min_lag1_lag3 ===
+Top positive correlations:
+  + deep_min_lag1_lag3_3d_ma  r=+0.530
+  + deep_min_lag2_3d_ma       r=+0.527
+  + deep_min_lag1_lag2_3d_ma  r=+0.526
+  + deep_min_lag3_3d_ma       r=+0.526
+  + deep_min_lag2_3d_ma_7d_ma r=+0.350
+Top negative correlations:
+  - rem_min_lag2_lag3         r=-0.156
+  - deep_min_lag2_lag3_7d_ma  r=-0.154
+  - basal_kcal_lag2_3d_ma     r=-0.135
+  - total_min_lag2_lag3       r=-0.134
+  - basal_kcal_lag1_7d_ma     r=-0.127
+
+=== rem_min_lag1_lag3 ===
+Top positive correlations:
+  + core_min_lag1_lag3        r=+0.748
+  + rem_min_lag1_lag2_3d_ma   r=+0.635
+  + rem_min_lag3_3d_ma        r=+0.635
+  + rem_min_lag2_3d_ma        r=+0.625
+  + rem_min_lag1_lag3_3d_ma   r=+0.619
+Top negative correlations:
+  - vo2max_ml_kg_min_lag1     r=-0.199
+  - vo2max_ml_kg_min_3d_ma    r=-0.184
+  - vo2max_ml_kg_min_lag2     r=-0.173
+  - vo2max_ml_kg_min_lag1_3d_ma r=-0.167
+  - deep_min_lag3             r=-0.155
+
+=== steps_sum_lag2_lag3 ===
+Top positive correlations:
+  + steps_sum_lag3_3d_ma      r=+0.845
+  + steps_sum_lag1_lag2_3d_ma r=+0.845
+  + steps_sum_lag2_lag3_3d_ma r=+0.843
+  + steps_sum_lag1_lag3_3d_ma r=+0.840
+  + steps_sum_lag1_3d_ma_7d_ma r=+0.793
+Top negative correlations:
+  - rem_min_lag1_lag2_lag3_3d_ma r=-0.244
+  - resting_hr_bpm_7d_ma      r=-0.241
+  - core_min_lag1_lag2_lag3_3d_ma r=-0.229
+  - rem_min_lag1_lag3_3d_ma_7d_ma r=-0.229
+  - rem_min_lag3_3d_ma_7d_ma  r=-0.229
+
+=== active_kcal_lag2_lag3 ===
+Top positive correlations:
+  + active_kcal_lag1_lag2_3d_ma r=+0.704
+  + active_kcal_lag3_3d_ma    r=+0.704
+  + active_kcal_lag2_lag3_3d_ma r=+0.693
+  + active_kcal_lag1_lag3_3d_ma r=+0.622
+  + active_kcal_lag1_3d_ma_7d_ma r=+0.581
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.219
+  - hrv_sdnn_ms_lag2_lag3_3d_ma r=-0.208
+  - glucose_mean_7d_ma        r=-0.192
+  - resting_hr_bpm_lag3       r=-0.190
+  - resting_hr_bpm_lag1_lag2  r=-0.190
+
+=== basal_kcal_lag2_lag3 ===
+Top positive correlations:
+  + basal_kcal_lag1_lag2_3d_ma r=+0.763
+  + basal_kcal_lag3_3d_ma     r=+0.763
+  + basal_kcal_lag1_lag3_3d_ma r=+0.739
+  + basal_kcal_lag1_lag3_7d_ma r=+0.616
+  + basal_kcal_lag1_lag2_3d_ma_7d_ma r=+0.616
+Top negative correlations:
+  - deep_min_lag2_7d_ma       r=-0.287
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma r=-0.278
+  - deep_min_lag1_3d_ma_7d_ma r=-0.258
+  - vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma r=-0.245
+  - vo2max_ml_kg_min_lag1_lag3_3d_ma_7d_ma r=-0.237
+
+=== resting_hr_bpm_lag2_lag3 ===
+Top positive correlations:
+  + resting_hr_bpm_lag1_lag3_3d_ma r=+0.653
+  + resting_hr_bpm_lag3_3d_ma r=+0.635
+  + resting_hr_bpm_lag1_lag2_3d_ma r=+0.635
+  + resting_hr_bpm_lag2_lag3_3d_ma r=+0.549
+  + resting_hr_bpm_lag1_lag3_7d_ma r=+0.506
+Top negative correlations:
+  - hrv_sdnn_ms_lag2_lag3     r=-0.320
+  - hrv_sdnn_ms_lag1_lag3_3d_ma r=-0.250
+  - hrv_sdnn_ms_lag1_lag2_3d_ma r=-0.249
+  - hrv_sdnn_ms_lag3_3d_ma    r=-0.249
+  - hrv_sdnn_ms_lag2_lag3_3d_ma r=-0.236
+
+=== hrv_sdnn_ms_lag2_lag3 ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag1_lag3_3d_ma r=+0.810
+  + hrv_sdnn_ms_lag2_lag3_3d_ma r=+0.749
+  + hrv_sdnn_ms_lag1_lag2_3d_ma r=+0.746
+  + hrv_sdnn_ms_lag3_3d_ma    r=+0.746
+  + hrv_sdnn_ms_lag1_3d_ma_7d_ma r=+0.652
+Top negative correlations:
+  - resting_hr_bpm_lag2_lag3  r=-0.320
+  - resting_hr_bpm_lag1_lag3_3d_ma r=-0.318
+  - resting_hr_bpm_lag2_lag3_3d_ma r=-0.308
+  - resting_hr_bpm_lag2_3d_ma_7d_ma r=-0.295
+  - resting_hr_bpm_lag1_lag2_3d_ma r=-0.291
+
+=== vo2max_ml_kg_min_lag2_lag3 ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag1_lag3_3d_ma r=+0.776
+  + vo2max_ml_kg_min_lag2_lag3_3d_ma r=+0.763
+  + vo2max_ml_kg_min_lag1_lag2_3d_ma r=+0.763
+  + vo2max_ml_kg_min_lag3_3d_ma r=+0.763
+  + vo2max_ml_kg_min_lag1_3d_ma_7d_ma r=+0.689
+Top negative correlations:
+  - basal_kcal_7d_ma          r=-0.345
+  - basal_kcal_lag2_3d_ma     r=-0.319
+  - basal_kcal_3d_ma_7d_ma    r=-0.304
+  - basal_kcal_lag1_7d_ma     r=-0.280
+  - glucose_mean_3d_ma        r=-0.277
+
+=== total_min_lag2_lag3 ===
+Top positive correlations:
+  + total_min_lag1_lag3_3d_ma r=+0.679
+  + total_min_lag1_lag2_3d_ma r=+0.668
+  + total_min_lag3_3d_ma      r=+0.668
+  + total_min_lag2_lag3_3d_ma r=+0.665
+  + core_min_lag2_lag3        r=+0.578
+Top negative correlations:
+  - deep_min_lag1_lag3        r=-0.134
+  - glucose_mean_3d_ma_7d_ma  r=-0.126
+  - basal_kcal_lag1_lag2_lag3_3d_ma r=-0.112
+  - deep_min_lag2_3d_ma       r=-0.108
+  - glucose_mean_7d_ma        r=-0.094
+
+=== core_min_lag2_lag3 ===
+Top positive correlations:
+  + rem_min_lag2_lag3         r=+0.748
+  + core_min_lag1_lag3_3d_ma  r=+0.678
+  + core_min_lag1_lag2_3d_ma  r=+0.667
+  + core_min_lag3_3d_ma       r=+0.667
+  + core_min_lag2_lag3_3d_ma  r=+0.663
+Top negative correlations:
+  - steps_sum_lag1_lag3       r=-0.160
+  - steps_sum_lag2_3d_ma      r=-0.152
+  - deep_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.125
+  - steps_sum_lag2            r=-0.120
+  - steps_sum_lag1_lag2_3d_ma r=-0.111
+
+=== deep_min_lag2_lag3 ===
+Top positive correlations:
+  + deep_min_lag2_lag3_3d_ma  r=+0.531
+  + deep_min_lag3_3d_ma       r=+0.526
+  + deep_min_lag1_lag2_3d_ma  r=+0.526
+  + deep_min_lag1_lag3_3d_ma  r=+0.524
+  + deep_min_3d_ma_7d_ma      r=+0.351
+Top negative correlations:
+  - rem_min_lag1_lag2_lag3    r=-0.160
+  - deep_min_lag1_lag2_lag3_7d_ma r=-0.156
+  - total_min_lag1_lag2_lag3  r=-0.135
+  - basal_kcal_lag3_3d_ma     r=-0.130
+  - basal_kcal_lag1_lag2_3d_ma r=-0.130
+
+=== rem_min_lag2_lag3 ===
+Top positive correlations:
+  + core_min_lag2_lag3        r=+0.748
+  + rem_min_lag1_lag3_3d_ma   r=+0.635
+  + rem_min_lag1_lag2_3d_ma   r=+0.625
+  + rem_min_lag3_3d_ma        r=+0.625
+  + rem_min_lag2_lag3_3d_ma   r=+0.620
+Top negative correlations:
+  - vo2max_ml_kg_min_lag2     r=-0.201
+  - vo2max_ml_kg_min_lag1_3d_ma r=-0.184
+  - vo2max_ml_kg_min_lag3     r=-0.173
+  - vo2max_ml_kg_min_lag1_lag2 r=-0.173
+  - vo2max_ml_kg_min_lag2_3d_ma r=-0.168
+
+=== steps_sum_lag1_lag2_lag3 ===
+Top positive correlations:
+  + steps_sum_lag1_lag2_lag3_3d_ma r=+0.839
+  + steps_sum_lag1_lag3_3d_ma r=+0.838
+  + steps_sum_lag2_lag3_3d_ma r=+0.833
+  + steps_sum_lag2_3d_ma_7d_ma r=+0.784
+  + steps_sum_lag1_lag2_7d_ma r=+0.782
+Top negative correlations:
+  - resting_hr_bpm_7d_ma      r=-0.270
+  - rem_min_lag2_lag3_3d_ma_7d_ma r=-0.255
+  - rem_min_lag1_lag3_3d_ma_7d_ma r=-0.254
+  - basal_kcal_3d_ma          r=-0.251
+  - basal_kcal                r=-0.250
+
+=== active_kcal_lag1_lag2_lag3 ===
+Top positive correlations:
+  + active_kcal_lag1_lag3_3d_ma r=+0.705
+  + active_kcal_lag1_lag2_lag3_3d_ma r=+0.692
+  + active_kcal_lag2_lag3_3d_ma r=+0.620
+  + active_kcal_lag1_lag2_7d_ma r=+0.579
+  + active_kcal_lag3_7d_ma    r=+0.579
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.239
+  - hrv_sdnn_ms_lag1_lag2_lag3_3d_ma r=-0.214
+  - glucose_mean_7d_ma        r=-0.212
+  - resting_hr_bpm_lag1_lag3  r=-0.191
+  - glucose_mean_3d_ma        r=-0.187
+
+=== basal_kcal_lag1_lag2_lag3 ===
+Top positive correlations:
+  + basal_kcal_lag1_lag3_3d_ma r=+0.763
+  + basal_kcal_lag2_lag3_3d_ma r=+0.739
+  + basal_kcal_lag2_lag3_7d_ma r=+0.616
+  + basal_kcal_lag1_lag3_3d_ma_7d_ma r=+0.616
+  + basal_kcal_lag3_3d_ma_7d_ma r=+0.580
+Top negative correlations:
+  - deep_min_lag1_lag2_7d_ma  r=-0.288
+  - deep_min_lag3_7d_ma       r=-0.288
+  - vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma r=-0.277
+  - deep_min_lag2_3d_ma_7d_ma r=-0.258
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma r=-0.235
+
+=== resting_hr_bpm_lag1_lag2_lag3 ===
+Top positive correlations:
+  + resting_hr_bpm_lag2_lag3_3d_ma r=+0.654
+  + resting_hr_bpm_lag1_lag3_3d_ma r=+0.636
+  + resting_hr_bpm_lag1_lag2_lag3_3d_ma r=+0.548
+  + resting_hr_bpm_lag2_lag3_7d_ma r=+0.506
+  + resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=+0.502
+Top negative correlations:
+  - hrv_sdnn_ms_lag1_lag2_lag3 r=-0.319
+  - hrv_sdnn_ms_lag1_lag3_3d_ma r=-0.249
+  - hrv_sdnn_ms_lag2_lag3_3d_ma r=-0.248
+  - hrv_sdnn_ms_lag1_lag2_lag3_3d_ma r=-0.233
+  - hrv_sdnn_ms_7d_ma         r=-0.213
+
+=== hrv_sdnn_ms_lag1_lag2_lag3 ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag2_lag3_3d_ma r=+0.810
+  + hrv_sdnn_ms_lag1_lag2_lag3_3d_ma r=+0.749
+  + hrv_sdnn_ms_lag1_lag3_3d_ma r=+0.747
+  + hrv_sdnn_ms_lag2_3d_ma_7d_ma r=+0.651
+  + hrv_sdnn_ms_lag1_lag3_7d_ma r=+0.645
+Top negative correlations:
+  - resting_hr_bpm_lag1_lag2_lag3 r=-0.319
+  - resting_hr_bpm_lag2_lag3_3d_ma r=-0.318
+  - resting_hr_bpm_lag1_lag2_lag3_3d_ma r=-0.307
+  - resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=-0.294
+  - resting_hr_bpm_lag3_3d_ma_7d_ma r=-0.294
+
+=== vo2max_ml_kg_min_lag1_lag2_lag3 ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag2_lag3_3d_ma r=+0.773
+  + vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma r=+0.760
+  + vo2max_ml_kg_min_lag1_lag3_3d_ma r=+0.760
+  + vo2max_ml_kg_min_lag2_3d_ma_7d_ma r=+0.685
+  + vo2max_ml_kg_min_lag3_3d_ma_7d_ma r=+0.682
+Top negative correlations:
+  - basal_kcal_3d_ma_7d_ma    r=-0.337
+  - basal_kcal_lag1_7d_ma     r=-0.334
+  - glucose_mean_3d_ma        r=-0.331
+  - basal_kcal_lag3_3d_ma     r=-0.311
+  - basal_kcal_lag1_lag2_3d_ma r=-0.311
+
+=== total_min_lag1_lag2_lag3 ===
+Top positive correlations:
+  + total_min_lag2_lag3_3d_ma r=+0.679
+  + total_min_lag1_lag3_3d_ma r=+0.668
+  + total_min_lag1_lag2_lag3_3d_ma r=+0.665
+  + core_min_lag1_lag2_lag3   r=+0.578
+  + total_min_lag2_3d_ma_7d_ma r=+0.531
+Top negative correlations:
+  - deep_min_lag2_lag3        r=-0.135
+  - glucose_mean_3d_ma_7d_ma  r=-0.119
+  - deep_min_lag3_3d_ma       r=-0.109
+  - deep_min_lag1_lag2_3d_ma  r=-0.109
+  - steps_sum_lag2_lag3       r=-0.091
+
+=== core_min_lag1_lag2_lag3 ===
+Top positive correlations:
+  + rem_min_lag1_lag2_lag3    r=+0.748
+  + core_min_lag2_lag3_3d_ma  r=+0.678
+  + core_min_lag1_lag3_3d_ma  r=+0.667
+  + core_min_lag1_lag2_lag3_3d_ma r=+0.663
+  + total_min_lag1_lag2_lag3  r=+0.578
+Top negative correlations:
+  - steps_sum_lag2_lag3       r=-0.167
+  - steps_sum_lag1_lag2_3d_ma r=-0.157
+  - steps_sum_lag3_3d_ma      r=-0.157
+  - steps_sum_lag1_lag3       r=-0.121
+  - steps_sum_lag1_lag3_3d_ma r=-0.120
+
+=== deep_min_lag1_lag2_lag3 ===
+Top positive correlations:
+  + deep_min_lag1_lag2_lag3_3d_ma r=+0.531
+  + deep_min_lag1_lag3_3d_ma  r=+0.529
+  + deep_min_lag2_lag3_3d_ma  r=+0.524
+  + deep_min_lag1_3d_ma_7d_ma r=+0.356
+  + deep_min_3d_ma_7d_ma      r=+0.355
+Top negative correlations:
+  - basal_kcal_lag1_lag3_3d_ma r=-0.131
+  - basal_kcal_lag1_lag2_7d_ma r=-0.129
+  - basal_kcal_lag3_7d_ma     r=-0.129
+  - deep_min_lag2_lag3        r=-0.115
+  - basal_kcal_lag2_3d_ma_7d_ma r=-0.112
+
+=== rem_min_lag1_lag2_lag3 ===
+Top positive correlations:
+  + core_min_lag1_lag2_lag3   r=+0.748
+  + rem_min_lag2_lag3_3d_ma   r=+0.634
+  + rem_min_lag1_lag3_3d_ma   r=+0.624
+  + rem_min_lag1_lag2_lag3_3d_ma r=+0.618
+  + core_min_lag1_lag2_lag3_3d_ma r=+0.528
+Top negative correlations:
+  - vo2max_ml_kg_min_lag3     r=-0.198
+  - vo2max_ml_kg_min_lag1_lag2 r=-0.198
+  - vo2max_ml_kg_min_lag2_3d_ma r=-0.189
+  - vo2max_ml_kg_min_lag1_lag3 r=-0.180
+  - steps_sum_lag2_lag3       r=-0.176
+
+=== steps_sum_3d_ma ===
+Top positive correlations:
+  + steps_sum_lag1_3d_ma      r=+0.918
+  + steps_sum_7d_ma           r=+0.896
+  + steps_sum_3d_ma_7d_ma     r=+0.839
+  + steps_sum_lag1            r=+0.836
+  + steps_sum_lag2            r=+0.834
+Top negative correlations:
+  - glucose_mean_7d_ma        r=-0.232
+  - glucose_mean_3d_ma_7d_ma  r=-0.225
+  - rem_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.224
+  - rem_min_3d_ma_7d_ma       r=-0.195
+  - glucose_mean_3d_ma        r=-0.194
+
+=== glucose_mean_3d_ma ===
+Top positive correlations:
+  + glucose_mean_7d_ma        r=+0.889
+  + glucose_mean              r=+0.881
+  + glucose_mean_3d_ma_7d_ma  r=+0.821
+  + hrv_sdnn_ms_lag1_lag2_lag3_3d_ma_7d_ma r=+0.654
+  + hrv_sdnn_ms_lag2_lag3_3d_ma_7d_ma r=+0.626
+Top negative correlations:
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma r=-0.514
+  - vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.510
+  - vo2max_ml_kg_min_lag1_lag2_lag3_7d_ma r=-0.510
+  - vo2max_ml_kg_min_lag1_lag3_3d_ma_7d_ma r=-0.507
+  - vo2max_ml_kg_min_lag2_lag3_7d_ma r=-0.503
+
+=== active_kcal_3d_ma ===
+Top positive correlations:
+  + active_kcal_lag1_3d_ma    r=+0.783
+  + active_kcal_7d_ma         r=+0.764
+  + active_kcal_lag2          r=+0.690
+  + active_kcal               r=+0.676
+  + active_kcal_3d_ma_7d_ma   r=+0.624
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.283
+  - glucose_mean_7d_ma        r=-0.259
+  - glucose_mean_3d_ma        r=-0.243
+  - hrv_sdnn_ms_lag2          r=-0.223
+  - hrv_sdnn_ms_lag1_3d_ma    r=-0.220
+
+=== basal_kcal_3d_ma ===
+Top positive correlations:
+  + basal_kcal_7d_ma          r=+0.783
+  + basal_kcal_lag2           r=+0.756
+  + basal_kcal_lag1_3d_ma     r=+0.739
+  + basal_kcal_lag1           r=+0.728
+  + basal_kcal_3d_ma_7d_ma    r=+0.578
+Top negative correlations:
+  - vo2max_ml_kg_min_lag1_3d_ma_7d_ma r=-0.416
+  - vo2max_ml_kg_min_lag2_3d_ma_7d_ma r=-0.409
+  - vo2max_ml_kg_min_lag1_lag2_7d_ma r=-0.408
+  - vo2max_ml_kg_min_lag3_7d_ma r=-0.408
+  - vo2max_ml_kg_min_lag2_3d_ma r=-0.405
+
+=== resting_hr_bpm_3d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_7d_ma      r=+0.719
+  + resting_hr_bpm_lag1_3d_ma r=+0.696
+  + resting_hr_bpm_lag1       r=+0.654
+  + resting_hr_bpm_lag2       r=+0.635
+  + resting_hr_bpm            r=+0.547
+Top negative correlations:
+  - hrv_sdnn_ms_3d_ma         r=-0.390
+  - hrv_sdnn_ms_lag1          r=-0.318
+  - hrv_sdnn_ms_lag1_3d_ma    r=-0.312
+  - hrv_sdnn_ms               r=-0.309
+  - hrv_sdnn_ms_lag2          r=-0.291
+
+=== hrv_sdnn_ms_3d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag1_3d_ma    r=+0.834
+  + hrv_sdnn_ms_lag1          r=+0.809
+  + hrv_sdnn_ms_7d_ma         r=+0.800
+  + hrv_sdnn_ms               r=+0.746
+  + hrv_sdnn_ms_lag2          r=+0.746
+Top negative correlations:
+  - resting_hr_bpm_3d_ma      r=-0.390
+  - resting_hr_bpm_3d_ma_7d_ma r=-0.359
+  - resting_hr_bpm_7d_ma      r=-0.341
+  - resting_hr_bpm_lag1_3d_ma r=-0.340
+  - resting_hr_bpm_lag1_7d_ma r=-0.334
+
+=== vo2max_ml_kg_min_3d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag1_3d_ma r=+0.875
+  + vo2max_ml_kg_min_7d_ma    r=+0.861
+  + vo2max_ml_kg_min_3d_ma_7d_ma r=+0.784
+  + vo2max_ml_kg_min_lag1_7d_ma r=+0.775
+  + vo2max_ml_kg_min_lag1     r=+0.774
+Top negative correlations:
+  - basal_kcal                r=-0.286
+  - basal_kcal_3d_ma          r=-0.284
+  - hrv_sdnn_ms_lag1_lag2_lag3_3d_ma_7d_ma r=-0.274
+  - hrv_sdnn_ms_lag2_lag3_3d_ma_7d_ma r=-0.263
+  - rem_min_3d_ma_7d_ma       r=-0.258
+
+=== total_min_3d_ma ===
+Top positive correlations:
+  + total_min_lag1_3d_ma      r=+0.764
+  + total_min_7d_ma           r=+0.750
+  + total_min_lag1            r=+0.679
+  + total_min_lag2            r=+0.667
+  + total_min                 r=+0.664
+Top negative correlations:
+  - glucose_mean_3d_ma        r=-0.272
+  - glucose_mean_7d_ma        r=-0.265
+  - glucose_mean_3d_ma_7d_ma  r=-0.252
+  - glucose_mean              r=-0.240
+  - deep_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.144
+
+=== core_min_3d_ma ===
+Top positive correlations:
+  + rem_min_3d_ma             r=+0.798
+  + core_min_lag1_3d_ma       r=+0.760
+  + core_min_7d_ma            r=+0.733
+  + core_min_lag1             r=+0.677
+  + core_min_lag2             r=+0.667
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.296
+  - glucose_mean_7d_ma        r=-0.252
+  - deep_min_lag3_3d_ma_7d_ma r=-0.183
+  - deep_min_lag1_lag2_3d_ma_7d_ma r=-0.183
+  - deep_min_lag1_lag2_lag3_3d_ma r=-0.180
+
+=== deep_min_3d_ma ===
+Top positive correlations:
+  + deep_min_7d_ma            r=+0.642
+  + deep_min_lag1_3d_ma       r=+0.627
+  + deep_min                  r=+0.533
+  + deep_min_lag1             r=+0.533
+  + deep_min_lag2             r=+0.532
+Top negative correlations:
+  - basal_kcal_lag1_lag2_lag3_3d_ma_7d_ma r=-0.313
+  - basal_kcal_lag1_lag2_lag3_7d_ma r=-0.280
+  - basal_kcal_lag2_lag3_3d_ma_7d_ma r=-0.264
+  - basal_kcal_lag1_3d_ma_7d_ma r=-0.236
+  - basal_kcal_lag2_7d_ma     r=-0.223
+
+=== rem_min_3d_ma ===
+Top positive correlations:
+  + core_min_3d_ma            r=+0.798
+  + rem_min_lag1_3d_ma        r=+0.735
+  + rem_min_7d_ma             r=+0.678
+  + core_min_lag1_3d_ma       r=+0.647
+  + rem_min_lag1              r=+0.637
+Top negative correlations:
+  - basal_kcal_lag3_7d_ma     r=-0.180
+  - basal_kcal_lag1_lag2_7d_ma r=-0.180
+  - basal_kcal_lag2_3d_ma_7d_ma r=-0.176
+  - deep_min_lag1_lag2_lag3_3d_ma r=-0.164
+  - basal_kcal_lag3_3d_ma     r=-0.145
+
+=== steps_sum_lag1_3d_ma ===
+Top positive correlations:
+  + steps_sum_7d_ma           r=+0.928
+  + steps_sum_lag2_3d_ma      r=+0.919
+  + steps_sum_3d_ma           r=+0.918
+  + steps_sum_lag1_7d_ma      r=+0.905
+  + steps_sum_3d_ma_7d_ma     r=+0.902
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.219
+  - glucose_mean_7d_ma        r=-0.218
+  - basal_kcal_3d_ma          r=-0.216
+  - rem_min_lag1_3d_ma_7d_ma  r=-0.201
+  - rem_min_3d_ma_7d_ma       r=-0.199
+
+=== active_kcal_lag1_3d_ma ===
+Top positive correlations:
+  + active_kcal_7d_ma         r=+0.807
+  + active_kcal_lag2_3d_ma    r=+0.784
+  + active_kcal_3d_ma         r=+0.783
+  + active_kcal_lag1_7d_ma    r=+0.771
+  + active_kcal_3d_ma_7d_ma   r=+0.757
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.294
+  - glucose_mean_7d_ma        r=-0.257
+  - hrv_sdnn_ms_lag1_lag2     r=-0.224
+  - hrv_sdnn_ms_lag3          r=-0.224
+  - hrv_sdnn_ms_lag2_3d_ma    r=-0.221
+
+=== basal_kcal_lag1_3d_ma ===
+Top positive correlations:
+  + basal_kcal_3d_ma_7d_ma    r=+0.787
+  + basal_kcal_7d_ma          r=+0.784
+  + basal_kcal_lag1_7d_ma     r=+0.784
+  + basal_kcal_lag3           r=+0.758
+  + basal_kcal_lag1_lag2      r=+0.758
+Top negative correlations:
+  - vo2max_ml_kg_min_lag1_lag2_3d_ma r=-0.405
+  - vo2max_ml_kg_min_lag3_3d_ma r=-0.405
+  - vo2max_ml_kg_min_lag2_3d_ma_7d_ma r=-0.398
+  - vo2max_ml_kg_min_lag1_lag2_7d_ma r=-0.387
+  - vo2max_ml_kg_min_lag3_7d_ma r=-0.387
+
+=== resting_hr_bpm_lag1_3d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_lag1_7d_ma r=+0.719
+  + resting_hr_bpm_7d_ma      r=+0.708
+  + resting_hr_bpm_3d_ma_7d_ma r=+0.705
+  + resting_hr_bpm_3d_ma      r=+0.696
+  + resting_hr_bpm_lag2_3d_ma r=+0.695
+Top negative correlations:
+  - hrv_sdnn_ms_lag1_3d_ma    r=-0.389
+  - hrv_sdnn_ms_3d_ma         r=-0.340
+  - hrv_sdnn_ms_lag2          r=-0.318
+  - hrv_sdnn_ms_lag2_3d_ma    r=-0.312
+  - hrv_sdnn_ms_lag1          r=-0.308
+
+=== hrv_sdnn_ms_lag1_3d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag2_3d_ma    r=+0.835
+  + hrv_sdnn_ms_3d_ma         r=+0.834
+  + hrv_sdnn_ms_7d_ma         r=+0.818
+  + hrv_sdnn_ms_lag2          r=+0.809
+  + hrv_sdnn_ms_lag1_7d_ma    r=+0.799
+Top negative correlations:
+  - resting_hr_bpm_lag1_3d_ma r=-0.389
+  - resting_hr_bpm_3d_ma_7d_ma r=-0.361
+  - resting_hr_bpm_lag1_3d_ma_7d_ma r=-0.359
+  - resting_hr_bpm_7d_ma      r=-0.353
+  - resting_hr_bpm_lag1_7d_ma r=-0.341
+
+=== vo2max_ml_kg_min_lag1_3d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_7d_ma    r=+0.881
+  + vo2max_ml_kg_min_3d_ma    r=+0.875
+  + vo2max_ml_kg_min_lag2_3d_ma r=+0.875
+  + vo2max_ml_kg_min_lag1_7d_ma r=+0.861
+  + vo2max_ml_kg_min_3d_ma_7d_ma r=+0.853
+Top negative correlations:
+  - basal_kcal_3d_ma          r=-0.385
+  - basal_kcal_lag1           r=-0.284
+  - basal_kcal_lag1_3d_ma     r=-0.278
+  - hrv_sdnn_ms_lag1_lag2_lag3_3d_ma_7d_ma r=-0.271
+  - glucose_mean_7d_ma        r=-0.267
+
+=== total_min_lag1_3d_ma ===
+Top positive correlations:
+  + total_min_3d_ma           r=+0.764
+  + total_min_lag2_3d_ma      r=+0.763
+  + total_min_7d_ma           r=+0.761
+  + total_min_lag1_7d_ma      r=+0.749
+  + total_min_3d_ma_7d_ma     r=+0.734
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.280
+  - glucose_mean_7d_ma        r=-0.265
+  - glucose_mean_3d_ma        r=-0.257
+  - glucose_mean              r=-0.159
+  - deep_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.143
+
+=== core_min_lag1_3d_ma ===
+Top positive correlations:
+  + rem_min_lag1_3d_ma        r=+0.797
+  + core_min_3d_ma            r=+0.760
+  + core_min_lag2_3d_ma       r=+0.760
+  + core_min_7d_ma            r=+0.753
+  + core_min_lag1_7d_ma       r=+0.732
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.262
+  - glucose_mean_7d_ma        r=-0.206
+  - deep_min_lag1_lag3_3d_ma_7d_ma r=-0.188
+  - steps_sum                 r=-0.182
+  - deep_min_lag2_lag3_3d_ma_7d_ma r=-0.175
+
+=== deep_min_lag1_3d_ma ===
+Top positive correlations:
+  + deep_min_lag1_7d_ma       r=+0.642
+  + deep_min_7d_ma            r=+0.630
+  + deep_min_lag2_3d_ma       r=+0.629
+  + deep_min_3d_ma            r=+0.627
+  + deep_min_3d_ma_7d_ma      r=+0.601
+Top negative correlations:
+  - basal_kcal_lag1_lag2_lag3_3d_ma_7d_ma r=-0.263
+  - basal_kcal_lag2_3d_ma_7d_ma r=-0.235
+  - basal_kcal_3d_ma          r=-0.226
+  - basal_kcal_lag3_7d_ma     r=-0.222
+  - basal_kcal_lag1_lag2_7d_ma r=-0.222
+
+=== rem_min_lag1_3d_ma ===
+Top positive correlations:
+  + core_min_lag1_3d_ma       r=+0.797
+  + rem_min_3d_ma             r=+0.735
+  + rem_min_lag2_3d_ma        r=+0.733
+  + rem_min_7d_ma             r=+0.724
+  + rem_min_lag1_7d_ma        r=+0.675
+Top negative correlations:
+  - vo2max_ml_kg_min          r=-0.194
+  - steps_sum                 r=-0.187
+  - steps_sum_3d_ma           r=-0.184
+  - basal_kcal_lag1_lag3_7d_ma r=-0.176
+  - vo2max_ml_kg_min_3d_ma    r=-0.173
+
+=== steps_sum_lag2_3d_ma ===
+Top positive correlations:
+  + steps_sum_7d_ma           r=+0.936
+  + steps_sum_3d_ma_7d_ma     r=+0.935
+  + steps_sum_lag1_7d_ma      r=+0.931
+  + steps_sum_lag3_3d_ma      r=+0.919
+  + steps_sum_lag1_lag2_3d_ma r=+0.919
+Top negative correlations:
+  - basal_kcal_3d_ma          r=-0.226
+  - glucose_mean_3d_ma_7d_ma  r=-0.218
+  - rem_min_lag2_3d_ma_7d_ma  r=-0.213
+  - glucose_mean_7d_ma        r=-0.211
+  - rem_min_lag1_3d_ma_7d_ma  r=-0.211
+
+=== active_kcal_lag2_3d_ma ===
+Top positive correlations:
+  + active_kcal_3d_ma_7d_ma   r=+0.832
+  + active_kcal_7d_ma         r=+0.828
+  + active_kcal_lag1_7d_ma    r=+0.809
+  + active_kcal_lag1_lag2_3d_ma r=+0.785
+  + active_kcal_lag3_3d_ma    r=+0.785
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.301
+  - glucose_mean_7d_ma        r=-0.258
+  - resting_hr_bpm_3d_ma      r=-0.244
+  - hrv_sdnn_ms_lag1_lag3     r=-0.224
+  - hrv_sdnn_ms_lag1_lag2_3d_ma r=-0.222
+
+=== basal_kcal_lag2_3d_ma ===
+Top positive correlations:
+  + basal_kcal_3d_ma_7d_ma    r=+0.788
+  + basal_kcal_lag1_3d_ma_7d_ma r=+0.786
+  + basal_kcal_lag2_7d_ma     r=+0.785
+  + basal_kcal_lag1_7d_ma     r=+0.783
+  + basal_kcal_7d_ma          r=+0.779
+Top negative correlations:
+  - vo2max_ml_kg_min_lag1_lag3_3d_ma r=-0.396
+  - vo2max_ml_kg_min_lag1_lag2_3d_ma_7d_ma r=-0.388
+  - vo2max_ml_kg_min_lag3_3d_ma_7d_ma r=-0.388
+  - vo2max_ml_kg_min_lag1_lag2_3d_ma r=-0.379
+  - vo2max_ml_kg_min_lag3_3d_ma r=-0.379
+
+=== resting_hr_bpm_lag2_3d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_3d_ma_7d_ma r=+0.735
+  + resting_hr_bpm_lag2_7d_ma r=+0.719
+  + resting_hr_bpm_lag1_7d_ma r=+0.708
+  + resting_hr_bpm_lag1_3d_ma_7d_ma r=+0.705
+  + resting_hr_bpm_lag1_lag2_3d_ma r=+0.696
+Top negative correlations:
+  - hrv_sdnn_ms_lag2_3d_ma    r=-0.389
+  - hrv_sdnn_ms_lag1_3d_ma    r=-0.339
+  - hrv_sdnn_ms_lag3          r=-0.318
+  - hrv_sdnn_ms_lag1_lag2     r=-0.318
+  - hrv_sdnn_ms_lag1_lag2_3d_ma r=-0.312
+
+=== hrv_sdnn_ms_lag2_3d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag1_lag2_3d_ma r=+0.835
+  + hrv_sdnn_ms_lag3_3d_ma    r=+0.835
+  + hrv_sdnn_ms_lag1_3d_ma    r=+0.835
+  + hrv_sdnn_ms_3d_ma_7d_ma   r=+0.833
+  + hrv_sdnn_ms_7d_ma         r=+0.828
+Top negative correlations:
+  - resting_hr_bpm_lag2_3d_ma r=-0.389
+  - resting_hr_bpm_3d_ma_7d_ma r=-0.382
+  - resting_hr_bpm_lag1_3d_ma_7d_ma r=-0.361
+  - resting_hr_bpm_lag2_3d_ma_7d_ma r=-0.359
+  - resting_hr_bpm_lag1_7d_ma r=-0.353
+
+=== vo2max_ml_kg_min_lag2_3d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_3d_ma_7d_ma r=+0.891
+  + vo2max_ml_kg_min_7d_ma    r=+0.883
+  + vo2max_ml_kg_min_lag1_7d_ma r=+0.882
+  + vo2max_ml_kg_min_lag1_3d_ma r=+0.875
+  + vo2max_ml_kg_min_lag3_3d_ma r=+0.874
+Top negative correlations:
+  - basal_kcal_3d_ma          r=-0.405
+  - basal_kcal_lag1_3d_ma     r=-0.382
+  - basal_kcal_7d_ma          r=-0.313
+  - basal_kcal_lag2           r=-0.284
+  - glucose_mean_7d_ma        r=-0.281
+
+=== total_min_lag2_3d_ma ===
+Top positive correlations:
+  + total_min_3d_ma_7d_ma     r=+0.787
+  + total_min_7d_ma           r=+0.770
+  + total_min_lag1_3d_ma      r=+0.763
+  + total_min_lag3_3d_ma      r=+0.763
+  + total_min_lag1_lag2_3d_ma r=+0.763
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.287
+  - glucose_mean_7d_ma        r=-0.248
+  - glucose_mean_3d_ma        r=-0.170
+  - deep_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.128
+  - deep_min_lag2_lag3_3d_ma_7d_ma r=-0.108
+
+=== core_min_lag2_3d_ma ===
+Top positive correlations:
+  + rem_min_lag2_3d_ma        r=+0.797
+  + core_min_3d_ma_7d_ma      r=+0.776
+  + core_min_7d_ma            r=+0.762
+  + core_min_lag1_3d_ma       r=+0.760
+  + core_min_lag1_lag2_3d_ma  r=+0.760
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.206
+  - deep_min_lag2_lag3_3d_ma_7d_ma r=-0.190
+  - steps_sum_lag1            r=-0.190
+  - deep_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.178
+  - steps_sum_3d_ma           r=-0.172
+
+=== deep_min_lag2_3d_ma ===
+Top positive correlations:
+  + deep_min_3d_ma_7d_ma      r=+0.677
+  + deep_min_lag2_7d_ma       r=+0.637
+  + deep_min_lag1_3d_ma       r=+0.629
+  + deep_min_lag1_7d_ma       r=+0.629
+  + deep_min_lag3_3d_ma       r=+0.624
+Top negative correlations:
+  - basal_kcal_7d_ma          r=-0.232
+  - basal_kcal_lag1_lag2_3d_ma_7d_ma r=-0.229
+  - basal_kcal_lag3_3d_ma_7d_ma r=-0.229
+  - basal_kcal_3d_ma          r=-0.229
+  - basal_kcal_lag1_lag3_7d_ma r=-0.218
+
+=== rem_min_lag2_3d_ma ===
+Top positive correlations:
+  + core_min_lag2_3d_ma       r=+0.797
+  + rem_min_3d_ma_7d_ma       r=+0.746
+  + rem_min_lag1_3d_ma        r=+0.733
+  + rem_min_lag3_3d_ma        r=+0.733
+  + rem_min_lag1_lag2_3d_ma   r=+0.733
+Top negative correlations:
+  - vo2max_ml_kg_min_3d_ma    r=-0.243
+  - vo2max_ml_kg_min          r=-0.218
+  - vo2max_ml_kg_min_lag1     r=-0.201
+  - steps_sum_lag1            r=-0.200
+  - steps_sum_3d_ma           r=-0.189
+
+=== steps_sum_lag1_lag2_3d_ma ===
+Top positive correlations:
+  + steps_sum_lag3_3d_ma      r=+1.000
+  + steps_sum_3d_ma_7d_ma     r=+0.938
+  + steps_sum_lag1_7d_ma      r=+0.935
+  + steps_sum_lag1_3d_ma_7d_ma r=+0.934
+  + steps_sum_lag2_7d_ma      r=+0.930
+Top negative correlations:
+  - basal_kcal_7d_ma          r=-0.257
+  - basal_kcal_3d_ma          r=-0.246
+  - rem_min_lag3_3d_ma_7d_ma  r=-0.232
+  - rem_min_lag1_lag2_3d_ma_7d_ma r=-0.232
+  - rem_min_lag2_3d_ma_7d_ma  r=-0.231
+
+=== active_kcal_lag1_lag2_3d_ma ===
+Top positive correlations:
+  + active_kcal_lag3_3d_ma    r=+1.000
+  + active_kcal_3d_ma_7d_ma   r=+0.842
+  + active_kcal_lag1_3d_ma_7d_ma r=+0.832
+  + active_kcal_lag1_7d_ma    r=+0.827
+  + active_kcal_lag2_7d_ma    r=+0.809
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.311
+  - glucose_mean_7d_ma        r=-0.269
+  - resting_hr_bpm_lag1_3d_ma r=-0.243
+  - resting_hr_bpm_3d_ma      r=-0.225
+  - hrv_sdnn_ms_lag2_lag3     r=-0.224
+
+=== basal_kcal_lag1_lag2_3d_ma ===
+Top positive correlations:
+  + basal_kcal_lag3_3d_ma     r=+1.000
+  + basal_kcal_lag1_3d_ma_7d_ma r=+0.787
+  + basal_kcal_lag2_3d_ma_7d_ma r=+0.785
+  + basal_kcal_lag3_7d_ma     r=+0.784
+  + basal_kcal_lag1_lag2_7d_ma r=+0.784
+Top negative correlations:
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma r=-0.387
+  - vo2max_ml_kg_min_lag1_lag3_3d_ma_7d_ma r=-0.377
+  - vo2max_ml_kg_min_lag1_lag3_3d_ma r=-0.372
+  - vo2max_ml_kg_min_lag2_lag3_7d_ma r=-0.365
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma r=-0.363
+
+=== resting_hr_bpm_lag1_lag2_3d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_lag3_3d_ma r=+1.000
+  + resting_hr_bpm_lag1_3d_ma_7d_ma r=+0.735
+  + resting_hr_bpm_3d_ma_7d_ma r=+0.725
+  + resting_hr_bpm_lag1_lag2_7d_ma r=+0.719
+  + resting_hr_bpm_lag3_7d_ma r=+0.719
+Top negative correlations:
+  - hrv_sdnn_ms_lag1_lag2_3d_ma r=-0.389
+  - hrv_sdnn_ms_lag3_3d_ma    r=-0.389
+  - hrv_sdnn_ms_lag2_3d_ma    r=-0.339
+  - hrv_sdnn_ms_7d_ma         r=-0.320
+  - hrv_sdnn_ms_lag1_lag3     r=-0.318
+
+=== hrv_sdnn_ms_lag1_lag2_3d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag3_3d_ma    r=+1.000
+  + hrv_sdnn_ms_3d_ma_7d_ma   r=+0.840
+  + hrv_sdnn_ms_lag1_lag3_3d_ma r=+0.835
+  + hrv_sdnn_ms_lag2_3d_ma    r=+0.835
+  + hrv_sdnn_ms_lag1_3d_ma_7d_ma r=+0.835
+Top negative correlations:
+  - resting_hr_bpm_lag3_3d_ma r=-0.389
+  - resting_hr_bpm_lag1_lag2_3d_ma r=-0.389
+  - resting_hr_bpm_lag1_3d_ma_7d_ma r=-0.382
+  - resting_hr_bpm_3d_ma_7d_ma r=-0.372
+  - resting_hr_bpm_lag2_3d_ma_7d_ma r=-0.362
+
+=== vo2max_ml_kg_min_lag1_lag2_3d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag3_3d_ma r=+1.000
+  + vo2max_ml_kg_min_3d_ma_7d_ma r=+0.897
+  + vo2max_ml_kg_min_lag1_3d_ma_7d_ma r=+0.892
+  + vo2max_ml_kg_min_lag1_7d_ma r=+0.884
+  + vo2max_ml_kg_min_lag2_7d_ma r=+0.882
+Top negative correlations:
+  - basal_kcal_lag1_3d_ma     r=-0.405
+  - basal_kcal_7d_ma          r=-0.393
+  - basal_kcal_lag2_3d_ma     r=-0.379
+  - basal_kcal_3d_ma          r=-0.350
+  - basal_kcal_3d_ma_7d_ma    r=-0.342
+
+=== total_min_lag1_lag2_3d_ma ===
+Top positive correlations:
+  + total_min_lag3_3d_ma      r=+1.000
+  + total_min_3d_ma_7d_ma     r=+0.792
+  + total_min_lag1_3d_ma_7d_ma r=+0.787
+  + total_min_lag1_7d_ma      r=+0.770
+  + total_min_7d_ma           r=+0.765
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.255
+  - glucose_mean_7d_ma        r=-0.208
+  - deep_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.109
+  - active_kcal_lag2_3d_ma    r=-0.086
+  - resting_hr_bpm_lag1_lag2_lag3_3d_ma r=-0.085
+
+=== core_min_lag1_lag2_3d_ma ===
+Top positive correlations:
+  + core_min_lag3_3d_ma       r=+1.000
+  + rem_min_lag1_lag2_3d_ma   r=+0.797
+  + rem_min_lag3_3d_ma        r=+0.797
+  + core_min_3d_ma_7d_ma      r=+0.783
+  + core_min_lag1_3d_ma_7d_ma r=+0.776
+Top negative correlations:
+  - deep_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.192
+  - steps_sum_lag2            r=-0.190
+  - steps_sum_lag1_3d_ma      r=-0.174
+  - deep_min_lag1_lag2_lag3_7d_ma r=-0.159
+  - steps_sum_lag2_3d_ma      r=-0.157
+
+=== deep_min_lag1_lag2_3d_ma ===
+Top positive correlations:
+  + deep_min_lag3_3d_ma       r=+1.000
+  + deep_min_lag1_3d_ma_7d_ma r=+0.673
+  + deep_min_3d_ma_7d_ma      r=+0.672
+  + deep_min_lag1_lag2_7d_ma  r=+0.632
+  + deep_min_lag3_7d_ma       r=+0.632
+Top negative correlations:
+  - basal_kcal_lag1_lag3_3d_ma_7d_ma r=-0.224
+  - basal_kcal_lag1_7d_ma     r=-0.217
+  - basal_kcal_lag2_lag3_7d_ma r=-0.214
+  - basal_kcal_lag1_3d_ma     r=-0.206
+  - basal_kcal_3d_ma_7d_ma    r=-0.203
+
+=== rem_min_lag1_lag2_3d_ma ===
+Top positive correlations:
+  + rem_min_lag3_3d_ma        r=+1.000
+  + core_min_lag1_lag2_3d_ma  r=+0.797
+  + core_min_lag3_3d_ma       r=+0.797
+  + rem_min_3d_ma_7d_ma       r=+0.765
+  + rem_min_lag1_3d_ma_7d_ma  r=+0.747
+Top negative correlations:
+  - vo2max_ml_kg_min_3d_ma    r=-0.251
+  - vo2max_ml_kg_min_lag1_3d_ma r=-0.246
+  - vo2max_ml_kg_min_lag1     r=-0.224
+  - vo2max_ml_kg_min_lag2     r=-0.206
+  - steps_sum_lag2            r=-0.201
+
+=== steps_sum_lag3_3d_ma ===
+Top positive correlations:
+  + steps_sum_lag1_lag2_3d_ma r=+1.000
+  + steps_sum_3d_ma_7d_ma     r=+0.938
+  + steps_sum_lag1_7d_ma      r=+0.935
+  + steps_sum_lag1_3d_ma_7d_ma r=+0.934
+  + steps_sum_lag2_7d_ma      r=+0.930
+Top negative correlations:
+  - basal_kcal_7d_ma          r=-0.257
+  - basal_kcal_3d_ma          r=-0.246
+  - rem_min_lag3_3d_ma_7d_ma  r=-0.232
+  - rem_min_lag1_lag2_3d_ma_7d_ma r=-0.232
+  - rem_min_lag2_3d_ma_7d_ma  r=-0.231
+
+=== active_kcal_lag3_3d_ma ===
+Top positive correlations:
+  + active_kcal_lag1_lag2_3d_ma r=+1.000
+  + active_kcal_3d_ma_7d_ma   r=+0.842
+  + active_kcal_lag1_3d_ma_7d_ma r=+0.832
+  + active_kcal_lag1_7d_ma    r=+0.827
+  + active_kcal_lag2_7d_ma    r=+0.809
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.311
+  - glucose_mean_7d_ma        r=-0.269
+  - resting_hr_bpm_lag1_3d_ma r=-0.243
+  - resting_hr_bpm_3d_ma      r=-0.225
+  - hrv_sdnn_ms_lag2_lag3     r=-0.224
+
+=== basal_kcal_lag3_3d_ma ===
+Top positive correlations:
+  + basal_kcal_lag1_lag2_3d_ma r=+1.000
+  + basal_kcal_lag1_3d_ma_7d_ma r=+0.787
+  + basal_kcal_lag2_3d_ma_7d_ma r=+0.785
+  + basal_kcal_lag3_7d_ma     r=+0.784
+  + basal_kcal_lag1_lag2_7d_ma r=+0.784
+Top negative correlations:
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma r=-0.387
+  - vo2max_ml_kg_min_lag1_lag3_3d_ma_7d_ma r=-0.377
+  - vo2max_ml_kg_min_lag1_lag3_3d_ma r=-0.372
+  - vo2max_ml_kg_min_lag2_lag3_7d_ma r=-0.365
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma r=-0.363
+
+=== resting_hr_bpm_lag3_3d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_lag1_lag2_3d_ma r=+1.000
+  + resting_hr_bpm_lag1_3d_ma_7d_ma r=+0.735
+  + resting_hr_bpm_3d_ma_7d_ma r=+0.725
+  + resting_hr_bpm_lag3_7d_ma r=+0.719
+  + resting_hr_bpm_lag1_lag2_7d_ma r=+0.719
+Top negative correlations:
+  - hrv_sdnn_ms_lag1_lag2_3d_ma r=-0.389
+  - hrv_sdnn_ms_lag3_3d_ma    r=-0.389
+  - hrv_sdnn_ms_lag2_3d_ma    r=-0.339
+  - hrv_sdnn_ms_7d_ma         r=-0.320
+  - hrv_sdnn_ms_lag1_lag3     r=-0.318
+
+=== hrv_sdnn_ms_lag3_3d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag1_lag2_3d_ma r=+1.000
+  + hrv_sdnn_ms_3d_ma_7d_ma   r=+0.840
+  + hrv_sdnn_ms_lag1_lag3_3d_ma r=+0.835
+  + hrv_sdnn_ms_lag2_3d_ma    r=+0.835
+  + hrv_sdnn_ms_lag1_3d_ma_7d_ma r=+0.835
+Top negative correlations:
+  - resting_hr_bpm_lag1_lag2_3d_ma r=-0.389
+  - resting_hr_bpm_lag3_3d_ma r=-0.389
+  - resting_hr_bpm_lag1_3d_ma_7d_ma r=-0.382
+  - resting_hr_bpm_3d_ma_7d_ma r=-0.372
+  - resting_hr_bpm_lag2_3d_ma_7d_ma r=-0.362
+
+=== vo2max_ml_kg_min_lag3_3d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag1_lag2_3d_ma r=+1.000
+  + vo2max_ml_kg_min_3d_ma_7d_ma r=+0.897
+  + vo2max_ml_kg_min_lag1_3d_ma_7d_ma r=+0.892
+  + vo2max_ml_kg_min_lag1_7d_ma r=+0.884
+  + vo2max_ml_kg_min_lag2_7d_ma r=+0.882
+Top negative correlations:
+  - basal_kcal_lag1_3d_ma     r=-0.405
+  - basal_kcal_7d_ma          r=-0.393
+  - basal_kcal_lag2_3d_ma     r=-0.379
+  - basal_kcal_3d_ma          r=-0.350
+  - basal_kcal_3d_ma_7d_ma    r=-0.342
+
+=== total_min_lag3_3d_ma ===
+Top positive correlations:
+  + total_min_lag1_lag2_3d_ma r=+1.000
+  + total_min_3d_ma_7d_ma     r=+0.792
+  + total_min_lag1_3d_ma_7d_ma r=+0.787
+  + total_min_lag1_7d_ma      r=+0.770
+  + total_min_7d_ma           r=+0.765
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.255
+  - glucose_mean_7d_ma        r=-0.208
+  - deep_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.109
+  - active_kcal_lag2_3d_ma    r=-0.086
+  - resting_hr_bpm_lag1_lag2_lag3_3d_ma r=-0.085
+
+=== core_min_lag3_3d_ma ===
+Top positive correlations:
+  + core_min_lag1_lag2_3d_ma  r=+1.000
+  + rem_min_lag3_3d_ma        r=+0.797
+  + rem_min_lag1_lag2_3d_ma   r=+0.797
+  + core_min_3d_ma_7d_ma      r=+0.783
+  + core_min_lag1_3d_ma_7d_ma r=+0.776
+Top negative correlations:
+  - deep_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.192
+  - steps_sum_lag2            r=-0.190
+  - steps_sum_lag1_3d_ma      r=-0.174
+  - deep_min_lag1_lag2_lag3_7d_ma r=-0.159
+  - steps_sum_lag2_3d_ma      r=-0.157
+
+=== deep_min_lag3_3d_ma ===
+Top positive correlations:
+  + deep_min_lag1_lag2_3d_ma  r=+1.000
+  + deep_min_lag1_3d_ma_7d_ma r=+0.673
+  + deep_min_3d_ma_7d_ma      r=+0.672
+  + deep_min_lag3_7d_ma       r=+0.632
+  + deep_min_lag1_lag2_7d_ma  r=+0.632
+Top negative correlations:
+  - basal_kcal_lag1_lag3_3d_ma_7d_ma r=-0.224
+  - basal_kcal_lag1_7d_ma     r=-0.217
+  - basal_kcal_lag2_lag3_7d_ma r=-0.214
+  - basal_kcal_lag1_3d_ma     r=-0.206
+  - basal_kcal_3d_ma_7d_ma    r=-0.203
+
+=== rem_min_lag3_3d_ma ===
+Top positive correlations:
+  + rem_min_lag1_lag2_3d_ma   r=+1.000
+  + core_min_lag3_3d_ma       r=+0.797
+  + core_min_lag1_lag2_3d_ma  r=+0.797
+  + rem_min_3d_ma_7d_ma       r=+0.765
+  + rem_min_lag1_3d_ma_7d_ma  r=+0.747
+Top negative correlations:
+  - vo2max_ml_kg_min_3d_ma    r=-0.251
+  - vo2max_ml_kg_min_lag1_3d_ma r=-0.246
+  - vo2max_ml_kg_min_lag1     r=-0.224
+  - vo2max_ml_kg_min_lag2     r=-0.206
+  - steps_sum_lag2            r=-0.201
+
+=== steps_sum_lag1_lag3_3d_ma ===
+Top positive correlations:
+  + steps_sum_lag1_3d_ma_7d_ma r=+0.935
+  + steps_sum_lag2_7d_ma      r=+0.931
+  + steps_sum_lag2_3d_ma_7d_ma r=+0.929
+  + steps_sum_lag3_7d_ma      r=+0.925
+  + steps_sum_lag1_lag2_7d_ma r=+0.925
+Top negative correlations:
+  - rem_min_lag1_lag3_3d_ma_7d_ma r=-0.269
+  - resting_hr_bpm_7d_ma      r=-0.267
+  - rem_min_lag1_lag2_3d_ma_7d_ma r=-0.266
+  - rem_min_lag3_3d_ma_7d_ma  r=-0.266
+  - basal_kcal_7d_ma          r=-0.260
+
+=== active_kcal_lag1_lag3_3d_ma ===
+Top positive correlations:
+  + active_kcal_lag1_3d_ma_7d_ma r=+0.845
+  + active_kcal_lag2_3d_ma_7d_ma r=+0.832
+  + active_kcal_3d_ma_7d_ma   r=+0.830
+  + active_kcal_lag2_7d_ma    r=+0.829
+  + active_kcal_lag3_7d_ma    r=+0.812
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.335
+  - glucose_mean_7d_ma        r=-0.296
+  - resting_hr_bpm_lag2_3d_ma r=-0.241
+  - hrv_sdnn_ms_lag2_lag3_3d_ma r=-0.234
+  - hrv_sdnn_ms_lag1_lag2_lag3 r=-0.232
+
+=== basal_kcal_lag1_lag3_3d_ma ===
+Top positive correlations:
+  + basal_kcal_lag1_7d_ma     r=+0.788
+  + basal_kcal_lag2_3d_ma_7d_ma r=+0.788
+  + basal_kcal_lag1_lag2_3d_ma_7d_ma r=+0.786
+  + basal_kcal_lag3_3d_ma_7d_ma r=+0.786
+  + basal_kcal_lag1_lag2_7d_ma r=+0.786
+Top negative correlations:
+  - vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma r=-0.385
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma r=-0.375
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma r=-0.371
+  - vo2max_ml_kg_min_lag1_lag2_lag3_7d_ma r=-0.364
+  - vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.362
+
+=== resting_hr_bpm_lag1_lag3_3d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_lag2_3d_ma_7d_ma r=+0.736
+  + resting_hr_bpm_3d_ma_7d_ma r=+0.728
+  + resting_hr_bpm_lag1_3d_ma_7d_ma r=+0.725
+  + resting_hr_bpm_lag1_lag3_7d_ma r=+0.719
+  + resting_hr_bpm_7d_ma      r=+0.717
+Top negative correlations:
+  - hrv_sdnn_ms_lag1_lag3_3d_ma r=-0.389
+  - hrv_sdnn_ms_lag1_lag2_3d_ma r=-0.339
+  - hrv_sdnn_ms_lag3_3d_ma    r=-0.339
+  - hrv_sdnn_ms_7d_ma         r=-0.338
+  - hrv_sdnn_ms_3d_ma_7d_ma   r=-0.327
+
+=== hrv_sdnn_ms_lag1_lag3_3d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag1_3d_ma_7d_ma r=+0.841
+  + hrv_sdnn_ms_lag2_lag3_3d_ma r=+0.836
+  + hrv_sdnn_ms_lag2_3d_ma_7d_ma r=+0.836
+  + hrv_sdnn_ms_lag3_3d_ma    r=+0.835
+  + hrv_sdnn_ms_lag1_lag2_3d_ma r=+0.835
+Top negative correlations:
+  - resting_hr_bpm_lag1_lag3_3d_ma r=-0.389
+  - resting_hr_bpm_lag2_3d_ma_7d_ma r=-0.382
+  - resting_hr_bpm_lag1_3d_ma_7d_ma r=-0.372
+  - resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=-0.362
+  - resting_hr_bpm_lag3_3d_ma_7d_ma r=-0.362
+
+=== vo2max_ml_kg_min_lag1_lag3_3d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag1_3d_ma_7d_ma r=+0.896
+  + vo2max_ml_kg_min_lag2_3d_ma_7d_ma r=+0.890
+  + vo2max_ml_kg_min_3d_ma_7d_ma r=+0.887
+  + vo2max_ml_kg_min_lag2_7d_ma r=+0.882
+  + vo2max_ml_kg_min_lag1_lag2_7d_ma r=+0.880
+Top negative correlations:
+  - basal_kcal_7d_ma          r=-0.424
+  - basal_kcal_3d_ma_7d_ma    r=-0.404
+  - basal_kcal_lag2_3d_ma     r=-0.396
+  - basal_kcal_lag1_7d_ma     r=-0.381
+  - basal_kcal_lag3_3d_ma     r=-0.372
+
+=== total_min_lag1_lag3_3d_ma ===
+Top positive correlations:
+  + total_min_lag1_3d_ma_7d_ma r=+0.793
+  + total_min_3d_ma_7d_ma     r=+0.788
+  + total_min_lag2_3d_ma_7d_ma r=+0.788
+  + total_min_lag2_7d_ma      r=+0.771
+  + total_min_lag1_7d_ma      r=+0.765
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.218
+  - glucose_mean_7d_ma        r=-0.169
+  - active_kcal_lag1_lag2_3d_ma r=-0.086
+  - active_kcal_lag3_3d_ma    r=-0.086
+  - active_kcal_lag2_lag3     r=-0.079
+
+=== core_min_lag1_lag3_3d_ma ===
+Top positive correlations:
+  + rem_min_lag1_lag3_3d_ma   r=+0.797
+  + core_min_lag1_3d_ma_7d_ma r=+0.784
+  + core_min_lag2_3d_ma_7d_ma r=+0.777
+  + core_min_3d_ma_7d_ma      r=+0.777
+  + core_min_lag2_7d_ma       r=+0.763
+Top negative correlations:
+  - steps_sum_lag3            r=-0.190
+  - steps_sum_lag1_lag2       r=-0.190
+  - steps_sum_lag2_3d_ma      r=-0.176
+  - steps_sum_lag1_lag2_3d_ma r=-0.160
+  - steps_sum_lag3_3d_ma      r=-0.160
+
+=== deep_min_lag1_lag3_3d_ma ===
+Top positive correlations:
+  + deep_min_lag2_3d_ma_7d_ma r=+0.671
+  + deep_min_lag1_3d_ma_7d_ma r=+0.670
+  + deep_min_3d_ma_7d_ma      r=+0.668
+  + deep_min_lag1_lag3_7d_ma  r=+0.629
+  + deep_min_lag2_lag3_3d_ma  r=+0.624
+Top negative correlations:
+  - basal_kcal_lag2_lag3_3d_ma_7d_ma r=-0.221
+  - basal_kcal_lag2_7d_ma     r=-0.215
+  - basal_kcal_lag1_lag2_lag3_7d_ma r=-0.211
+  - basal_kcal_lag2_3d_ma     r=-0.200
+  - basal_kcal_lag1_3d_ma_7d_ma r=-0.196
+
+=== rem_min_lag1_lag3_3d_ma ===
+Top positive correlations:
+  + core_min_lag1_lag3_3d_ma  r=+0.797
+  + rem_min_lag1_3d_ma_7d_ma  r=+0.764
+  + rem_min_3d_ma_7d_ma       r=+0.747
+  + rem_min_lag2_3d_ma_7d_ma  r=+0.746
+  + rem_min_lag1_lag2_3d_ma   r=+0.732
+Top negative correlations:
+  - vo2max_ml_kg_min_lag1_3d_ma r=-0.255
+  - vo2max_ml_kg_min_lag2_3d_ma r=-0.250
+  - vo2max_ml_kg_min_lag2     r=-0.230
+  - steps_sum_lag1_lag2_3d_ma r=-0.206
+  - steps_sum_lag3_3d_ma      r=-0.206
+
+=== steps_sum_lag2_lag3_3d_ma ===
+Top positive correlations:
+  + steps_sum_lag2_3d_ma_7d_ma r=+0.930
+  + steps_sum_lag1_lag2_7d_ma r=+0.926
+  + steps_sum_lag3_7d_ma      r=+0.926
+  + steps_sum_lag1_lag2_3d_ma_7d_ma r=+0.924
+  + steps_sum_lag3_3d_ma_7d_ma r=+0.924
+Top negative correlations:
+  - rem_min_lag2_lag3_3d_ma_7d_ma r=-0.305
+  - rem_min_lag1_lag3_3d_ma_7d_ma r=-0.301
+  - resting_hr_bpm_7d_ma      r=-0.296
+  - rem_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.289
+  - basal_kcal_3d_ma          r=-0.285
+
+=== active_kcal_lag2_lag3_3d_ma ===
+Top positive correlations:
+  + active_kcal_lag2_3d_ma_7d_ma r=+0.844
+  + active_kcal_lag1_lag2_3d_ma_7d_ma r=+0.831
+  + active_kcal_lag3_3d_ma_7d_ma r=+0.831
+  + active_kcal_lag1_3d_ma_7d_ma r=+0.830
+  + active_kcal_lag1_lag2_7d_ma r=+0.829
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.329
+  - glucose_mean_7d_ma        r=-0.293
+  - resting_hr_bpm_7d_ma      r=-0.276
+  - resting_hr_bpm_lag3_3d_ma r=-0.243
+  - resting_hr_bpm_lag1_lag2_3d_ma r=-0.243
+
+=== basal_kcal_lag2_lag3_3d_ma ===
+Top positive correlations:
+  + basal_kcal_lag1_lag2_3d_ma_7d_ma r=+0.791
+  + basal_kcal_lag3_3d_ma_7d_ma r=+0.791
+  + basal_kcal_lag2_7d_ma     r=+0.789
+  + basal_kcal_lag1_lag3_7d_ma r=+0.788
+  + basal_kcal_lag1_7d_ma     r=+0.788
+Top negative correlations:
+  - vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.378
+  - vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma r=-0.373
+  - deep_min_lag1_lag2_7d_ma  r=-0.339
+  - deep_min_lag3_7d_ma       r=-0.339
+  - vo2max_ml_kg_min_lag1_lag2_lag3_7d_ma r=-0.337
+
+=== resting_hr_bpm_lag2_lag3_3d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=+0.736
+  + resting_hr_bpm_lag3_3d_ma_7d_ma r=+0.736
+  + resting_hr_bpm_lag1_3d_ma_7d_ma r=+0.728
+  + resting_hr_bpm_lag2_3d_ma_7d_ma r=+0.725
+  + resting_hr_bpm_lag2_lag3_7d_ma r=+0.719
+Top negative correlations:
+  - hrv_sdnn_ms_lag2_lag3_3d_ma r=-0.390
+  - hrv_sdnn_ms_lag1_lag3_3d_ma r=-0.339
+  - hrv_sdnn_ms_lag1_7d_ma    r=-0.338
+  - hrv_sdnn_ms_3d_ma_7d_ma   r=-0.334
+  - hrv_sdnn_ms_lag1_3d_ma_7d_ma r=-0.327
+
+=== hrv_sdnn_ms_lag2_lag3_3d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag2_3d_ma_7d_ma r=+0.840
+  + hrv_sdnn_ms_lag1_lag3_3d_ma r=+0.836
+  + hrv_sdnn_ms_lag1_lag2_lag3_3d_ma r=+0.835
+  + hrv_sdnn_ms_lag1_lag2_3d_ma_7d_ma r=+0.835
+  + hrv_sdnn_ms_lag3_3d_ma_7d_ma r=+0.835
+Top negative correlations:
+  - resting_hr_bpm_lag2_lag3_3d_ma r=-0.390
+  - resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=-0.382
+  - resting_hr_bpm_lag3_3d_ma_7d_ma r=-0.382
+  - resting_hr_bpm_lag2_3d_ma_7d_ma r=-0.372
+  - resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=-0.361
+
+=== vo2max_ml_kg_min_lag2_lag3_3d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag2_3d_ma_7d_ma r=+0.894
+  + vo2max_ml_kg_min_lag3_3d_ma_7d_ma r=+0.888
+  + vo2max_ml_kg_min_lag1_lag2_3d_ma_7d_ma r=+0.888
+  + vo2max_ml_kg_min_lag1_3d_ma_7d_ma r=+0.886
+  + vo2max_ml_kg_min_lag1_lag2_7d_ma r=+0.880
+Top negative correlations:
+  - basal_kcal_7d_ma          r=-0.448
+  - basal_kcal_3d_ma_7d_ma    r=-0.442
+  - basal_kcal_lag1_7d_ma     r=-0.411
+  - basal_kcal_lag1_3d_ma_7d_ma r=-0.394
+  - glucose_mean_3d_ma        r=-0.389
+
+=== total_min_lag2_lag3_3d_ma ===
+Top positive correlations:
+  + total_min_lag2_3d_ma_7d_ma r=+0.793
+  + total_min_lag1_3d_ma_7d_ma r=+0.788
+  + total_min_lag3_3d_ma_7d_ma r=+0.788
+  + total_min_lag1_lag2_3d_ma_7d_ma r=+0.788
+  + total_min_lag1_lag2_7d_ma r=+0.771
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.192
+  - glucose_mean_7d_ma        r=-0.142
+  - active_kcal_lag1_lag3_3d_ma r=-0.090
+  - active_kcal_lag1_lag2_lag3 r=-0.080
+  - deep_min_lag1_lag3        r=-0.079
+
+=== core_min_lag2_lag3_3d_ma ===
+Top positive correlations:
+  + rem_min_lag2_lag3_3d_ma   r=+0.797
+  + core_min_lag2_3d_ma_7d_ma r=+0.784
+  + core_min_lag1_lag2_3d_ma_7d_ma r=+0.776
+  + core_min_lag3_3d_ma_7d_ma r=+0.776
+  + core_min_lag1_3d_ma_7d_ma r=+0.776
+Top negative correlations:
+  - steps_sum_lag1_lag3       r=-0.215
+  - steps_sum_lag3_3d_ma      r=-0.187
+  - steps_sum_lag1_lag2_3d_ma r=-0.187
+  - steps_sum_lag1_lag3_3d_ma r=-0.180
+  - steps_sum_lag2_lag3       r=-0.154
+
+=== deep_min_lag2_lag3_3d_ma ===
+Top positive correlations:
+  + deep_min_lag2_3d_ma_7d_ma r=+0.677
+  + deep_min_lag3_3d_ma_7d_ma r=+0.676
+  + deep_min_lag1_lag2_3d_ma_7d_ma r=+0.676
+  + deep_min_lag1_3d_ma_7d_ma r=+0.673
+  + deep_min_lag2_lag3_7d_ma  r=+0.630
+Top negative correlations:
+  - basal_kcal_lag1_lag2_lag3_3d_ma_7d_ma r=-0.221
+  - basal_kcal_lag3_7d_ma     r=-0.218
+  - basal_kcal_lag1_lag2_7d_ma r=-0.218
+  - basal_kcal_lag1_lag2_3d_ma r=-0.202
+  - basal_kcal_lag3_3d_ma     r=-0.202
+
+=== rem_min_lag2_lag3_3d_ma ===
+Top positive correlations:
+  + core_min_lag2_lag3_3d_ma  r=+0.797
+  + rem_min_lag2_3d_ma_7d_ma  r=+0.764
+  + rem_min_lag1_3d_ma_7d_ma  r=+0.746
+  + rem_min_lag3_3d_ma_7d_ma  r=+0.745
+  + rem_min_lag1_lag2_3d_ma_7d_ma r=+0.745
+Top negative correlations:
+  - vo2max_ml_kg_min_lag2_3d_ma r=-0.259
+  - vo2max_ml_kg_min_lag3_3d_ma r=-0.253
+  - vo2max_ml_kg_min_lag1_lag2_3d_ma r=-0.253
+  - steps_sum_lag1_lag3_3d_ma r=-0.228
+  - vo2max_ml_kg_min_lag3     r=-0.228
+
+=== steps_sum_lag1_lag2_lag3_3d_ma ===
+Top positive correlations:
+  + steps_sum_lag1_lag2_3d_ma_7d_ma r=+0.925
+  + steps_sum_lag3_3d_ma_7d_ma r=+0.925
+  + steps_sum_lag1_lag3_7d_ma r=+0.919
+  + steps_sum_lag1_lag3_3d_ma_7d_ma r=+0.918
+  + steps_sum_lag2_lag3_7d_ma r=+0.914
+Top negative correlations:
+  - rem_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.357
+  - rem_min_lag2_lag3_3d_ma_7d_ma r=-0.352
+  - rem_min_lag1_lag2_lag3_7d_ma r=-0.330
+  - rem_min_lag1_lag3_3d_ma_7d_ma r=-0.330
+  - rem_min_lag2_lag3_7d_ma   r=-0.309
+
+=== active_kcal_lag1_lag2_lag3_3d_ma ===
+Top positive correlations:
+  + active_kcal_lag1_lag2_3d_ma_7d_ma r=+0.843
+  + active_kcal_lag3_3d_ma_7d_ma r=+0.843
+  + active_kcal_lag1_lag3_3d_ma_7d_ma r=+0.830
+  + active_kcal_lag2_3d_ma_7d_ma r=+0.829
+  + active_kcal_lag1_lag3_7d_ma r=+0.827
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.311
+  - resting_hr_bpm_7d_ma      r=-0.295
+  - glucose_mean_7d_ma        r=-0.278
+  - resting_hr_bpm_lag1_7d_ma r=-0.276
+  - resting_hr_bpm_3d_ma_7d_ma r=-0.262
+
+=== basal_kcal_lag1_lag2_lag3_3d_ma ===
+Top positive correlations:
+  + basal_kcal_lag3_7d_ma     r=+0.799
+  + basal_kcal_lag1_lag2_7d_ma r=+0.799
+  + basal_kcal_lag1_lag3_3d_ma_7d_ma r=+0.794
+  + basal_kcal_lag3_3d_ma_7d_ma r=+0.791
+  + basal_kcal_lag1_lag2_3d_ma_7d_ma r=+0.791
+Top negative correlations:
+  - deep_min_lag1_lag3_7d_ma  r=-0.343
+  - vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.334
+  - deep_min_lag1_lag2_3d_ma_7d_ma r=-0.331
+  - deep_min_lag3_3d_ma_7d_ma r=-0.331
+  - vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma r=-0.278
+
+=== resting_hr_bpm_lag1_lag2_lag3_3d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=+0.735
+  + resting_hr_bpm_lag2_3d_ma_7d_ma r=+0.728
+  + resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=+0.725
+  + resting_hr_bpm_lag3_3d_ma_7d_ma r=+0.725
+  + resting_hr_bpm_lag1_lag2_lag3_7d_ma r=+0.719
+Top negative correlations:
+  - hrv_sdnn_ms_lag1_lag2_lag3_3d_ma r=-0.389
+  - hrv_sdnn_ms_lag2_lag3_3d_ma r=-0.338
+  - hrv_sdnn_ms_lag2_7d_ma    r=-0.337
+  - hrv_sdnn_ms_lag1_3d_ma_7d_ma r=-0.333
+  - hrv_sdnn_ms_lag2_3d_ma_7d_ma r=-0.326
+
+=== hrv_sdnn_ms_lag1_lag2_lag3_3d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag1_lag2_3d_ma_7d_ma r=+0.839
+  + hrv_sdnn_ms_lag3_3d_ma_7d_ma r=+0.839
+  + hrv_sdnn_ms_lag2_lag3_3d_ma r=+0.835
+  + hrv_sdnn_ms_lag1_lag3_3d_ma_7d_ma r=+0.834
+  + hrv_sdnn_ms_lag2_3d_ma_7d_ma r=+0.832
+Top negative correlations:
+  - resting_hr_bpm_lag1_lag2_lag3_3d_ma r=-0.389
+  - resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=-0.381
+  - resting_hr_bpm_lag3_3d_ma_7d_ma r=-0.372
+  - resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=-0.372
+  - resting_hr_bpm_lag2_lag3_3d_ma_7d_ma r=-0.360
+
+=== vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag1_lag2_3d_ma_7d_ma r=+0.892
+  + vo2max_ml_kg_min_lag3_3d_ma_7d_ma r=+0.892
+  + vo2max_ml_kg_min_lag1_lag3_3d_ma_7d_ma r=+0.885
+  + vo2max_ml_kg_min_lag2_3d_ma_7d_ma r=+0.883
+  + vo2max_ml_kg_min_lag1_lag3_7d_ma r=+0.878
+Top negative correlations:
+  - basal_kcal_3d_ma_7d_ma    r=-0.453
+  - basal_kcal_7d_ma          r=-0.442
+  - basal_kcal_lag1_7d_ma     r=-0.434
+  - basal_kcal_lag1_3d_ma_7d_ma r=-0.431
+  - glucose_mean_3d_ma        r=-0.424
+
+=== total_min_lag1_lag2_lag3_3d_ma ===
+Top positive correlations:
+  + total_min_lag1_lag2_3d_ma_7d_ma r=+0.792
+  + total_min_lag3_3d_ma_7d_ma r=+0.792
+  + total_min_lag2_3d_ma_7d_ma r=+0.787
+  + total_min_lag1_lag3_3d_ma_7d_ma r=+0.787
+  + total_min_lag1_lag3_7d_ma r=+0.771
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.191
+  - glucose_mean_7d_ma        r=-0.129
+  - active_kcal_lag2_lag3_3d_ma r=-0.094
+  - deep_min_lag2_lag3        r=-0.081
+  - active_kcal_lag1_lag2_lag3_3d_ma r=-0.078
+
+=== core_min_lag1_lag2_lag3_3d_ma ===
+Top positive correlations:
+  + rem_min_lag1_lag2_lag3_3d_ma r=+0.796
+  + core_min_lag3_3d_ma_7d_ma r=+0.783
+  + core_min_lag1_lag2_3d_ma_7d_ma r=+0.783
+  + core_min_lag1_lag3_3d_ma_7d_ma r=+0.776
+  + core_min_lag2_3d_ma_7d_ma r=+0.776
+Top negative correlations:
+  - steps_sum_lag2_lag3       r=-0.229
+  - steps_sum_lag1_lag3_3d_ma r=-0.209
+  - steps_sum_lag2_lag3_3d_ma r=-0.200
+  - steps_sum_lag1_lag2_lag3  r=-0.168
+  - steps_sum_lag3_3d_ma      r=-0.164
+
+=== deep_min_lag1_lag2_lag3_3d_ma ===
+Top positive correlations:
+  + deep_min_lag3_3d_ma_7d_ma r=+0.679
+  + deep_min_lag1_lag2_3d_ma_7d_ma r=+0.679
+  + deep_min_lag1_lag3_3d_ma_7d_ma r=+0.676
+  + deep_min_lag2_3d_ma_7d_ma r=+0.676
+  + deep_min_lag1_lag2_lag3_7d_ma r=+0.630
+Top negative correlations:
+  - basal_kcal_lag1_lag3_7d_ma r=-0.217
+  - basal_kcal_lag1_lag3_3d_ma r=-0.201
+  - basal_kcal_lag1_lag2_3d_ma_7d_ma r=-0.195
+  - basal_kcal_lag3_3d_ma_7d_ma r=-0.195
+  - basal_kcal_lag2_lag3_7d_ma r=-0.187
+
+=== rem_min_lag1_lag2_lag3_3d_ma ===
+Top positive correlations:
+  + core_min_lag1_lag2_lag3_3d_ma r=+0.796
+  + rem_min_lag1_lag2_3d_ma_7d_ma r=+0.762
+  + rem_min_lag3_3d_ma_7d_ma  r=+0.762
+  + rem_min_lag2_3d_ma_7d_ma  r=+0.745
+  + rem_min_lag1_lag3_3d_ma_7d_ma r=+0.744
+Top negative correlations:
+  - vo2max_ml_kg_min_lag1_lag3_3d_ma r=-0.266
+  - vo2max_ml_kg_min_lag1_lag2_3d_ma r=-0.265
+  - vo2max_ml_kg_min_lag3_3d_ma r=-0.265
+  - steps_sum_lag2_lag3_3d_ma r=-0.256
+  - steps_sum_lag2_lag3       r=-0.244
+
+=== steps_sum_7d_ma ===
+Top positive correlations:
+  + steps_sum_3d_ma_7d_ma     r=+0.987
+  + steps_sum_lag1_7d_ma      r=+0.980
+  + steps_sum_lag1_3d_ma_7d_ma r=+0.960
+  + steps_sum_lag2_7d_ma      r=+0.951
+  + steps_sum_lag2_3d_ma      r=+0.936
+Top negative correlations:
+  - basal_kcal_3d_ma          r=-0.255
+  - glucose_mean_3d_ma_7d_ma  r=-0.251
+  - glucose_mean_7d_ma        r=-0.250
+  - rem_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.237
+  - rem_min_lag1_3d_ma_7d_ma  r=-0.229
+
+=== glucose_mean_7d_ma ===
+Top positive correlations:
+  + glucose_mean_3d_ma_7d_ma  r=+0.976
+  + glucose_mean_3d_ma        r=+0.889
+  + glucose_mean              r=+0.720
+  + hrv_sdnn_ms_lag1_lag2_lag3_3d_ma_7d_ma r=+0.624
+  + hrv_sdnn_ms_lag2_lag3_3d_ma_7d_ma r=+0.566
+Top negative correlations:
+  - vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.575
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma r=-0.556
+  - vo2max_ml_kg_min_lag1_lag2_lag3_7d_ma r=-0.550
+  - vo2max_ml_kg_min_lag1_lag3_3d_ma_7d_ma r=-0.524
+  - vo2max_ml_kg_min_lag2_lag3_7d_ma r=-0.517
+
+=== active_kcal_7d_ma ===
+Top positive correlations:
+  + active_kcal_3d_ma_7d_ma   r=+0.958
+  + active_kcal_lag1_7d_ma    r=+0.930
+  + active_kcal_lag1_3d_ma_7d_ma r=+0.867
+  + active_kcal_lag2_7d_ma    r=+0.849
+  + active_kcal_lag2_3d_ma    r=+0.828
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.409
+  - glucose_mean_7d_ma        r=-0.363
+  - glucose_mean_3d_ma        r=-0.293
+  - glucose_mean              r=-0.254
+  - hrv_sdnn_ms_lag2_7d_ma    r=-0.230
+
+=== basal_kcal_7d_ma ===
+Top positive correlations:
+  + basal_kcal_3d_ma_7d_ma    r=+0.960
+  + basal_kcal_lag1_7d_ma     r=+0.945
+  + basal_kcal_lag1_3d_ma_7d_ma r=+0.881
+  + basal_kcal_lag2_7d_ma     r=+0.864
+  + basal_kcal_lag1_3d_ma     r=+0.784
+Top negative correlations:
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma r=-0.499
+  - vo2max_ml_kg_min_lag2_lag3_7d_ma r=-0.493
+  - vo2max_ml_kg_min_lag1_lag3_3d_ma_7d_ma r=-0.491
+  - vo2max_ml_kg_min_lag1_lag2_lag3_7d_ma r=-0.488
+  - vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.474
+
+=== resting_hr_bpm_7d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_3d_ma_7d_ma r=+0.940
+  + resting_hr_bpm_lag1_7d_ma r=+0.904
+  + resting_hr_bpm_lag1_3d_ma_7d_ma r=+0.824
+  + resting_hr_bpm_lag2_7d_ma r=+0.784
+  + resting_hr_bpm_3d_ma      r=+0.719
+Top negative correlations:
+  - hrv_sdnn_ms_3d_ma_7d_ma   r=-0.370
+  - hrv_sdnn_ms_7d_ma         r=-0.369
+  - hrv_sdnn_ms_lag1_7d_ma    r=-0.363
+  - hrv_sdnn_ms_lag1_3d_ma    r=-0.353
+  - hrv_sdnn_ms_lag2_3d_ma    r=-0.351
+
+=== hrv_sdnn_ms_7d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_3d_ma_7d_ma   r=+0.972
+  + hrv_sdnn_ms_lag1_7d_ma    r=+0.960
+  + hrv_sdnn_ms_lag1_3d_ma_7d_ma r=+0.909
+  + hrv_sdnn_ms_lag2_7d_ma    r=+0.895
+  + hrv_sdnn_ms_lag2_3d_ma_7d_ma r=+0.828
+Top negative correlations:
+  - resting_hr_bpm_lag1_3d_ma_7d_ma r=-0.424
+  - resting_hr_bpm_3d_ma_7d_ma r=-0.423
+  - resting_hr_bpm_lag2_3d_ma_7d_ma r=-0.420
+  - resting_hr_bpm_lag3_3d_ma_7d_ma r=-0.406
+  - resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=-0.406
+
+=== vo2max_ml_kg_min_7d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_3d_ma_7d_ma r=+0.977
+  + vo2max_ml_kg_min_lag1_7d_ma r=+0.966
+  + vo2max_ml_kg_min_lag1_3d_ma_7d_ma r=+0.929
+  + vo2max_ml_kg_min_lag2_7d_ma r=+0.917
+  + vo2max_ml_kg_min_lag2_3d_ma r=+0.883
+Top negative correlations:
+  - glucose_mean_3d_ma        r=-0.331
+  - glucose_mean_7d_ma        r=-0.319
+  - hrv_sdnn_ms_lag1_lag2_lag3_3d_ma_7d_ma r=-0.319
+  - hrv_sdnn_ms_lag2_lag3_3d_ma_7d_ma r=-0.309
+  - hrv_sdnn_ms_lag1_lag2_lag3_7d_ma r=-0.303
+
+=== total_min_7d_ma ===
+Top positive correlations:
+  + total_min_3d_ma_7d_ma     r=+0.958
+  + total_min_lag1_7d_ma      r=+0.935
+  + total_min_lag1_3d_ma_7d_ma r=+0.883
+  + total_min_lag2_7d_ma      r=+0.859
+  + total_min_lag2_3d_ma_7d_ma r=+0.805
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.368
+  - glucose_mean_7d_ma        r=-0.335
+  - glucose_mean_3d_ma        r=-0.214
+  - glucose_mean              r=-0.157
+  - deep_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.140
+
+=== core_min_7d_ma ===
+Top positive correlations:
+  + core_min_3d_ma_7d_ma      r=+0.956
+  + core_min_lag1_7d_ma       r=+0.928
+  + core_min_lag1_3d_ma_7d_ma r=+0.873
+  + core_min_lag2_7d_ma       r=+0.844
+  + core_min_lag2_3d_ma_7d_ma r=+0.787
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.263
+  - glucose_mean_7d_ma        r=-0.186
+  - deep_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.163
+  - deep_min_lag2_lag3_3d_ma_7d_ma r=-0.143
+  - steps_sum_3d_ma           r=-0.120
+
+=== deep_min_7d_ma ===
+Top positive correlations:
+  + deep_min_3d_ma_7d_ma      r=+0.877
+  + deep_min_lag1_7d_ma       r=+0.799
+  + deep_min_lag1_3d_ma_7d_ma r=+0.683
+  + deep_min_3d_ma            r=+0.642
+  + deep_min_lag1_3d_ma       r=+0.630
+Top negative correlations:
+  - basal_kcal_lag1_3d_ma_7d_ma r=-0.386
+  - basal_kcal_lag2_7d_ma     r=-0.381
+  - basal_kcal_3d_ma_7d_ma    r=-0.357
+  - basal_kcal_lag1_7d_ma     r=-0.349
+  - basal_kcal_lag1_lag2_lag3_3d_ma_7d_ma r=-0.340
+
+=== rem_min_7d_ma ===
+Top positive correlations:
+  + rem_min_3d_ma_7d_ma       r=+0.931
+  + rem_min_lag1_7d_ma        r=+0.892
+  + rem_min_lag1_3d_ma_7d_ma  r=+0.810
+  + core_min_7d_ma            r=+0.785
+  + core_min_3d_ma_7d_ma      r=+0.773
+Top negative correlations:
+  - vo2max_ml_kg_min_3d_ma    r=-0.235
+  - vo2max_ml_kg_min_lag1_3d_ma r=-0.220
+  - vo2max_ml_kg_min_lag1     r=-0.192
+  - vo2max_ml_kg_min_7d_ma    r=-0.188
+  - steps_sum_3d_ma           r=-0.177
+
+=== steps_sum_lag1_7d_ma ===
+Top positive correlations:
+  + steps_sum_3d_ma_7d_ma     r=+0.996
+  + steps_sum_lag1_3d_ma_7d_ma r=+0.987
+  + steps_sum_7d_ma           r=+0.980
+  + steps_sum_lag2_7d_ma      r=+0.980
+  + steps_sum_lag2_3d_ma_7d_ma r=+0.960
+Top negative correlations:
+  - basal_kcal_3d_ma          r=-0.277
+  - glucose_mean_3d_ma_7d_ma  r=-0.259
+  - glucose_mean_7d_ma        r=-0.256
+  - rem_min_lag2_3d_ma_7d_ma  r=-0.252
+  - rem_min_lag1_lag2_3d_ma_7d_ma r=-0.251
+
+=== active_kcal_lag1_7d_ma ===
+Top positive correlations:
+  + active_kcal_3d_ma_7d_ma   r=+0.985
+  + active_kcal_lag1_3d_ma_7d_ma r=+0.958
+  + active_kcal_lag2_7d_ma    r=+0.930
+  + active_kcal_7d_ma         r=+0.930
+  + active_kcal_lag2_3d_ma_7d_ma r=+0.868
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.415
+  - glucose_mean_7d_ma        r=-0.367
+  - glucose_mean_3d_ma        r=-0.274
+  - glucose_mean              r=-0.240
+  - hrv_sdnn_ms_lag3_3d_ma_7d_ma r=-0.233
+
+=== basal_kcal_lag1_7d_ma ===
+Top positive correlations:
+  + basal_kcal_3d_ma_7d_ma    r=+0.991
+  + basal_kcal_lag1_3d_ma_7d_ma r=+0.961
+  + basal_kcal_lag2_7d_ma     r=+0.948
+  + basal_kcal_7d_ma          r=+0.945
+  + basal_kcal_lag2_3d_ma_7d_ma r=+0.882
+Top negative correlations:
+  - vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.482
+  - vo2max_ml_kg_min_lag1_lag2_lag3_7d_ma r=-0.477
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma r=-0.475
+  - vo2max_ml_kg_min_lag1_lag3_3d_ma_7d_ma r=-0.455
+  - vo2max_ml_kg_min_lag2_lag3_7d_ma r=-0.452
+
+=== resting_hr_bpm_lag1_7d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_3d_ma_7d_ma r=+0.983
+  + resting_hr_bpm_lag1_3d_ma_7d_ma r=+0.940
+  + resting_hr_bpm_lag2_7d_ma r=+0.904
+  + resting_hr_bpm_7d_ma      r=+0.904
+  + resting_hr_bpm_lag2_3d_ma_7d_ma r=+0.824
+Top negative correlations:
+  - hrv_sdnn_ms_7d_ma         r=-0.392
+  - hrv_sdnn_ms_lag1_3d_ma_7d_ma r=-0.370
+  - hrv_sdnn_ms_3d_ma_7d_ma   r=-0.370
+  - hrv_sdnn_ms_lag1_7d_ma    r=-0.369
+  - hrv_sdnn_ms_lag2_7d_ma    r=-0.363
+
+=== hrv_sdnn_ms_lag1_7d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_3d_ma_7d_ma   r=+0.994
+  + hrv_sdnn_ms_lag1_3d_ma_7d_ma r=+0.972
+  + hrv_sdnn_ms_7d_ma         r=+0.960
+  + hrv_sdnn_ms_lag2_7d_ma    r=+0.960
+  + hrv_sdnn_ms_lag2_3d_ma_7d_ma r=+0.908
+Top negative correlations:
+  - resting_hr_bpm_lag2_3d_ma_7d_ma r=-0.424
+  - resting_hr_bpm_lag1_3d_ma_7d_ma r=-0.423
+  - resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=-0.420
+  - resting_hr_bpm_lag3_3d_ma_7d_ma r=-0.420
+  - resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=-0.405
+
+=== vo2max_ml_kg_min_lag1_7d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_3d_ma_7d_ma r=+0.994
+  + vo2max_ml_kg_min_lag1_3d_ma_7d_ma r=+0.977
+  + vo2max_ml_kg_min_7d_ma    r=+0.966
+  + vo2max_ml_kg_min_lag2_7d_ma r=+0.965
+  + vo2max_ml_kg_min_lag2_3d_ma_7d_ma r=+0.928
+Top negative correlations:
+  - glucose_mean_7d_ma        r=-0.366
+  - basal_kcal_3d_ma          r=-0.366
+  - glucose_mean_3d_ma        r=-0.360
+  - glucose_mean_3d_ma_7d_ma  r=-0.353
+  - glucose_mean              r=-0.336
+
+=== total_min_lag1_7d_ma ===
+Top positive correlations:
+  + total_min_3d_ma_7d_ma     r=+0.983
+  + total_min_lag1_3d_ma_7d_ma r=+0.958
+  + total_min_7d_ma           r=+0.935
+  + total_min_lag2_7d_ma      r=+0.935
+  + total_min_lag2_3d_ma_7d_ma r=+0.883
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.363
+  - glucose_mean_7d_ma        r=-0.310
+  - glucose_mean_3d_ma        r=-0.172
+  - glucose_mean              r=-0.117
+  - deep_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.090
+
+=== core_min_lag1_7d_ma ===
+Top positive correlations:
+  + core_min_3d_ma_7d_ma      r=+0.983
+  + core_min_lag1_3d_ma_7d_ma r=+0.956
+  + core_min_7d_ma            r=+0.928
+  + core_min_lag2_7d_ma       r=+0.928
+  + core_min_lag2_3d_ma_7d_ma r=+0.873
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.223
+  - deep_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.148
+  - glucose_mean_7d_ma        r=-0.144
+  - steps_sum_lag2_3d_ma      r=-0.125
+  - steps_sum_lag1_3d_ma      r=-0.124
+
+=== deep_min_lag1_7d_ma ===
+Top positive correlations:
+  + deep_min_3d_ma_7d_ma      r=+0.952
+  + deep_min_lag1_3d_ma_7d_ma r=+0.877
+  + deep_min_lag2_7d_ma       r=+0.799
+  + deep_min_7d_ma            r=+0.799
+  + deep_min_lag2_3d_ma_7d_ma r=+0.683
+Top negative correlations:
+  - basal_kcal_lag2_3d_ma_7d_ma r=-0.385
+  - basal_kcal_lag3_7d_ma     r=-0.379
+  - basal_kcal_lag1_lag2_7d_ma r=-0.379
+  - basal_kcal_lag1_3d_ma_7d_ma r=-0.354
+  - basal_kcal_lag2_7d_ma     r=-0.348
+
+=== rem_min_lag1_7d_ma ===
+Top positive correlations:
+  + rem_min_3d_ma_7d_ma       r=+0.971
+  + rem_min_lag1_3d_ma_7d_ma  r=+0.930
+  + rem_min_7d_ma             r=+0.892
+  + rem_min_lag2_7d_ma        r=+0.891
+  + rem_min_lag2_3d_ma_7d_ma  r=+0.808
+Top negative correlations:
+  - vo2max_ml_kg_min_lag1_3d_ma r=-0.241
+  - vo2max_ml_kg_min_3d_ma    r=-0.233
+  - vo2max_ml_kg_min_lag2_3d_ma r=-0.227
+  - vo2max_ml_kg_min_7d_ma    r=-0.220
+  - vo2max_ml_kg_min_lag2     r=-0.202
+
+=== steps_sum_lag2_7d_ma ===
+Top positive correlations:
+  + steps_sum_lag1_3d_ma_7d_ma r=+0.996
+  + steps_sum_lag2_3d_ma_7d_ma r=+0.987
+  + steps_sum_3d_ma_7d_ma     r=+0.986
+  + steps_sum_lag1_7d_ma      r=+0.980
+  + steps_sum_lag3_7d_ma      r=+0.979
+Top negative correlations:
+  - basal_kcal_3d_ma          r=-0.296
+  - rem_min_lag1_lag3_3d_ma_7d_ma r=-0.282
+  - rem_min_lag1_lag2_3d_ma_7d_ma r=-0.281
+  - rem_min_lag3_3d_ma_7d_ma  r=-0.281
+  - rem_min_lag2_lag3_3d_ma_7d_ma r=-0.279
+
+=== active_kcal_lag2_7d_ma ===
+Top positive correlations:
+  + active_kcal_lag1_3d_ma_7d_ma r=+0.986
+  + active_kcal_lag2_3d_ma_7d_ma r=+0.958
+  + active_kcal_3d_ma_7d_ma   r=+0.957
+  + active_kcal_lag1_7d_ma    r=+0.930
+  + active_kcal_lag1_lag2_7d_ma r=+0.930
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.401
+  - glucose_mean_7d_ma        r=-0.352
+  - glucose_mean_3d_ma        r=-0.270
+  - resting_hr_bpm_3d_ma      r=-0.250
+  - glucose_mean              r=-0.241
+
+=== basal_kcal_lag2_7d_ma ===
+Top positive correlations:
+  + basal_kcal_lag1_3d_ma_7d_ma r=+0.992
+  + basal_kcal_lag2_3d_ma_7d_ma r=+0.961
+  + basal_kcal_3d_ma_7d_ma    r=+0.955
+  + basal_kcal_lag3_7d_ma     r=+0.949
+  + basal_kcal_lag1_lag2_7d_ma r=+0.949
+Top negative correlations:
+  - vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.473
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma r=-0.453
+  - vo2max_ml_kg_min_lag1_lag2_lag3_7d_ma r=-0.450
+  - vo2max_ml_kg_min_lag1_lag3_3d_ma_7d_ma r=-0.416
+  - vo2max_ml_kg_min_lag2_lag3_7d_ma r=-0.412
+
+=== resting_hr_bpm_lag2_7d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_lag1_3d_ma_7d_ma r=+0.983
+  + resting_hr_bpm_lag2_3d_ma_7d_ma r=+0.940
+  + resting_hr_bpm_3d_ma_7d_ma r=+0.931
+  + resting_hr_bpm_lag3_7d_ma r=+0.904
+  + resting_hr_bpm_lag1_lag2_7d_ma r=+0.904
+Top negative correlations:
+  - hrv_sdnn_ms_lag1_7d_ma    r=-0.391
+  - hrv_sdnn_ms_7d_ma         r=-0.391
+  - hrv_sdnn_ms_3d_ma_7d_ma   r=-0.390
+  - hrv_sdnn_ms_lag2_3d_ma_7d_ma r=-0.369
+  - hrv_sdnn_ms_lag1_3d_ma_7d_ma r=-0.369
+
+=== hrv_sdnn_ms_lag2_7d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag1_3d_ma_7d_ma r=+0.994
+  + hrv_sdnn_ms_lag2_3d_ma_7d_ma r=+0.972
+  + hrv_sdnn_ms_3d_ma_7d_ma   r=+0.972
+  + hrv_sdnn_ms_lag3_7d_ma    r=+0.960
+  + hrv_sdnn_ms_lag1_lag2_7d_ma r=+0.960
+Top negative correlations:
+  - resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=-0.424
+  - resting_hr_bpm_lag3_3d_ma_7d_ma r=-0.424
+  - resting_hr_bpm_lag2_3d_ma_7d_ma r=-0.423
+  - resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=-0.420
+  - resting_hr_bpm_lag2_lag3_3d_ma_7d_ma r=-0.405
+
+=== vo2max_ml_kg_min_lag2_7d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag1_3d_ma_7d_ma r=+0.994
+  + vo2max_ml_kg_min_3d_ma_7d_ma r=+0.977
+  + vo2max_ml_kg_min_lag2_3d_ma_7d_ma r=+0.977
+  + vo2max_ml_kg_min_lag1_7d_ma r=+0.965
+  + vo2max_ml_kg_min_lag1_lag2_7d_ma r=+0.965
+Top negative correlations:
+  - basal_kcal_3d_ma          r=-0.403
+  - glucose_mean_7d_ma        r=-0.397
+  - glucose_mean_3d_ma        r=-0.389
+  - glucose_mean_3d_ma_7d_ma  r=-0.387
+  - glucose_mean              r=-0.366
+
+=== total_min_lag2_7d_ma ===
+Top positive correlations:
+  + total_min_lag1_3d_ma_7d_ma r=+0.983
+  + total_min_lag2_3d_ma_7d_ma r=+0.958
+  + total_min_3d_ma_7d_ma     r=+0.957
+  + total_min_lag1_7d_ma      r=+0.935
+  + total_min_lag3_7d_ma      r=+0.935
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.345
+  - glucose_mean_7d_ma        r=-0.270
+  - glucose_mean_3d_ma        r=-0.121
+  - basal_kcal_3d_ma          r=-0.057
+  - basal_kcal_7d_ma          r=-0.050
+
+=== core_min_lag2_7d_ma ===
+Top positive correlations:
+  + core_min_lag1_3d_ma_7d_ma r=+0.983
+  + core_min_lag2_3d_ma_7d_ma r=+0.955
+  + core_min_3d_ma_7d_ma      r=+0.955
+  + core_min_lag1_7d_ma       r=+0.928
+  + core_min_lag1_lag2_7d_ma  r=+0.928
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.165
+  - steps_sum_lag1_lag2_3d_ma r=-0.136
+  - steps_sum_lag3_3d_ma      r=-0.136
+  - steps_sum_lag2_3d_ma      r=-0.131
+  - steps_sum_lag1_lag3_3d_ma r=-0.129
+
+=== deep_min_lag2_7d_ma ===
+Top positive correlations:
+  + deep_min_lag1_3d_ma_7d_ma r=+0.952
+  + deep_min_3d_ma_7d_ma      r=+0.888
+  + deep_min_lag2_3d_ma_7d_ma r=+0.875
+  + deep_min_lag1_7d_ma       r=+0.799
+  + deep_min_lag3_7d_ma       r=+0.796
+Top negative correlations:
+  - basal_kcal_lag3_3d_ma_7d_ma r=-0.380
+  - basal_kcal_lag1_lag2_3d_ma_7d_ma r=-0.380
+  - basal_kcal_lag1_lag3_7d_ma r=-0.376
+  - basal_kcal_lag2_3d_ma_7d_ma r=-0.349
+  - basal_kcal_lag3_7d_ma     r=-0.340
+
+=== rem_min_lag2_7d_ma ===
+Top positive correlations:
+  + rem_min_lag1_3d_ma_7d_ma  r=+0.971
+  + rem_min_lag2_3d_ma_7d_ma  r=+0.930
+  + rem_min_3d_ma_7d_ma       r=+0.929
+  + rem_min_lag1_7d_ma        r=+0.891
+  + rem_min_lag3_7d_ma        r=+0.890
+Top negative correlations:
+  - vo2max_ml_kg_min_7d_ma    r=-0.251
+  - vo2max_ml_kg_min_lag2_3d_ma r=-0.248
+  - vo2max_ml_kg_min_lag1_3d_ma r=-0.240
+  - vo2max_ml_kg_min_3d_ma_7d_ma r=-0.236
+  - vo2max_ml_kg_min_lag1_lag2_3d_ma r=-0.233
+
+=== steps_sum_lag1_lag2_7d_ma ===
+Top positive correlations:
+  + steps_sum_lag3_7d_ma      r=+1.000
+  + steps_sum_lag2_3d_ma_7d_ma r=+0.996
+  + steps_sum_lag3_3d_ma_7d_ma r=+0.986
+  + steps_sum_lag1_lag2_3d_ma_7d_ma r=+0.986
+  + steps_sum_lag1_3d_ma_7d_ma r=+0.986
+Top negative correlations:
+  - basal_kcal_3d_ma          r=-0.327
+  - rem_min_lag2_lag3_3d_ma_7d_ma r=-0.318
+  - basal_kcal_7d_ma          r=-0.317
+  - rem_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.316
+  - rem_min_lag1_lag3_3d_ma_7d_ma r=-0.315
+
+=== active_kcal_lag1_lag2_7d_ma ===
+Top positive correlations:
+  + active_kcal_lag3_7d_ma    r=+1.000
+  + active_kcal_lag2_3d_ma_7d_ma r=+0.986
+  + active_kcal_lag3_3d_ma_7d_ma r=+0.958
+  + active_kcal_lag1_lag2_3d_ma_7d_ma r=+0.958
+  + active_kcal_lag1_3d_ma_7d_ma r=+0.957
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.396
+  - glucose_mean_7d_ma        r=-0.351
+  - glucose_mean_3d_ma        r=-0.268
+  - resting_hr_bpm_lag1_3d_ma r=-0.249
+  - hrv_sdnn_ms_lag2_lag3_3d_ma_7d_ma r=-0.246
+
+=== basal_kcal_lag1_lag2_7d_ma ===
+Top positive correlations:
+  + basal_kcal_lag3_7d_ma     r=+1.000
+  + basal_kcal_lag2_3d_ma_7d_ma r=+0.992
+  + basal_kcal_lag3_3d_ma_7d_ma r=+0.961
+  + basal_kcal_lag1_lag2_3d_ma_7d_ma r=+0.961
+  + basal_kcal_lag1_3d_ma_7d_ma r=+0.955
+Top negative correlations:
+  - vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.437
+  - deep_min_3d_ma_7d_ma      r=-0.415
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma r=-0.401
+  - vo2max_ml_kg_min_lag1_lag2_lag3_7d_ma r=-0.397
+  - deep_min_lag1_3d_ma_7d_ma r=-0.386
+
+=== resting_hr_bpm_lag1_lag2_7d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_lag3_7d_ma r=+1.000
+  + resting_hr_bpm_lag2_3d_ma_7d_ma r=+0.983
+  + resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=+0.940
+  + resting_hr_bpm_lag3_3d_ma_7d_ma r=+0.940
+  + resting_hr_bpm_lag1_3d_ma_7d_ma r=+0.931
+Top negative correlations:
+  - hrv_sdnn_ms_3d_ma_7d_ma   r=-0.396
+  - hrv_sdnn_ms_lag2_7d_ma    r=-0.391
+  - hrv_sdnn_ms_lag1_7d_ma    r=-0.391
+  - hrv_sdnn_ms_lag1_3d_ma_7d_ma r=-0.390
+  - hrv_sdnn_ms_7d_ma         r=-0.385
+
+=== hrv_sdnn_ms_lag1_lag2_7d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag3_7d_ma    r=+1.000
+  + hrv_sdnn_ms_lag2_3d_ma_7d_ma r=+0.994
+  + hrv_sdnn_ms_lag1_lag2_3d_ma_7d_ma r=+0.972
+  + hrv_sdnn_ms_lag3_3d_ma_7d_ma r=+0.972
+  + hrv_sdnn_ms_lag1_3d_ma_7d_ma r=+0.972
+Top negative correlations:
+  - resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=-0.424
+  - resting_hr_bpm_lag3_3d_ma_7d_ma r=-0.424
+  - resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=-0.423
+  - resting_hr_bpm_lag2_lag3_3d_ma_7d_ma r=-0.419
+  - resting_hr_bpm_lag1_lag2_lag3_3d_ma_7d_ma r=-0.403
+
+=== vo2max_ml_kg_min_lag1_lag2_7d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag3_7d_ma r=+1.000
+  + vo2max_ml_kg_min_lag2_3d_ma_7d_ma r=+0.994
+  + vo2max_ml_kg_min_lag1_3d_ma_7d_ma r=+0.977
+  + vo2max_ml_kg_min_lag3_3d_ma_7d_ma r=+0.977
+  + vo2max_ml_kg_min_lag1_lag2_3d_ma_7d_ma r=+0.977
+Top negative correlations:
+  - glucose_mean_7d_ma        r=-0.432
+  - glucose_mean_3d_ma        r=-0.431
+  - basal_kcal_7d_ma          r=-0.426
+  - glucose_mean_3d_ma_7d_ma  r=-0.420
+  - glucose_mean              r=-0.409
+
+=== total_min_lag1_lag2_7d_ma ===
+Top positive correlations:
+  + total_min_lag3_7d_ma      r=+1.000
+  + total_min_lag2_3d_ma_7d_ma r=+0.983
+  + total_min_lag1_lag2_3d_ma_7d_ma r=+0.958
+  + total_min_lag3_3d_ma_7d_ma r=+0.958
+  + total_min_lag1_3d_ma_7d_ma r=+0.957
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.310
+  - glucose_mean_7d_ma        r=-0.221
+  - basal_kcal_3d_ma          r=-0.069
+  - basal_kcal_7d_ma          r=-0.062
+  - basal_kcal_lag1_3d_ma     r=-0.048
+
+=== core_min_lag1_lag2_7d_ma ===
+Top positive correlations:
+  + core_min_lag3_7d_ma       r=+1.000
+  + core_min_lag2_3d_ma_7d_ma r=+0.983
+  + core_min_lag3_3d_ma_7d_ma r=+0.955
+  + core_min_lag1_lag2_3d_ma_7d_ma r=+0.955
+  + core_min_lag1_3d_ma_7d_ma r=+0.955
+Top negative correlations:
+  - steps_sum_lag1_lag3_3d_ma r=-0.156
+  - steps_sum_lag2_lag3_3d_ma r=-0.147
+  - steps_sum_lag1_lag2_3d_ma r=-0.141
+  - steps_sum_lag3_3d_ma      r=-0.141
+  - steps_sum_lag2_lag3       r=-0.136
+
+=== deep_min_lag1_lag2_7d_ma ===
+Top positive correlations:
+  + deep_min_lag3_7d_ma       r=+1.000
+  + deep_min_lag2_3d_ma_7d_ma r=+0.951
+  + deep_min_lag1_3d_ma_7d_ma r=+0.887
+  + deep_min_lag1_lag2_3d_ma_7d_ma r=+0.874
+  + deep_min_lag3_3d_ma_7d_ma r=+0.874
+Top negative correlations:
+  - basal_kcal_lag1_lag3_3d_ma_7d_ma r=-0.376
+  - basal_kcal_lag2_lag3_7d_ma r=-0.373
+  - basal_kcal_lag1_lag2_3d_ma_7d_ma r=-0.340
+  - basal_kcal_lag3_3d_ma_7d_ma r=-0.340
+  - basal_kcal_lag2_lag3_3d_ma r=-0.339
+
+=== rem_min_lag1_lag2_7d_ma ===
+Top positive correlations:
+  + rem_min_lag3_7d_ma        r=+1.000
+  + rem_min_lag2_3d_ma_7d_ma  r=+0.970
+  + rem_min_lag3_3d_ma_7d_ma  r=+0.929
+  + rem_min_lag1_lag2_3d_ma_7d_ma r=+0.929
+  + rem_min_lag1_3d_ma_7d_ma  r=+0.929
+Top negative correlations:
+  - vo2max_ml_kg_min_7d_ma    r=-0.270
+  - vo2max_ml_kg_min_3d_ma_7d_ma r=-0.265
+  - vo2max_ml_kg_min_lag1_7d_ma r=-0.265
+  - vo2max_ml_kg_min_lag3_3d_ma r=-0.255
+  - vo2max_ml_kg_min_lag1_lag2_3d_ma r=-0.255
+
+=== steps_sum_lag3_7d_ma ===
+Top positive correlations:
+  + steps_sum_lag1_lag2_7d_ma r=+1.000
+  + steps_sum_lag2_3d_ma_7d_ma r=+0.996
+  + steps_sum_lag3_3d_ma_7d_ma r=+0.986
+  + steps_sum_lag1_lag2_3d_ma_7d_ma r=+0.986
+  + steps_sum_lag1_3d_ma_7d_ma r=+0.986
+Top negative correlations:
+  - basal_kcal_3d_ma          r=-0.327
+  - rem_min_lag2_lag3_3d_ma_7d_ma r=-0.318
+  - basal_kcal_7d_ma          r=-0.317
+  - rem_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.316
+  - rem_min_lag1_lag3_3d_ma_7d_ma r=-0.315
+
+=== active_kcal_lag3_7d_ma ===
+Top positive correlations:
+  + active_kcal_lag1_lag2_7d_ma r=+1.000
+  + active_kcal_lag2_3d_ma_7d_ma r=+0.986
+  + active_kcal_lag3_3d_ma_7d_ma r=+0.958
+  + active_kcal_lag1_lag2_3d_ma_7d_ma r=+0.958
+  + active_kcal_lag1_3d_ma_7d_ma r=+0.957
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.396
+  - glucose_mean_7d_ma        r=-0.351
+  - glucose_mean_3d_ma        r=-0.268
+  - resting_hr_bpm_lag1_3d_ma r=-0.249
+  - hrv_sdnn_ms_lag2_lag3_3d_ma_7d_ma r=-0.246
+
+=== basal_kcal_lag3_7d_ma ===
+Top positive correlations:
+  + basal_kcal_lag1_lag2_7d_ma r=+1.000
+  + basal_kcal_lag2_3d_ma_7d_ma r=+0.992
+  + basal_kcal_lag3_3d_ma_7d_ma r=+0.961
+  + basal_kcal_lag1_lag2_3d_ma_7d_ma r=+0.961
+  + basal_kcal_lag1_3d_ma_7d_ma r=+0.955
+Top negative correlations:
+  - vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.437
+  - deep_min_3d_ma_7d_ma      r=-0.415
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma r=-0.401
+  - vo2max_ml_kg_min_lag1_lag2_lag3_7d_ma r=-0.397
+  - deep_min_lag1_3d_ma_7d_ma r=-0.386
+
+=== resting_hr_bpm_lag3_7d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_lag1_lag2_7d_ma r=+1.000
+  + resting_hr_bpm_lag2_3d_ma_7d_ma r=+0.983
+  + resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=+0.940
+  + resting_hr_bpm_lag3_3d_ma_7d_ma r=+0.940
+  + resting_hr_bpm_lag1_3d_ma_7d_ma r=+0.931
+Top negative correlations:
+  - hrv_sdnn_ms_3d_ma_7d_ma   r=-0.396
+  - hrv_sdnn_ms_lag2_7d_ma    r=-0.391
+  - hrv_sdnn_ms_lag1_7d_ma    r=-0.391
+  - hrv_sdnn_ms_lag1_3d_ma_7d_ma r=-0.390
+  - hrv_sdnn_ms_7d_ma         r=-0.385
+
+=== hrv_sdnn_ms_lag3_7d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag1_lag2_7d_ma r=+1.000
+  + hrv_sdnn_ms_lag2_3d_ma_7d_ma r=+0.994
+  + hrv_sdnn_ms_lag1_lag2_3d_ma_7d_ma r=+0.972
+  + hrv_sdnn_ms_lag3_3d_ma_7d_ma r=+0.972
+  + hrv_sdnn_ms_lag1_3d_ma_7d_ma r=+0.972
+Top negative correlations:
+  - resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=-0.424
+  - resting_hr_bpm_lag3_3d_ma_7d_ma r=-0.424
+  - resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=-0.423
+  - resting_hr_bpm_lag2_lag3_3d_ma_7d_ma r=-0.419
+  - resting_hr_bpm_lag1_lag2_lag3_3d_ma_7d_ma r=-0.403
+
+=== vo2max_ml_kg_min_lag3_7d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag1_lag2_7d_ma r=+1.000
+  + vo2max_ml_kg_min_lag2_3d_ma_7d_ma r=+0.994
+  + vo2max_ml_kg_min_lag1_3d_ma_7d_ma r=+0.977
+  + vo2max_ml_kg_min_lag3_3d_ma_7d_ma r=+0.977
+  + vo2max_ml_kg_min_lag1_lag2_3d_ma_7d_ma r=+0.977
+Top negative correlations:
+  - glucose_mean_7d_ma        r=-0.432
+  - glucose_mean_3d_ma        r=-0.431
+  - basal_kcal_7d_ma          r=-0.426
+  - glucose_mean_3d_ma_7d_ma  r=-0.420
+  - glucose_mean              r=-0.409
+
+=== total_min_lag3_7d_ma ===
+Top positive correlations:
+  + total_min_lag1_lag2_7d_ma r=+1.000
+  + total_min_lag2_3d_ma_7d_ma r=+0.983
+  + total_min_lag3_3d_ma_7d_ma r=+0.958
+  + total_min_lag1_lag2_3d_ma_7d_ma r=+0.958
+  + total_min_lag1_3d_ma_7d_ma r=+0.957
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.310
+  - glucose_mean_7d_ma        r=-0.221
+  - basal_kcal_3d_ma          r=-0.069
+  - basal_kcal_7d_ma          r=-0.062
+  - basal_kcal_lag1_3d_ma     r=-0.048
+
+=== core_min_lag3_7d_ma ===
+Top positive correlations:
+  + core_min_lag1_lag2_7d_ma  r=+1.000
+  + core_min_lag2_3d_ma_7d_ma r=+0.983
+  + core_min_lag3_3d_ma_7d_ma r=+0.955
+  + core_min_lag1_lag2_3d_ma_7d_ma r=+0.955
+  + core_min_lag1_3d_ma_7d_ma r=+0.955
+Top negative correlations:
+  - steps_sum_lag1_lag3_3d_ma r=-0.156
+  - steps_sum_lag2_lag3_3d_ma r=-0.147
+  - steps_sum_lag1_lag2_3d_ma r=-0.141
+  - steps_sum_lag3_3d_ma      r=-0.141
+  - steps_sum_lag2_lag3       r=-0.136
+
+=== deep_min_lag3_7d_ma ===
+Top positive correlations:
+  + deep_min_lag1_lag2_7d_ma  r=+1.000
+  + deep_min_lag2_3d_ma_7d_ma r=+0.951
+  + deep_min_lag1_3d_ma_7d_ma r=+0.887
+  + deep_min_lag1_lag2_3d_ma_7d_ma r=+0.874
+  + deep_min_lag3_3d_ma_7d_ma r=+0.874
+Top negative correlations:
+  - basal_kcal_lag1_lag3_3d_ma_7d_ma r=-0.376
+  - basal_kcal_lag2_lag3_7d_ma r=-0.373
+  - basal_kcal_lag1_lag2_3d_ma_7d_ma r=-0.340
+  - basal_kcal_lag3_3d_ma_7d_ma r=-0.340
+  - basal_kcal_lag2_lag3_3d_ma r=-0.339
+
+=== rem_min_lag3_7d_ma ===
+Top positive correlations:
+  + rem_min_lag1_lag2_7d_ma   r=+1.000
+  + rem_min_lag2_3d_ma_7d_ma  r=+0.970
+  + rem_min_lag3_3d_ma_7d_ma  r=+0.929
+  + rem_min_lag1_lag2_3d_ma_7d_ma r=+0.929
+  + rem_min_lag1_3d_ma_7d_ma  r=+0.929
+Top negative correlations:
+  - vo2max_ml_kg_min_7d_ma    r=-0.270
+  - vo2max_ml_kg_min_3d_ma_7d_ma r=-0.265
+  - vo2max_ml_kg_min_lag1_7d_ma r=-0.265
+  - vo2max_ml_kg_min_lag3_3d_ma r=-0.255
+  - vo2max_ml_kg_min_lag1_lag2_3d_ma r=-0.255
+
+=== steps_sum_lag1_lag3_7d_ma ===
+Top positive correlations:
+  + steps_sum_lag1_lag2_3d_ma_7d_ma r=+0.996
+  + steps_sum_lag3_3d_ma_7d_ma r=+0.996
+  + steps_sum_lag1_lag3_3d_ma_7d_ma r=+0.986
+  + steps_sum_lag2_3d_ma_7d_ma r=+0.985
+  + steps_sum_lag3_7d_ma      r=+0.978
+Top negative correlations:
+  - rem_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.367
+  - rem_min_lag2_lag3_3d_ma_7d_ma r=-0.363
+  - rem_min_lag1_lag3_3d_ma_7d_ma r=-0.344
+  - basal_kcal_3d_ma          r=-0.336
+  - rem_min_lag1_lag2_lag3_7d_ma r=-0.331
+
+=== active_kcal_lag1_lag3_7d_ma ===
+Top positive correlations:
+  + active_kcal_lag3_3d_ma_7d_ma r=+0.986
+  + active_kcal_lag1_lag2_3d_ma_7d_ma r=+0.986
+  + active_kcal_lag1_lag3_3d_ma_7d_ma r=+0.958
+  + active_kcal_lag2_3d_ma_7d_ma r=+0.957
+  + active_kcal_lag2_lag3_7d_ma r=+0.932
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.400
+  - glucose_mean_7d_ma        r=-0.362
+  - glucose_mean_3d_ma        r=-0.266
+  - hrv_sdnn_ms_lag1_lag2_lag3_3d_ma_7d_ma r=-0.261
+  - hrv_sdnn_ms_lag1_lag2_lag3_7d_ma r=-0.259
+
+=== basal_kcal_lag1_lag3_7d_ma ===
+Top positive correlations:
+  + basal_kcal_lag3_3d_ma_7d_ma r=+0.992
+  + basal_kcal_lag1_lag2_3d_ma_7d_ma r=+0.992
+  + basal_kcal_lag1_lag3_3d_ma_7d_ma r=+0.961
+  + basal_kcal_lag2_3d_ma_7d_ma r=+0.955
+  + basal_kcal_lag2_lag3_7d_ma r=+0.950
+Top negative correlations:
+  - deep_min_lag1_3d_ma_7d_ma r=-0.412
+  - vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.390
+  - deep_min_lag2_3d_ma_7d_ma r=-0.380
+  - deep_min_lag2_7d_ma       r=-0.376
+  - deep_min_3d_ma_7d_ma      r=-0.353
+
+=== resting_hr_bpm_lag1_lag3_7d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=+0.983
+  + resting_hr_bpm_lag3_3d_ma_7d_ma r=+0.983
+  + resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=+0.940
+  + resting_hr_bpm_lag2_3d_ma_7d_ma r=+0.931
+  + resting_hr_bpm_lag2_lag3_7d_ma r=+0.904
+Top negative correlations:
+  - hrv_sdnn_ms_lag1_3d_ma_7d_ma r=-0.396
+  - hrv_sdnn_ms_lag3_7d_ma    r=-0.392
+  - hrv_sdnn_ms_lag1_lag2_7d_ma r=-0.392
+  - hrv_sdnn_ms_3d_ma_7d_ma   r=-0.392
+  - hrv_sdnn_ms_lag2_7d_ma    r=-0.391
+
+=== hrv_sdnn_ms_lag1_lag3_7d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag1_lag2_3d_ma_7d_ma r=+0.994
+  + hrv_sdnn_ms_lag3_3d_ma_7d_ma r=+0.994
+  + hrv_sdnn_ms_lag1_lag3_3d_ma_7d_ma r=+0.972
+  + hrv_sdnn_ms_lag2_3d_ma_7d_ma r=+0.972
+  + hrv_sdnn_ms_lag1_lag2_7d_ma r=+0.960
+Top negative correlations:
+  - resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=-0.423
+  - resting_hr_bpm_lag2_lag3_3d_ma_7d_ma r=-0.423
+  - resting_hr_bpm_lag1_lag2_lag3_3d_ma_7d_ma r=-0.418
+  - resting_hr_bpm_lag3_3d_ma_7d_ma r=-0.396
+  - resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=-0.396
+
+=== vo2max_ml_kg_min_lag1_lag3_7d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag1_lag2_3d_ma_7d_ma r=+0.994
+  + vo2max_ml_kg_min_lag3_3d_ma_7d_ma r=+0.994
+  + vo2max_ml_kg_min_lag2_3d_ma_7d_ma r=+0.977
+  + vo2max_ml_kg_min_lag1_lag3_3d_ma_7d_ma r=+0.976
+  + vo2max_ml_kg_min_lag3_7d_ma r=+0.965
+Top negative correlations:
+  - glucose_mean_3d_ma        r=-0.476
+  - glucose_mean_7d_ma        r=-0.475
+  - basal_kcal_7d_ma          r=-0.466
+  - glucose_mean_3d_ma_7d_ma  r=-0.460
+  - basal_kcal_3d_ma_7d_ma    r=-0.448
+
+=== total_min_lag1_lag3_7d_ma ===
+Top positive correlations:
+  + total_min_lag1_lag2_3d_ma_7d_ma r=+0.983
+  + total_min_lag3_3d_ma_7d_ma r=+0.983
+  + total_min_lag1_lag3_3d_ma_7d_ma r=+0.958
+  + total_min_lag2_3d_ma_7d_ma r=+0.957
+  + total_min_lag1_lag2_7d_ma r=+0.935
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.246
+  - glucose_mean_7d_ma        r=-0.149
+  - basal_kcal_lag1_3d_ma     r=-0.063
+  - basal_kcal_7d_ma          r=-0.060
+  - basal_kcal_lag1_7d_ma     r=-0.058
+
+=== core_min_lag1_lag3_7d_ma ===
+Top positive correlations:
+  + core_min_lag3_3d_ma_7d_ma r=+0.983
+  + core_min_lag1_lag2_3d_ma_7d_ma r=+0.983
+  + core_min_lag1_lag3_3d_ma_7d_ma r=+0.955
+  + core_min_lag2_3d_ma_7d_ma r=+0.955
+  + core_min_lag2_lag3_7d_ma  r=+0.928
+Top negative correlations:
+  - steps_sum_lag2_lag3_3d_ma r=-0.170
+  - steps_sum_lag1_lag2_lag3_3d_ma r=-0.166
+  - steps_sum_lag1_lag3_3d_ma r=-0.157
+  - steps_sum_lag3_7d_ma      r=-0.146
+  - steps_sum_lag1_lag2_7d_ma r=-0.146
+
+=== deep_min_lag1_lag3_7d_ma ===
+Top positive correlations:
+  + deep_min_lag3_3d_ma_7d_ma r=+0.951
+  + deep_min_lag1_lag2_3d_ma_7d_ma r=+0.951
+  + deep_min_lag2_3d_ma_7d_ma r=+0.885
+  + deep_min_lag1_lag3_3d_ma_7d_ma r=+0.875
+  + deep_min_lag2_lag3_7d_ma  r=+0.795
+Top negative correlations:
+  - basal_kcal_lag2_lag3_3d_ma_7d_ma r=-0.372
+  - basal_kcal_lag1_lag2_lag3_7d_ma r=-0.370
+  - basal_kcal_lag1_lag2_lag3_3d_ma r=-0.343
+  - basal_kcal_lag1_lag3_3d_ma_7d_ma r=-0.334
+  - basal_kcal_lag2_lag3_7d_ma r=-0.329
+
+=== rem_min_lag1_lag3_7d_ma ===
+Top positive correlations:
+  + rem_min_lag1_lag2_3d_ma_7d_ma r=+0.970
+  + rem_min_lag3_3d_ma_7d_ma  r=+0.970
+  + rem_min_lag1_lag3_3d_ma_7d_ma r=+0.929
+  + rem_min_lag2_3d_ma_7d_ma  r=+0.928
+  + rem_min_lag3_7d_ma        r=+0.889
+Top negative correlations:
+  - vo2max_ml_kg_min_lag1_7d_ma r=-0.283
+  - steps_sum_lag1_lag3_7d_ma r=-0.283
+  - vo2max_ml_kg_min_3d_ma_7d_ma r=-0.280
+  - steps_sum_lag3_3d_ma_7d_ma r=-0.278
+  - steps_sum_lag1_lag2_3d_ma_7d_ma r=-0.278
+
+=== steps_sum_lag2_lag3_7d_ma ===
+Top positive correlations:
+  + steps_sum_lag1_lag3_3d_ma_7d_ma r=+0.996
+  + steps_sum_lag2_lag3_3d_ma_7d_ma r=+0.985
+  + steps_sum_lag3_3d_ma_7d_ma r=+0.984
+  + steps_sum_lag1_lag2_3d_ma_7d_ma r=+0.984
+  + steps_sum_lag1_lag3_7d_ma r=+0.977
+Top negative correlations:
+  - rem_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.405
+  - rem_min_lag2_lag3_3d_ma_7d_ma r=-0.384
+  - rem_min_lag1_lag2_lag3_7d_ma r=-0.353
+  - basal_kcal_3d_ma          r=-0.348
+  - basal_kcal_7d_ma          r=-0.346
+
+=== active_kcal_lag2_lag3_7d_ma ===
+Top positive correlations:
+  + active_kcal_lag1_lag3_3d_ma_7d_ma r=+0.986
+  + active_kcal_lag2_lag3_3d_ma_7d_ma r=+0.959
+  + active_kcal_lag3_3d_ma_7d_ma r=+0.957
+  + active_kcal_lag1_lag2_3d_ma_7d_ma r=+0.957
+  + active_kcal_lag1_lag2_lag3_7d_ma r=+0.932
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.385
+  - glucose_mean_7d_ma        r=-0.347
+  - resting_hr_bpm_7d_ma      r=-0.266
+  - hrv_sdnn_ms_lag1_lag2_lag3_3d_ma_7d_ma r=-0.266
+  - glucose_mean_3d_ma        r=-0.264
+
+=== basal_kcal_lag2_lag3_7d_ma ===
+Top positive correlations:
+  + basal_kcal_lag1_lag3_3d_ma_7d_ma r=+0.992
+  + basal_kcal_lag2_lag3_3d_ma_7d_ma r=+0.961
+  + basal_kcal_lag3_3d_ma_7d_ma r=+0.956
+  + basal_kcal_lag1_lag2_3d_ma_7d_ma r=+0.956
+  + basal_kcal_lag1_lag3_7d_ma r=+0.950
+Top negative correlations:
+  - deep_min_lag2_3d_ma_7d_ma r=-0.410
+  - deep_min_lag1_lag2_3d_ma_7d_ma r=-0.376
+  - deep_min_lag3_3d_ma_7d_ma r=-0.376
+  - deep_min_lag3_7d_ma       r=-0.373
+  - deep_min_lag1_lag2_7d_ma  r=-0.373
+
+=== resting_hr_bpm_lag2_lag3_7d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=+0.983
+  + resting_hr_bpm_lag2_lag3_3d_ma_7d_ma r=+0.940
+  + resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=+0.931
+  + resting_hr_bpm_lag3_3d_ma_7d_ma r=+0.931
+  + resting_hr_bpm_lag1_lag2_lag3_7d_ma r=+0.905
+Top negative correlations:
+  - hrv_sdnn_ms_lag2_3d_ma_7d_ma r=-0.396
+  - hrv_sdnn_ms_lag1_lag3_7d_ma r=-0.392
+  - hrv_sdnn_ms_lag1_3d_ma_7d_ma r=-0.392
+  - hrv_sdnn_ms_lag3_7d_ma    r=-0.391
+  - hrv_sdnn_ms_lag1_lag2_7d_ma r=-0.391
+
+=== hrv_sdnn_ms_lag2_lag3_7d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag1_lag3_3d_ma_7d_ma r=+0.994
+  + hrv_sdnn_ms_lag2_lag3_3d_ma_7d_ma r=+0.972
+  + hrv_sdnn_ms_lag1_lag2_3d_ma_7d_ma r=+0.972
+  + hrv_sdnn_ms_lag3_3d_ma_7d_ma r=+0.972
+  + hrv_sdnn_ms_lag1_lag3_7d_ma r=+0.960
+Top negative correlations:
+  - resting_hr_bpm_lag2_lag3_3d_ma_7d_ma r=-0.423
+  - resting_hr_bpm_lag1_lag2_lag3_3d_ma_7d_ma r=-0.421
+  - resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=-0.396
+  - resting_hr_bpm_lag1_lag2_lag3_7d_ma r=-0.391
+  - resting_hr_bpm_lag3_3d_ma_7d_ma r=-0.389
+
+=== vo2max_ml_kg_min_lag2_lag3_7d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag1_lag3_3d_ma_7d_ma r=+0.993
+  + vo2max_ml_kg_min_lag1_lag2_3d_ma_7d_ma r=+0.976
+  + vo2max_ml_kg_min_lag3_3d_ma_7d_ma r=+0.976
+  + vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma r=+0.975
+  + vo2max_ml_kg_min_lag1_lag3_7d_ma r=+0.964
+Top negative correlations:
+  - glucose_mean_7d_ma        r=-0.517
+  - glucose_mean_3d_ma        r=-0.503
+  - glucose_mean_3d_ma_7d_ma  r=-0.502
+  - basal_kcal_7d_ma          r=-0.493
+  - basal_kcal_3d_ma_7d_ma    r=-0.483
+
+=== total_min_lag2_lag3_7d_ma ===
+Top positive correlations:
+  + total_min_lag1_lag3_3d_ma_7d_ma r=+0.983
+  + total_min_lag2_lag3_3d_ma_7d_ma r=+0.958
+  + total_min_lag3_3d_ma_7d_ma r=+0.957
+  + total_min_lag1_lag2_3d_ma_7d_ma r=+0.957
+  + total_min_lag1_lag2_lag3_7d_ma r=+0.935
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.174
+  - glucose_mean_7d_ma        r=-0.076
+  - basal_kcal_lag2_3d_ma     r=-0.060
+  - basal_kcal_lag2_7d_ma     r=-0.057
+  - basal_kcal_3d_ma_7d_ma    r=-0.057
+
+=== core_min_lag2_lag3_7d_ma ===
+Top positive correlations:
+  + core_min_lag1_lag3_3d_ma_7d_ma r=+0.983
+  + core_min_lag2_lag3_3d_ma_7d_ma r=+0.955
+  + core_min_lag3_3d_ma_7d_ma r=+0.955
+  + core_min_lag1_lag2_3d_ma_7d_ma r=+0.955
+  + core_min_lag1_lag3_7d_ma  r=+0.928
+Top negative correlations:
+  - steps_sum_lag1_lag2_lag3_3d_ma r=-0.197
+  - steps_sum_lag2_lag3_3d_ma r=-0.176
+  - steps_sum_lag1_lag3_7d_ma r=-0.170
+  - steps_sum_lag1_lag2_3d_ma_7d_ma r=-0.165
+  - steps_sum_lag3_3d_ma_7d_ma r=-0.165
+
+=== deep_min_lag2_lag3_7d_ma ===
+Top positive correlations:
+  + deep_min_lag1_lag3_3d_ma_7d_ma r=+0.951
+  + deep_min_lag1_lag2_3d_ma_7d_ma r=+0.887
+  + deep_min_lag3_3d_ma_7d_ma r=+0.887
+  + deep_min_lag2_lag3_3d_ma_7d_ma r=+0.875
+  + deep_min_lag1_lag3_7d_ma  r=+0.795
+Top negative correlations:
+  - basal_kcal_lag1_lag2_lag3_3d_ma_7d_ma r=-0.370
+  - basal_kcal_lag2_lag3_3d_ma_7d_ma r=-0.332
+  - basal_kcal_lag1_lag2_lag3_7d_ma r=-0.327
+  - basal_kcal_lag2_lag3_7d_ma r=-0.306
+  - basal_kcal_lag1_lag3_3d_ma_7d_ma r=-0.302
+
+=== rem_min_lag2_lag3_7d_ma ===
+Top positive correlations:
+  + rem_min_lag1_lag3_3d_ma_7d_ma r=+0.970
+  + rem_min_lag2_lag3_3d_ma_7d_ma r=+0.928
+  + rem_min_lag3_3d_ma_7d_ma  r=+0.928
+  + rem_min_lag1_lag2_3d_ma_7d_ma r=+0.928
+  + rem_min_lag1_lag3_7d_ma   r=+0.888
+Top negative correlations:
+  - steps_sum_lag2_lag3_7d_ma r=-0.315
+  - steps_sum_lag1_lag3_3d_ma_7d_ma r=-0.312
+  - steps_sum_lag1_lag3_7d_ma r=-0.311
+  - steps_sum_lag1_lag2_lag3_3d_ma r=-0.309
+  - steps_sum_lag3_3d_ma_7d_ma r=-0.304
+
+=== steps_sum_lag1_lag2_lag3_7d_ma ===
+Top positive correlations:
+  + steps_sum_lag2_lag3_3d_ma_7d_ma r=+0.996
+  + steps_sum_lag1_lag2_lag3_3d_ma_7d_ma r=+0.984
+  + steps_sum_lag1_lag3_3d_ma_7d_ma r=+0.984
+  + steps_sum_lag2_lag3_7d_ma r=+0.976
+  + steps_sum_lag3_3d_ma_7d_ma r=+0.951
+Top negative correlations:
+  - rem_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.422
+  - rem_min_lag2_lag3_3d_ma_7d_ma r=-0.379
+  - basal_kcal_7d_ma          r=-0.361
+  - rem_min_lag1_lag2_lag3_7d_ma r=-0.353
+  - basal_kcal_3d_ma          r=-0.342
+
+=== active_kcal_lag1_lag2_lag3_7d_ma ===
+Top positive correlations:
+  + active_kcal_lag2_lag3_3d_ma_7d_ma r=+0.986
+  + active_kcal_lag1_lag2_lag3_3d_ma_7d_ma r=+0.959
+  + active_kcal_lag1_lag3_3d_ma_7d_ma r=+0.958
+  + active_kcal_lag2_lag3_7d_ma r=+0.932
+  + active_kcal_lag1_lag2_3d_ma_7d_ma r=+0.868
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.376
+  - glucose_mean_7d_ma        r=-0.335
+  - resting_hr_bpm_7d_ma      r=-0.267
+  - resting_hr_bpm_lag1_7d_ma r=-0.266
+  - resting_hr_bpm_3d_ma_7d_ma r=-0.263
+
+=== basal_kcal_lag1_lag2_lag3_7d_ma ===
+Top positive correlations:
+  + basal_kcal_lag2_lag3_3d_ma_7d_ma r=+0.992
+  + basal_kcal_lag1_lag2_lag3_3d_ma_7d_ma r=+0.961
+  + basal_kcal_lag1_lag3_3d_ma_7d_ma r=+0.957
+  + basal_kcal_lag2_lag3_7d_ma r=+0.950
+  + basal_kcal_lag1_lag3_7d_ma r=+0.866
+Top negative correlations:
+  - deep_min_lag1_lag2_3d_ma_7d_ma r=-0.407
+  - deep_min_lag3_3d_ma_7d_ma r=-0.407
+  - deep_min_lag1_lag3_3d_ma_7d_ma r=-0.373
+  - deep_min_lag1_lag3_7d_ma  r=-0.370
+  - deep_min_lag2_3d_ma_7d_ma r=-0.347
+
+=== resting_hr_bpm_lag1_lag2_lag3_7d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_lag2_lag3_3d_ma_7d_ma r=+0.983
+  + resting_hr_bpm_lag1_lag2_lag3_3d_ma_7d_ma r=+0.940
+  + resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=+0.931
+  + resting_hr_bpm_lag2_lag3_7d_ma r=+0.905
+  + resting_hr_bpm_lag3_3d_ma_7d_ma r=+0.808
+Top negative correlations:
+  - hrv_sdnn_ms_lag3_3d_ma_7d_ma r=-0.395
+  - hrv_sdnn_ms_lag1_lag2_3d_ma_7d_ma r=-0.395
+  - hrv_sdnn_ms_lag2_lag3_7d_ma r=-0.391
+  - hrv_sdnn_ms_lag2_3d_ma_7d_ma r=-0.391
+  - hrv_sdnn_ms_lag1_lag3_7d_ma r=-0.390
+
+=== hrv_sdnn_ms_lag1_lag2_lag3_7d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag2_lag3_3d_ma_7d_ma r=+0.994
+  + hrv_sdnn_ms_lag1_lag3_3d_ma_7d_ma r=+0.971
+  + hrv_sdnn_ms_lag1_lag2_lag3_3d_ma_7d_ma r=+0.971
+  + hrv_sdnn_ms_lag2_lag3_7d_ma r=+0.960
+  + hrv_sdnn_ms_lag3_3d_ma_7d_ma r=+0.908
+Top negative correlations:
+  - resting_hr_bpm_lag1_lag2_lag3_3d_ma_7d_ma r=-0.422
+  - resting_hr_bpm_lag2_lag3_3d_ma_7d_ma r=-0.396
+  - resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=-0.389
+  - resting_hr_bpm_lag1_lag2_lag3_7d_ma r=-0.369
+  - resting_hr_bpm_lag2_lag3_7d_ma r=-0.364
+
+=== vo2max_ml_kg_min_lag1_lag2_lag3_7d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma r=+0.993
+  + vo2max_ml_kg_min_lag1_lag3_3d_ma_7d_ma r=+0.976
+  + vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma_7d_ma r=+0.975
+  + vo2max_ml_kg_min_lag2_lag3_7d_ma r=+0.963
+  + vo2max_ml_kg_min_lag3_3d_ma_7d_ma r=+0.924
+Top negative correlations:
+  - glucose_mean_7d_ma        r=-0.550
+  - glucose_mean_3d_ma_7d_ma  r=-0.535
+  - glucose_mean_3d_ma        r=-0.510
+  - basal_kcal_3d_ma_7d_ma    r=-0.500
+  - basal_kcal_7d_ma          r=-0.488
+
+=== total_min_lag1_lag2_lag3_7d_ma ===
+Top positive correlations:
+  + total_min_lag2_lag3_3d_ma_7d_ma r=+0.983
+  + total_min_lag1_lag2_lag3_3d_ma_7d_ma r=+0.958
+  + total_min_lag1_lag3_3d_ma_7d_ma r=+0.957
+  + total_min_lag2_lag3_7d_ma r=+0.935
+  + total_min_lag1_lag2_3d_ma_7d_ma r=+0.883
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.112
+  - basal_kcal_lag1_lag2_3d_ma r=-0.055
+  - basal_kcal_lag3_3d_ma     r=-0.055
+  - basal_kcal_lag2_7d_ma     r=-0.052
+  - basal_kcal_lag1_3d_ma_7d_ma r=-0.049
+
+=== core_min_lag1_lag2_lag3_7d_ma ===
+Top positive correlations:
+  + core_min_lag2_lag3_3d_ma_7d_ma r=+0.983
+  + core_min_lag1_lag2_lag3_3d_ma_7d_ma r=+0.955
+  + core_min_lag1_lag3_3d_ma_7d_ma r=+0.954
+  + core_min_lag2_lag3_7d_ma  r=+0.928
+  + core_min_lag1_lag2_3d_ma_7d_ma r=+0.870
+Top negative correlations:
+  - steps_sum_lag1_lag2_lag3_3d_ma r=-0.209
+  - steps_sum_lag2_lag3_7d_ma r=-0.195
+  - steps_sum_lag1_lag3_7d_ma r=-0.194
+  - steps_sum_lag1_lag3_3d_ma_7d_ma r=-0.191
+  - steps_sum_lag1_lag2_3d_ma_7d_ma r=-0.188
+
+=== deep_min_lag1_lag2_lag3_7d_ma ===
+Top positive correlations:
+  + deep_min_lag2_lag3_3d_ma_7d_ma r=+0.951
+  + deep_min_lag1_lag3_3d_ma_7d_ma r=+0.887
+  + deep_min_lag1_lag2_lag3_3d_ma_7d_ma r=+0.875
+  + deep_min_lag2_lag3_7d_ma  r=+0.795
+  + deep_min_lag3_3d_ma_7d_ma r=+0.699
+Top negative correlations:
+  - basal_kcal_lag1_lag2_lag3_3d_ma_7d_ma r=-0.331
+  - basal_kcal_lag1_lag2_lag3_7d_ma r=-0.305
+  - basal_kcal_lag2_lag3_3d_ma_7d_ma r=-0.300
+  - basal_kcal_lag2_lag3_7d_ma r=-0.283
+  - basal_kcal_lag1_lag3_3d_ma_7d_ma r=-0.278
+
+=== rem_min_lag1_lag2_lag3_7d_ma ===
+Top positive correlations:
+  + rem_min_lag2_lag3_3d_ma_7d_ma r=+0.970
+  + rem_min_lag1_lag2_lag3_3d_ma_7d_ma r=+0.928
+  + rem_min_lag1_lag3_3d_ma_7d_ma r=+0.927
+  + rem_min_lag2_lag3_7d_ma   r=+0.888
+  + rem_min_lag1_lag2_3d_ma_7d_ma r=+0.804
+Top negative correlations:
+  - steps_sum_lag1_lag2_lag3_7d_ma r=-0.353
+  - steps_sum_lag2_lag3_7d_ma r=-0.353
+  - steps_sum_lag2_lag3_3d_ma_7d_ma r=-0.352
+  - steps_sum_lag1_lag3_3d_ma_7d_ma r=-0.348
+  - steps_sum_lag1_lag2_lag3_3d_ma_7d_ma r=-0.339
+
+=== steps_sum_3d_ma_7d_ma ===
+Top positive correlations:
+  + steps_sum_lag1_7d_ma      r=+0.996
+  + steps_sum_lag1_3d_ma_7d_ma r=+0.991
+  + steps_sum_7d_ma           r=+0.987
+  + steps_sum_lag2_7d_ma      r=+0.986
+  + steps_sum_lag2_3d_ma_7d_ma r=+0.967
+Top negative correlations:
+  - basal_kcal_3d_ma          r=-0.276
+  - glucose_mean_3d_ma_7d_ma  r=-0.260
+  - rem_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.258
+  - glucose_mean_7d_ma        r=-0.257
+  - rem_min_lag1_lag2_3d_ma_7d_ma r=-0.253
+
+=== glucose_mean_3d_ma_7d_ma ===
+Top positive correlations:
+  + glucose_mean_7d_ma        r=+0.976
+  + glucose_mean_3d_ma        r=+0.821
+  + glucose_mean              r=+0.614
+  + hrv_sdnn_ms_lag1_lag2_lag3_3d_ma_7d_ma r=+0.596
+  + hrv_sdnn_ms_lag2_lag3_3d_ma_7d_ma r=+0.534
+Top negative correlations:
+  - vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.561
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma r=-0.541
+  - vo2max_ml_kg_min_lag1_lag2_lag3_7d_ma r=-0.535
+  - vo2max_ml_kg_min_lag1_lag3_3d_ma_7d_ma r=-0.509
+  - vo2max_ml_kg_min_lag2_lag3_7d_ma r=-0.502
+
+=== active_kcal_3d_ma_7d_ma ===
+Top positive correlations:
+  + active_kcal_lag1_7d_ma    r=+0.985
+  + active_kcal_lag1_3d_ma_7d_ma r=+0.969
+  + active_kcal_7d_ma         r=+0.958
+  + active_kcal_lag2_7d_ma    r=+0.957
+  + active_kcal_lag2_3d_ma_7d_ma r=+0.890
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.424
+  - glucose_mean_7d_ma        r=-0.374
+  - glucose_mean_3d_ma        r=-0.289
+  - glucose_mean              r=-0.254
+  - hrv_sdnn_ms_lag3_3d_ma_7d_ma r=-0.240
+
+=== basal_kcal_3d_ma_7d_ma ===
+Top positive correlations:
+  + basal_kcal_lag1_7d_ma     r=+0.991
+  + basal_kcal_lag1_3d_ma_7d_ma r=+0.967
+  + basal_kcal_7d_ma          r=+0.960
+  + basal_kcal_lag2_7d_ma     r=+0.955
+  + basal_kcal_lag2_3d_ma_7d_ma r=+0.886
+Top negative correlations:
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma r=-0.503
+  - vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.502
+  - vo2max_ml_kg_min_lag1_lag2_lag3_7d_ma r=-0.500
+  - vo2max_ml_kg_min_lag1_lag3_3d_ma_7d_ma r=-0.488
+  - vo2max_ml_kg_min_lag2_lag3_7d_ma r=-0.483
+
+=== resting_hr_bpm_3d_ma_7d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_lag1_7d_ma r=+0.983
+  + resting_hr_bpm_lag1_3d_ma_7d_ma r=+0.956
+  + resting_hr_bpm_7d_ma      r=+0.940
+  + resting_hr_bpm_lag2_7d_ma r=+0.931
+  + resting_hr_bpm_lag2_3d_ma_7d_ma r=+0.851
+Top negative correlations:
+  - hrv_sdnn_ms_7d_ma         r=-0.423
+  - hrv_sdnn_ms_3d_ma_7d_ma   r=-0.400
+  - hrv_sdnn_ms_lag1_7d_ma    r=-0.396
+  - hrv_sdnn_ms_lag1_3d_ma_7d_ma r=-0.393
+  - hrv_sdnn_ms_lag2_7d_ma    r=-0.388
+
+=== hrv_sdnn_ms_3d_ma_7d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag1_7d_ma    r=+0.994
+  + hrv_sdnn_ms_lag1_3d_ma_7d_ma r=+0.978
+  + hrv_sdnn_ms_7d_ma         r=+0.972
+  + hrv_sdnn_ms_lag2_7d_ma    r=+0.972
+  + hrv_sdnn_ms_lag2_3d_ma_7d_ma r=+0.922
+Top negative correlations:
+  - resting_hr_bpm_lag2_3d_ma_7d_ma r=-0.430
+  - resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=-0.424
+  - resting_hr_bpm_lag3_3d_ma_7d_ma r=-0.424
+  - resting_hr_bpm_lag1_3d_ma_7d_ma r=-0.421
+  - resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=-0.411
+
+=== vo2max_ml_kg_min_3d_ma_7d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag1_7d_ma r=+0.994
+  + vo2max_ml_kg_min_lag1_3d_ma_7d_ma r=+0.983
+  + vo2max_ml_kg_min_lag2_7d_ma r=+0.977
+  + vo2max_ml_kg_min_7d_ma    r=+0.977
+  + vo2max_ml_kg_min_lag2_3d_ma_7d_ma r=+0.941
+Top negative correlations:
+  - glucose_mean_7d_ma        r=-0.368
+  - glucose_mean_3d_ma        r=-0.367
+  - basal_kcal_3d_ma          r=-0.359
+  - glucose_mean_3d_ma_7d_ma  r=-0.352
+  - glucose_mean              r=-0.341
+
+=== total_min_3d_ma_7d_ma ===
+Top positive correlations:
+  + total_min_lag1_7d_ma      r=+0.983
+  + total_min_lag1_3d_ma_7d_ma r=+0.974
+  + total_min_7d_ma           r=+0.958
+  + total_min_lag2_7d_ma      r=+0.957
+  + total_min_lag2_3d_ma_7d_ma r=+0.911
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.373
+  - glucose_mean_7d_ma        r=-0.317
+  - glucose_mean_3d_ma        r=-0.175
+  - glucose_mean              r=-0.105
+  - deep_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.091
+
+=== core_min_3d_ma_7d_ma ===
+Top positive correlations:
+  + core_min_lag1_7d_ma       r=+0.983
+  + core_min_lag1_3d_ma_7d_ma r=+0.971
+  + core_min_7d_ma            r=+0.956
+  + core_min_lag2_7d_ma       r=+0.955
+  + core_min_lag2_3d_ma_7d_ma r=+0.903
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.225
+  - deep_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.143
+  - glucose_mean_7d_ma        r=-0.142
+  - steps_sum_lag1_3d_ma      r=-0.130
+  - steps_sum_lag2_3d_ma      r=-0.125
+
+=== deep_min_3d_ma_7d_ma ===
+Top positive correlations:
+  + deep_min_lag1_7d_ma       r=+0.952
+  + deep_min_lag1_3d_ma_7d_ma r=+0.933
+  + deep_min_lag2_7d_ma       r=+0.888
+  + deep_min_7d_ma            r=+0.877
+  + deep_min_lag2_3d_ma_7d_ma r=+0.777
+Top negative correlations:
+  - basal_kcal_lag2_3d_ma_7d_ma r=-0.423
+  - basal_kcal_lag1_lag2_7d_ma r=-0.415
+  - basal_kcal_lag3_7d_ma     r=-0.415
+  - basal_kcal_lag1_3d_ma_7d_ma r=-0.398
+  - basal_kcal_lag2_7d_ma     r=-0.393
+
+=== rem_min_3d_ma_7d_ma ===
+Top positive correlations:
+  + rem_min_lag1_7d_ma        r=+0.971
+  + rem_min_lag1_3d_ma_7d_ma  r=+0.958
+  + rem_min_7d_ma             r=+0.931
+  + rem_min_lag2_7d_ma        r=+0.929
+  + rem_min_lag2_3d_ma_7d_ma  r=+0.854
+Top negative correlations:
+  - vo2max_ml_kg_min_3d_ma    r=-0.258
+  - vo2max_ml_kg_min_lag1_3d_ma r=-0.254
+  - vo2max_ml_kg_min_7d_ma    r=-0.236
+  - vo2max_ml_kg_min_lag2_3d_ma r=-0.229
+  - steps_sum_7d_ma           r=-0.215
+
+=== steps_sum_lag1_3d_ma_7d_ma ===
+Top positive correlations:
+  + steps_sum_lag2_7d_ma      r=+0.996
+  + steps_sum_3d_ma_7d_ma     r=+0.991
+  + steps_sum_lag2_3d_ma_7d_ma r=+0.991
+  + steps_sum_lag1_7d_ma      r=+0.987
+  + steps_sum_lag1_lag2_7d_ma r=+0.986
+Top negative correlations:
+  - basal_kcal_3d_ma          r=-0.303
+  - rem_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.284
+  - rem_min_lag1_lag3_3d_ma_7d_ma r=-0.283
+  - rem_min_lag2_lag3_3d_ma_7d_ma r=-0.283
+  - rem_min_lag1_lag2_3d_ma_7d_ma r=-0.278
+
+=== active_kcal_lag1_3d_ma_7d_ma ===
+Top positive correlations:
+  + active_kcal_lag2_7d_ma    r=+0.986
+  + active_kcal_lag2_3d_ma_7d_ma r=+0.969
+  + active_kcal_3d_ma_7d_ma   r=+0.969
+  + active_kcal_lag1_7d_ma    r=+0.958
+  + active_kcal_lag1_lag2_7d_ma r=+0.957
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.419
+  - glucose_mean_7d_ma        r=-0.370
+  - glucose_mean_3d_ma        r=-0.280
+  - resting_hr_bpm_3d_ma      r=-0.255
+  - hrv_sdnn_ms_lag2_lag3_3d_ma_7d_ma r=-0.246
+
+=== basal_kcal_lag1_3d_ma_7d_ma ===
+Top positive correlations:
+  + basal_kcal_lag2_7d_ma     r=+0.992
+  + basal_kcal_lag2_3d_ma_7d_ma r=+0.968
+  + basal_kcal_3d_ma_7d_ma    r=+0.967
+  + basal_kcal_lag1_7d_ma     r=+0.961
+  + basal_kcal_lag3_7d_ma     r=+0.955
+Top negative correlations:
+  - vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.490
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma r=-0.476
+  - vo2max_ml_kg_min_lag1_lag2_lag3_7d_ma r=-0.472
+  - vo2max_ml_kg_min_lag1_lag3_3d_ma_7d_ma r=-0.443
+  - vo2max_ml_kg_min_lag2_lag3_7d_ma r=-0.437
+
+=== resting_hr_bpm_lag1_3d_ma_7d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_lag2_7d_ma r=+0.983
+  + resting_hr_bpm_lag2_3d_ma_7d_ma r=+0.956
+  + resting_hr_bpm_3d_ma_7d_ma r=+0.956
+  + resting_hr_bpm_lag1_7d_ma r=+0.940
+  + resting_hr_bpm_lag1_lag2_7d_ma r=+0.931
+Top negative correlations:
+  - hrv_sdnn_ms_7d_ma         r=-0.424
+  - hrv_sdnn_ms_lag1_7d_ma    r=-0.423
+  - hrv_sdnn_ms_3d_ma_7d_ma   r=-0.421
+  - hrv_sdnn_ms_lag1_3d_ma_7d_ma r=-0.400
+  - hrv_sdnn_ms_lag2_7d_ma    r=-0.396
+
+=== hrv_sdnn_ms_lag1_3d_ma_7d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag2_7d_ma    r=+0.994
+  + hrv_sdnn_ms_3d_ma_7d_ma   r=+0.978
+  + hrv_sdnn_ms_lag2_3d_ma_7d_ma r=+0.978
+  + hrv_sdnn_ms_lag3_7d_ma    r=+0.972
+  + hrv_sdnn_ms_lag1_lag2_7d_ma r=+0.972
+Top negative correlations:
+  - resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=-0.430
+  - resting_hr_bpm_lag3_3d_ma_7d_ma r=-0.430
+  - resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=-0.424
+  - resting_hr_bpm_lag2_3d_ma_7d_ma r=-0.421
+  - resting_hr_bpm_lag2_lag3_3d_ma_7d_ma r=-0.410
+
+=== vo2max_ml_kg_min_lag1_3d_ma_7d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag2_7d_ma r=+0.994
+  + vo2max_ml_kg_min_3d_ma_7d_ma r=+0.983
+  + vo2max_ml_kg_min_lag2_3d_ma_7d_ma r=+0.983
+  + vo2max_ml_kg_min_lag3_7d_ma r=+0.977
+  + vo2max_ml_kg_min_lag1_lag2_7d_ma r=+0.977
+Top negative correlations:
+  - basal_kcal_3d_ma          r=-0.416
+  - glucose_mean_7d_ma        r=-0.406
+  - glucose_mean_3d_ma        r=-0.401
+  - glucose_mean_3d_ma_7d_ma  r=-0.394
+  - glucose_mean              r=-0.378
+
+=== total_min_lag1_3d_ma_7d_ma ===
+Top positive correlations:
+  + total_min_lag2_7d_ma      r=+0.983
+  + total_min_3d_ma_7d_ma     r=+0.974
+  + total_min_lag2_3d_ma_7d_ma r=+0.974
+  + total_min_lag1_7d_ma      r=+0.958
+  + total_min_lag1_lag2_7d_ma r=+0.957
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.352
+  - glucose_mean_7d_ma        r=-0.277
+  - glucose_mean_3d_ma        r=-0.115
+  - basal_kcal_7d_ma          r=-0.081
+  - basal_kcal_3d_ma_7d_ma    r=-0.069
+
+=== core_min_lag1_3d_ma_7d_ma ===
+Top positive correlations:
+  + core_min_lag2_7d_ma       r=+0.983
+  + core_min_3d_ma_7d_ma      r=+0.971
+  + core_min_lag2_3d_ma_7d_ma r=+0.971
+  + core_min_lag1_7d_ma       r=+0.956
+  + core_min_lag1_lag2_7d_ma  r=+0.955
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.171
+  - steps_sum_lag1_lag2_3d_ma r=-0.137
+  - steps_sum_lag3_3d_ma      r=-0.137
+  - steps_sum_lag2_3d_ma      r=-0.136
+  - steps_sum_7d_ma           r=-0.130
+
+=== deep_min_lag1_3d_ma_7d_ma ===
+Top positive correlations:
+  + deep_min_lag2_7d_ma       r=+0.952
+  + deep_min_3d_ma_7d_ma      r=+0.933
+  + deep_min_lag2_3d_ma_7d_ma r=+0.932
+  + deep_min_lag3_7d_ma       r=+0.887
+  + deep_min_lag1_lag2_7d_ma  r=+0.887
+Top negative correlations:
+  - basal_kcal_lag1_lag2_3d_ma_7d_ma r=-0.419
+  - basal_kcal_lag3_3d_ma_7d_ma r=-0.419
+  - basal_kcal_lag1_lag3_7d_ma r=-0.412
+  - basal_kcal_lag2_3d_ma_7d_ma r=-0.393
+  - basal_kcal_lag1_lag2_7d_ma r=-0.386
+
+=== rem_min_lag1_3d_ma_7d_ma ===
+Top positive correlations:
+  + rem_min_lag2_7d_ma        r=+0.971
+  + rem_min_3d_ma_7d_ma       r=+0.958
+  + rem_min_lag2_3d_ma_7d_ma  r=+0.957
+  + rem_min_lag1_7d_ma        r=+0.930
+  + rem_min_lag3_7d_ma        r=+0.929
+Top negative correlations:
+  - vo2max_ml_kg_min_7d_ma    r=-0.265
+  - vo2max_ml_kg_min_lag1_3d_ma r=-0.265
+  - vo2max_ml_kg_min_lag2_3d_ma r=-0.261
+  - vo2max_ml_kg_min_lag1_7d_ma r=-0.249
+  - vo2max_ml_kg_min_3d_ma_7d_ma r=-0.249
+
+=== steps_sum_lag2_3d_ma_7d_ma ===
+Top positive correlations:
+  + steps_sum_lag1_lag2_7d_ma r=+0.996
+  + steps_sum_lag3_7d_ma      r=+0.996
+  + steps_sum_lag1_3d_ma_7d_ma r=+0.991
+  + steps_sum_lag3_3d_ma_7d_ma r=+0.990
+  + steps_sum_lag1_lag2_3d_ma_7d_ma r=+0.990
+Top negative correlations:
+  - rem_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.322
+  - rem_min_lag2_lag3_3d_ma_7d_ma r=-0.321
+  - basal_kcal_3d_ma          r=-0.321
+  - basal_kcal_7d_ma          r=-0.315
+  - rem_min_lag1_lag3_3d_ma_7d_ma r=-0.315
+
+=== active_kcal_lag2_3d_ma_7d_ma ===
+Top positive correlations:
+  + active_kcal_lag3_7d_ma    r=+0.986
+  + active_kcal_lag1_lag2_7d_ma r=+0.986
+  + active_kcal_lag1_3d_ma_7d_ma r=+0.969
+  + active_kcal_lag1_lag2_3d_ma_7d_ma r=+0.969
+  + active_kcal_lag3_3d_ma_7d_ma r=+0.969
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.413
+  - glucose_mean_7d_ma        r=-0.368
+  - glucose_mean_3d_ma        r=-0.278
+  - hrv_sdnn_ms_lag1_lag2_lag3_3d_ma_7d_ma r=-0.257
+  - hrv_sdnn_ms_lag2_lag3_3d_ma_7d_ma r=-0.256
+
+=== basal_kcal_lag2_3d_ma_7d_ma ===
+Top positive correlations:
+  + basal_kcal_lag3_7d_ma     r=+0.992
+  + basal_kcal_lag1_lag2_7d_ma r=+0.992
+  + basal_kcal_lag1_3d_ma_7d_ma r=+0.968
+  + basal_kcal_lag3_3d_ma_7d_ma r=+0.967
+  + basal_kcal_lag1_lag2_3d_ma_7d_ma r=+0.967
+Top negative correlations:
+  - vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.465
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma r=-0.434
+  - vo2max_ml_kg_min_lag1_lag2_lag3_7d_ma r=-0.427
+  - deep_min_3d_ma_7d_ma      r=-0.423
+  - deep_min_lag1_3d_ma_7d_ma r=-0.393
+
+=== resting_hr_bpm_lag2_3d_ma_7d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_lag3_7d_ma r=+0.983
+  + resting_hr_bpm_lag1_lag2_7d_ma r=+0.983
+  + resting_hr_bpm_lag3_3d_ma_7d_ma r=+0.956
+  + resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=+0.956
+  + resting_hr_bpm_lag1_3d_ma_7d_ma r=+0.956
+Top negative correlations:
+  - hrv_sdnn_ms_3d_ma_7d_ma   r=-0.430
+  - hrv_sdnn_ms_lag1_7d_ma    r=-0.424
+  - hrv_sdnn_ms_lag2_7d_ma    r=-0.423
+  - hrv_sdnn_ms_lag1_3d_ma_7d_ma r=-0.421
+  - hrv_sdnn_ms_7d_ma         r=-0.420
+
+=== hrv_sdnn_ms_lag2_3d_ma_7d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag3_7d_ma    r=+0.994
+  + hrv_sdnn_ms_lag1_lag2_7d_ma r=+0.994
+  + hrv_sdnn_ms_lag3_3d_ma_7d_ma r=+0.978
+  + hrv_sdnn_ms_lag1_lag2_3d_ma_7d_ma r=+0.978
+  + hrv_sdnn_ms_lag1_3d_ma_7d_ma r=+0.978
+Top negative correlations:
+  - resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=-0.429
+  - resting_hr_bpm_lag2_lag3_3d_ma_7d_ma r=-0.423
+  - resting_hr_bpm_lag3_3d_ma_7d_ma r=-0.422
+  - resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=-0.422
+  - resting_hr_bpm_lag1_lag2_lag3_3d_ma_7d_ma r=-0.409
+
+=== vo2max_ml_kg_min_lag2_3d_ma_7d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag3_7d_ma r=+0.994
+  + vo2max_ml_kg_min_lag1_lag2_7d_ma r=+0.994
+  + vo2max_ml_kg_min_lag1_3d_ma_7d_ma r=+0.983
+  + vo2max_ml_kg_min_lag1_lag2_3d_ma_7d_ma r=+0.983
+  + vo2max_ml_kg_min_lag3_3d_ma_7d_ma r=+0.983
+Top negative correlations:
+  - glucose_mean_7d_ma        r=-0.443
+  - glucose_mean_3d_ma        r=-0.440
+  - glucose_mean_3d_ma_7d_ma  r=-0.430
+  - basal_kcal_7d_ma          r=-0.429
+  - glucose_mean              r=-0.410
+
+=== total_min_lag2_3d_ma_7d_ma ===
+Top positive correlations:
+  + total_min_lag1_lag2_7d_ma r=+0.983
+  + total_min_lag3_7d_ma      r=+0.983
+  + total_min_lag1_3d_ma_7d_ma r=+0.974
+  + total_min_lag3_3d_ma_7d_ma r=+0.974
+  + total_min_lag1_lag2_3d_ma_7d_ma r=+0.974
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.312
+  - glucose_mean_7d_ma        r=-0.221
+  - basal_kcal_3d_ma_7d_ma    r=-0.077
+  - basal_kcal_lag1_7d_ma     r=-0.076
+  - basal_kcal_7d_ma          r=-0.074
+
+=== core_min_lag2_3d_ma_7d_ma ===
+Top positive correlations:
+  + core_min_lag3_7d_ma       r=+0.983
+  + core_min_lag1_lag2_7d_ma  r=+0.983
+  + core_min_lag1_3d_ma_7d_ma r=+0.971
+  + core_min_lag3_3d_ma_7d_ma r=+0.971
+  + core_min_lag1_lag2_3d_ma_7d_ma r=+0.971
+Top negative correlations:
+  - steps_sum_lag1_lag3_3d_ma r=-0.156
+  - steps_sum_lag3_3d_ma      r=-0.147
+  - steps_sum_lag1_lag2_3d_ma r=-0.147
+  - steps_sum_lag2_7d_ma      r=-0.143
+  - steps_sum_lag1_7d_ma      r=-0.142
+
+=== deep_min_lag2_3d_ma_7d_ma ===
+Top positive correlations:
+  + deep_min_lag3_7d_ma       r=+0.951
+  + deep_min_lag1_lag2_7d_ma  r=+0.951
+  + deep_min_lag1_3d_ma_7d_ma r=+0.932
+  + deep_min_lag1_lag2_3d_ma_7d_ma r=+0.931
+  + deep_min_lag3_3d_ma_7d_ma r=+0.931
+Top negative correlations:
+  - basal_kcal_lag1_lag3_3d_ma_7d_ma r=-0.416
+  - basal_kcal_lag2_lag3_7d_ma r=-0.410
+  - basal_kcal_lag3_3d_ma_7d_ma r=-0.386
+  - basal_kcal_lag1_lag2_3d_ma_7d_ma r=-0.386
+  - basal_kcal_lag1_lag3_7d_ma r=-0.380
+
+=== rem_min_lag2_3d_ma_7d_ma ===
+Top positive correlations:
+  + rem_min_lag3_7d_ma        r=+0.970
+  + rem_min_lag1_lag2_7d_ma   r=+0.970
+  + rem_min_lag1_3d_ma_7d_ma  r=+0.957
+  + rem_min_lag3_3d_ma_7d_ma  r=+0.957
+  + rem_min_lag1_lag2_3d_ma_7d_ma r=+0.957
+Top negative correlations:
+  - vo2max_ml_kg_min_7d_ma    r=-0.280
+  - vo2max_ml_kg_min_lag1_7d_ma r=-0.279
+  - vo2max_ml_kg_min_3d_ma_7d_ma r=-0.278
+  - vo2max_ml_kg_min_lag2_3d_ma r=-0.272
+  - vo2max_ml_kg_min_lag3_3d_ma r=-0.268
+
+=== steps_sum_lag1_lag2_3d_ma_7d_ma ===
+Top positive correlations:
+  + steps_sum_lag3_3d_ma_7d_ma r=+1.000
+  + steps_sum_lag1_lag3_7d_ma r=+0.996
+  + steps_sum_lag2_3d_ma_7d_ma r=+0.990
+  + steps_sum_lag1_lag3_3d_ma_7d_ma r=+0.989
+  + steps_sum_lag3_7d_ma      r=+0.986
+Top negative correlations:
+  - rem_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.365
+  - rem_min_lag2_lag3_3d_ma_7d_ma r=-0.357
+  - basal_kcal_3d_ma          r=-0.343
+  - rem_min_lag1_lag3_3d_ma_7d_ma r=-0.338
+  - basal_kcal_7d_ma          r=-0.334
+
+=== active_kcal_lag1_lag2_3d_ma_7d_ma ===
+Top positive correlations:
+  + active_kcal_lag3_3d_ma_7d_ma r=+1.000
+  + active_kcal_lag1_lag3_7d_ma r=+0.986
+  + active_kcal_lag2_3d_ma_7d_ma r=+0.969
+  + active_kcal_lag1_lag3_3d_ma_7d_ma r=+0.969
+  + active_kcal_lag3_7d_ma    r=+0.958
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.407
+  - glucose_mean_7d_ma        r=-0.366
+  - glucose_mean_3d_ma        r=-0.275
+  - hrv_sdnn_ms_lag1_lag2_lag3_3d_ma_7d_ma r=-0.267
+  - hrv_sdnn_ms_lag2_lag3_3d_ma_7d_ma r=-0.261
+
+=== basal_kcal_lag1_lag2_3d_ma_7d_ma ===
+Top positive correlations:
+  + basal_kcal_lag3_3d_ma_7d_ma r=+1.000
+  + basal_kcal_lag1_lag3_7d_ma r=+0.992
+  + basal_kcal_lag1_lag3_3d_ma_7d_ma r=+0.968
+  + basal_kcal_lag2_3d_ma_7d_ma r=+0.967
+  + basal_kcal_lag3_7d_ma     r=+0.961
+Top negative correlations:
+  - vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.421
+  - deep_min_lag1_3d_ma_7d_ma r=-0.419
+  - deep_min_lag2_3d_ma_7d_ma r=-0.386
+  - deep_min_lag2_7d_ma       r=-0.380
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma r=-0.374
+
+=== resting_hr_bpm_lag1_lag2_3d_ma_7d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_lag3_3d_ma_7d_ma r=+1.000
+  + resting_hr_bpm_lag1_lag3_7d_ma r=+0.983
+  + resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=+0.956
+  + resting_hr_bpm_lag2_3d_ma_7d_ma r=+0.956
+  + resting_hr_bpm_lag3_7d_ma r=+0.940
+Top negative correlations:
+  - hrv_sdnn_ms_lag1_3d_ma_7d_ma r=-0.430
+  - hrv_sdnn_ms_3d_ma_7d_ma   r=-0.424
+  - hrv_sdnn_ms_lag2_7d_ma    r=-0.424
+  - hrv_sdnn_ms_lag1_lag2_7d_ma r=-0.424
+  - hrv_sdnn_ms_lag3_7d_ma    r=-0.424
+
+=== hrv_sdnn_ms_lag1_lag2_3d_ma_7d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag3_3d_ma_7d_ma r=+1.000
+  + hrv_sdnn_ms_lag1_lag3_7d_ma r=+0.994
+  + hrv_sdnn_ms_lag2_3d_ma_7d_ma r=+0.978
+  + hrv_sdnn_ms_lag1_lag3_3d_ma_7d_ma r=+0.978
+  + hrv_sdnn_ms_lag3_7d_ma    r=+0.972
+Top negative correlations:
+  - resting_hr_bpm_lag2_lag3_3d_ma_7d_ma r=-0.429
+  - resting_hr_bpm_lag1_lag2_lag3_3d_ma_7d_ma r=-0.422
+  - resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=-0.421
+  - resting_hr_bpm_lag3_3d_ma_7d_ma r=-0.401
+  - resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=-0.401
+
+=== vo2max_ml_kg_min_lag1_lag2_3d_ma_7d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag3_3d_ma_7d_ma r=+1.000
+  + vo2max_ml_kg_min_lag1_lag3_7d_ma r=+0.994
+  + vo2max_ml_kg_min_lag2_3d_ma_7d_ma r=+0.983
+  + vo2max_ml_kg_min_lag1_lag3_3d_ma_7d_ma r=+0.983
+  + vo2max_ml_kg_min_lag3_7d_ma r=+0.977
+Top negative correlations:
+  - glucose_mean_7d_ma        r=-0.483
+  - glucose_mean_3d_ma        r=-0.479
+  - basal_kcal_7d_ma          r=-0.470
+  - glucose_mean_3d_ma_7d_ma  r=-0.469
+  - basal_kcal_3d_ma_7d_ma    r=-0.454
+
+=== total_min_lag1_lag2_3d_ma_7d_ma ===
+Top positive correlations:
+  + total_min_lag3_3d_ma_7d_ma r=+1.000
+  + total_min_lag1_lag3_7d_ma r=+0.983
+  + total_min_lag2_3d_ma_7d_ma r=+0.974
+  + total_min_lag1_lag3_3d_ma_7d_ma r=+0.974
+  + total_min_lag1_lag2_7d_ma r=+0.958
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.252
+  - glucose_mean_7d_ma        r=-0.154
+  - basal_kcal_lag2_7d_ma     r=-0.074
+  - basal_kcal_3d_ma_7d_ma    r=-0.073
+  - basal_kcal_lag1_3d_ma_7d_ma r=-0.073
+
+=== core_min_lag1_lag2_3d_ma_7d_ma ===
+Top positive correlations:
+  + core_min_lag3_3d_ma_7d_ma r=+1.000
+  + core_min_lag1_lag3_7d_ma  r=+0.983
+  + core_min_lag2_3d_ma_7d_ma r=+0.971
+  + core_min_lag1_lag3_3d_ma_7d_ma r=+0.971
+  + core_min_lag3_7d_ma       r=+0.955
+Top negative correlations:
+  - steps_sum_lag2_lag3_3d_ma r=-0.174
+  - steps_sum_lag1_lag3_3d_ma r=-0.166
+  - steps_sum_lag1_lag2_lag3_3d_ma r=-0.165
+  - steps_sum_lag1_lag2_7d_ma r=-0.160
+  - steps_sum_lag3_7d_ma      r=-0.160
+
+=== deep_min_lag1_lag2_3d_ma_7d_ma ===
+Top positive correlations:
+  + deep_min_lag3_3d_ma_7d_ma r=+1.000
+  + deep_min_lag1_lag3_7d_ma  r=+0.951
+  + deep_min_lag1_lag3_3d_ma_7d_ma r=+0.932
+  + deep_min_lag2_3d_ma_7d_ma r=+0.931
+  + deep_min_lag2_lag3_7d_ma  r=+0.887
+Top negative correlations:
+  - basal_kcal_lag2_lag3_3d_ma_7d_ma r=-0.412
+  - basal_kcal_lag1_lag2_lag3_7d_ma r=-0.407
+  - basal_kcal_lag1_lag3_3d_ma_7d_ma r=-0.381
+  - basal_kcal_lag2_lag3_7d_ma r=-0.376
+  - basal_kcal_lag1_lag2_lag3_3d_ma_7d_ma r=-0.351
+
+=== rem_min_lag1_lag2_3d_ma_7d_ma ===
+Top positive correlations:
+  + rem_min_lag3_3d_ma_7d_ma  r=+1.000
+  + rem_min_lag1_lag3_7d_ma   r=+0.970
+  + rem_min_lag2_3d_ma_7d_ma  r=+0.957
+  + rem_min_lag1_lag3_3d_ma_7d_ma r=+0.957
+  + rem_min_lag3_7d_ma        r=+0.929
+Top negative correlations:
+  - steps_sum_lag1_lag3_7d_ma r=-0.307
+  - steps_sum_lag3_3d_ma_7d_ma r=-0.303
+  - steps_sum_lag1_lag2_3d_ma_7d_ma r=-0.303
+  - steps_sum_lag1_lag2_7d_ma r=-0.300
+  - steps_sum_lag3_7d_ma      r=-0.300
+
+=== steps_sum_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + steps_sum_lag1_lag2_3d_ma_7d_ma r=+1.000
+  + steps_sum_lag1_lag3_7d_ma r=+0.996
+  + steps_sum_lag2_3d_ma_7d_ma r=+0.990
+  + steps_sum_lag1_lag3_3d_ma_7d_ma r=+0.989
+  + steps_sum_lag1_lag2_7d_ma r=+0.986
+Top negative correlations:
+  - rem_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.365
+  - rem_min_lag2_lag3_3d_ma_7d_ma r=-0.357
+  - basal_kcal_3d_ma          r=-0.343
+  - rem_min_lag1_lag3_3d_ma_7d_ma r=-0.338
+  - basal_kcal_7d_ma          r=-0.334
+
+=== active_kcal_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + active_kcal_lag1_lag2_3d_ma_7d_ma r=+1.000
+  + active_kcal_lag1_lag3_7d_ma r=+0.986
+  + active_kcal_lag2_3d_ma_7d_ma r=+0.969
+  + active_kcal_lag1_lag3_3d_ma_7d_ma r=+0.969
+  + active_kcal_lag3_7d_ma    r=+0.958
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.407
+  - glucose_mean_7d_ma        r=-0.366
+  - glucose_mean_3d_ma        r=-0.275
+  - hrv_sdnn_ms_lag1_lag2_lag3_3d_ma_7d_ma r=-0.267
+  - hrv_sdnn_ms_lag2_lag3_3d_ma_7d_ma r=-0.261
+
+=== basal_kcal_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + basal_kcal_lag1_lag2_3d_ma_7d_ma r=+1.000
+  + basal_kcal_lag1_lag3_7d_ma r=+0.992
+  + basal_kcal_lag1_lag3_3d_ma_7d_ma r=+0.968
+  + basal_kcal_lag2_3d_ma_7d_ma r=+0.967
+  + basal_kcal_lag3_7d_ma     r=+0.961
+Top negative correlations:
+  - vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.421
+  - deep_min_lag1_3d_ma_7d_ma r=-0.419
+  - deep_min_lag2_3d_ma_7d_ma r=-0.386
+  - deep_min_lag2_7d_ma       r=-0.380
+  - vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma r=-0.374
+
+=== resting_hr_bpm_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=+1.000
+  + resting_hr_bpm_lag1_lag3_7d_ma r=+0.983
+  + resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=+0.956
+  + resting_hr_bpm_lag2_3d_ma_7d_ma r=+0.956
+  + resting_hr_bpm_lag3_7d_ma r=+0.940
+Top negative correlations:
+  - hrv_sdnn_ms_lag1_3d_ma_7d_ma r=-0.430
+  - hrv_sdnn_ms_3d_ma_7d_ma   r=-0.424
+  - hrv_sdnn_ms_lag2_7d_ma    r=-0.424
+  - hrv_sdnn_ms_lag1_lag2_7d_ma r=-0.424
+  - hrv_sdnn_ms_lag3_7d_ma    r=-0.424
+
+=== hrv_sdnn_ms_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag1_lag2_3d_ma_7d_ma r=+1.000
+  + hrv_sdnn_ms_lag1_lag3_7d_ma r=+0.994
+  + hrv_sdnn_ms_lag2_3d_ma_7d_ma r=+0.978
+  + hrv_sdnn_ms_lag1_lag3_3d_ma_7d_ma r=+0.978
+  + hrv_sdnn_ms_lag3_7d_ma    r=+0.972
+Top negative correlations:
+  - resting_hr_bpm_lag2_lag3_3d_ma_7d_ma r=-0.429
+  - resting_hr_bpm_lag1_lag2_lag3_3d_ma_7d_ma r=-0.422
+  - resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=-0.421
+  - resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=-0.401
+  - resting_hr_bpm_lag3_3d_ma_7d_ma r=-0.401
+
+=== vo2max_ml_kg_min_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag1_lag2_3d_ma_7d_ma r=+1.000
+  + vo2max_ml_kg_min_lag1_lag3_7d_ma r=+0.994
+  + vo2max_ml_kg_min_lag2_3d_ma_7d_ma r=+0.983
+  + vo2max_ml_kg_min_lag1_lag3_3d_ma_7d_ma r=+0.983
+  + vo2max_ml_kg_min_lag3_7d_ma r=+0.977
+Top negative correlations:
+  - glucose_mean_7d_ma        r=-0.483
+  - glucose_mean_3d_ma        r=-0.479
+  - basal_kcal_7d_ma          r=-0.470
+  - glucose_mean_3d_ma_7d_ma  r=-0.469
+  - basal_kcal_3d_ma_7d_ma    r=-0.454
+
+=== total_min_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + total_min_lag1_lag2_3d_ma_7d_ma r=+1.000
+  + total_min_lag1_lag3_7d_ma r=+0.983
+  + total_min_lag2_3d_ma_7d_ma r=+0.974
+  + total_min_lag1_lag3_3d_ma_7d_ma r=+0.974
+  + total_min_lag1_lag2_7d_ma r=+0.958
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.252
+  - glucose_mean_7d_ma        r=-0.154
+  - basal_kcal_lag2_7d_ma     r=-0.074
+  - basal_kcal_3d_ma_7d_ma    r=-0.073
+  - basal_kcal_lag1_3d_ma_7d_ma r=-0.073
+
+=== core_min_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + core_min_lag1_lag2_3d_ma_7d_ma r=+1.000
+  + core_min_lag1_lag3_7d_ma  r=+0.983
+  + core_min_lag2_3d_ma_7d_ma r=+0.971
+  + core_min_lag1_lag3_3d_ma_7d_ma r=+0.971
+  + core_min_lag3_7d_ma       r=+0.955
+Top negative correlations:
+  - steps_sum_lag2_lag3_3d_ma r=-0.174
+  - steps_sum_lag1_lag3_3d_ma r=-0.166
+  - steps_sum_lag1_lag2_lag3_3d_ma r=-0.165
+  - steps_sum_lag1_lag2_7d_ma r=-0.160
+  - steps_sum_lag3_7d_ma      r=-0.160
+
+=== deep_min_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + deep_min_lag1_lag2_3d_ma_7d_ma r=+1.000
+  + deep_min_lag1_lag3_7d_ma  r=+0.951
+  + deep_min_lag1_lag3_3d_ma_7d_ma r=+0.932
+  + deep_min_lag2_3d_ma_7d_ma r=+0.931
+  + deep_min_lag2_lag3_7d_ma  r=+0.887
+Top negative correlations:
+  - basal_kcal_lag2_lag3_3d_ma_7d_ma r=-0.412
+  - basal_kcal_lag1_lag2_lag3_7d_ma r=-0.407
+  - basal_kcal_lag1_lag3_3d_ma_7d_ma r=-0.381
+  - basal_kcal_lag2_lag3_7d_ma r=-0.376
+  - basal_kcal_lag1_lag2_lag3_3d_ma_7d_ma r=-0.351
+
+=== rem_min_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + rem_min_lag1_lag2_3d_ma_7d_ma r=+1.000
+  + rem_min_lag1_lag3_7d_ma   r=+0.970
+  + rem_min_lag2_3d_ma_7d_ma  r=+0.957
+  + rem_min_lag1_lag3_3d_ma_7d_ma r=+0.957
+  + rem_min_lag1_lag2_7d_ma   r=+0.929
+Top negative correlations:
+  - steps_sum_lag1_lag3_7d_ma r=-0.307
+  - steps_sum_lag3_3d_ma_7d_ma r=-0.303
+  - steps_sum_lag1_lag2_3d_ma_7d_ma r=-0.303
+  - steps_sum_lag1_lag2_7d_ma r=-0.300
+  - steps_sum_lag3_7d_ma      r=-0.300
+
+=== steps_sum_lag1_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + steps_sum_lag2_lag3_7d_ma r=+0.996
+  + steps_sum_lag3_3d_ma_7d_ma r=+0.989
+  + steps_sum_lag1_lag2_3d_ma_7d_ma r=+0.989
+  + steps_sum_lag2_lag3_3d_ma_7d_ma r=+0.989
+  + steps_sum_lag1_lag3_7d_ma r=+0.986
+Top negative correlations:
+  - rem_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.401
+  - rem_min_lag2_lag3_3d_ma_7d_ma r=-0.380
+  - basal_kcal_7d_ma          r=-0.351
+  - basal_kcal_3d_ma          r=-0.348
+  - rem_min_lag1_lag2_lag3_7d_ma r=-0.348
+
+=== active_kcal_lag1_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + active_kcal_lag2_lag3_7d_ma r=+0.986
+  + active_kcal_lag2_lag3_3d_ma_7d_ma r=+0.969
+  + active_kcal_lag3_3d_ma_7d_ma r=+0.969
+  + active_kcal_lag1_lag2_3d_ma_7d_ma r=+0.969
+  + active_kcal_lag1_lag3_7d_ma r=+0.958
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.400
+  - glucose_mean_7d_ma        r=-0.360
+  - hrv_sdnn_ms_lag1_lag2_lag3_3d_ma_7d_ma r=-0.270
+  - resting_hr_bpm_7d_ma      r=-0.266
+  - glucose_mean_3d_ma        r=-0.265
+
+=== basal_kcal_lag1_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + basal_kcal_lag2_lag3_7d_ma r=+0.992
+  + basal_kcal_lag2_lag3_3d_ma_7d_ma r=+0.968
+  + basal_kcal_lag1_lag2_3d_ma_7d_ma r=+0.968
+  + basal_kcal_lag3_3d_ma_7d_ma r=+0.968
+  + basal_kcal_lag1_lag3_7d_ma r=+0.961
+Top negative correlations:
+  - deep_min_lag2_3d_ma_7d_ma r=-0.416
+  - deep_min_lag1_lag2_3d_ma_7d_ma r=-0.381
+  - deep_min_lag3_3d_ma_7d_ma r=-0.381
+  - deep_min_lag3_7d_ma       r=-0.376
+  - deep_min_lag1_lag2_7d_ma  r=-0.376
+
+=== resting_hr_bpm_lag1_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_lag2_lag3_7d_ma r=+0.983
+  + resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=+0.956
+  + resting_hr_bpm_lag3_3d_ma_7d_ma r=+0.956
+  + resting_hr_bpm_lag2_lag3_3d_ma_7d_ma r=+0.956
+  + resting_hr_bpm_lag1_lag3_7d_ma r=+0.940
+Top negative correlations:
+  - hrv_sdnn_ms_lag2_3d_ma_7d_ma r=-0.429
+  - hrv_sdnn_ms_lag1_3d_ma_7d_ma r=-0.424
+  - hrv_sdnn_ms_lag1_lag2_7d_ma r=-0.423
+  - hrv_sdnn_ms_lag3_7d_ma    r=-0.423
+  - hrv_sdnn_ms_lag1_lag3_7d_ma r=-0.423
+
+=== hrv_sdnn_ms_lag1_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag2_lag3_7d_ma r=+0.994
+  + hrv_sdnn_ms_lag3_3d_ma_7d_ma r=+0.978
+  + hrv_sdnn_ms_lag1_lag2_3d_ma_7d_ma r=+0.978
+  + hrv_sdnn_ms_lag2_lag3_3d_ma_7d_ma r=+0.978
+  + hrv_sdnn_ms_lag1_lag3_7d_ma r=+0.972
+Top negative correlations:
+  - resting_hr_bpm_lag1_lag2_lag3_3d_ma_7d_ma r=-0.427
+  - resting_hr_bpm_lag2_lag3_3d_ma_7d_ma r=-0.421
+  - resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=-0.400
+  - resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=-0.393
+  - resting_hr_bpm_lag3_3d_ma_7d_ma r=-0.393
+
+=== vo2max_ml_kg_min_lag1_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag2_lag3_7d_ma r=+0.993
+  + vo2max_ml_kg_min_lag3_3d_ma_7d_ma r=+0.983
+  + vo2max_ml_kg_min_lag1_lag2_3d_ma_7d_ma r=+0.983
+  + vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma r=+0.982
+  + vo2max_ml_kg_min_lag1_lag3_7d_ma r=+0.976
+Top negative correlations:
+  - glucose_mean_7d_ma        r=-0.524
+  - glucose_mean_3d_ma_7d_ma  r=-0.509
+  - glucose_mean_3d_ma        r=-0.507
+  - basal_kcal_7d_ma          r=-0.491
+  - basal_kcal_3d_ma_7d_ma    r=-0.488
+
+=== total_min_lag1_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + total_min_lag2_lag3_7d_ma r=+0.983
+  + total_min_lag2_lag3_3d_ma_7d_ma r=+0.974
+  + total_min_lag1_lag2_3d_ma_7d_ma r=+0.974
+  + total_min_lag3_3d_ma_7d_ma r=+0.974
+  + total_min_lag1_lag3_7d_ma r=+0.958
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.184
+  - glucose_mean_7d_ma        r=-0.085
+  - basal_kcal_lag3_7d_ma     r=-0.069
+  - basal_kcal_lag1_lag2_7d_ma r=-0.069
+  - basal_kcal_lag2_3d_ma_7d_ma r=-0.069
+
+=== core_min_lag1_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + core_min_lag2_lag3_7d_ma  r=+0.983
+  + core_min_lag2_lag3_3d_ma_7d_ma r=+0.971
+  + core_min_lag3_3d_ma_7d_ma r=+0.971
+  + core_min_lag1_lag2_3d_ma_7d_ma r=+0.971
+  + core_min_lag1_lag3_7d_ma  r=+0.955
+Top negative correlations:
+  - steps_sum_lag1_lag2_lag3_3d_ma r=-0.201
+  - steps_sum_lag2_lag3_3d_ma r=-0.186
+  - steps_sum_lag1_lag3_7d_ma r=-0.184
+  - steps_sum_lag3_3d_ma_7d_ma r=-0.179
+  - steps_sum_lag1_lag2_3d_ma_7d_ma r=-0.179
+
+=== deep_min_lag1_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + deep_min_lag2_lag3_7d_ma  r=+0.951
+  + deep_min_lag3_3d_ma_7d_ma r=+0.932
+  + deep_min_lag1_lag2_3d_ma_7d_ma r=+0.932
+  + deep_min_lag2_lag3_3d_ma_7d_ma r=+0.932
+  + deep_min_lag1_lag2_lag3_7d_ma r=+0.887
+Top negative correlations:
+  - basal_kcal_lag1_lag2_lag3_3d_ma_7d_ma r=-0.410
+  - basal_kcal_lag2_lag3_3d_ma_7d_ma r=-0.377
+  - basal_kcal_lag1_lag2_lag3_7d_ma r=-0.373
+  - basal_kcal_lag1_lag3_3d_ma_7d_ma r=-0.341
+  - basal_kcal_lag2_lag3_7d_ma r=-0.340
+
+=== rem_min_lag1_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + rem_min_lag2_lag3_7d_ma   r=+0.970
+  + rem_min_lag1_lag2_3d_ma_7d_ma r=+0.957
+  + rem_min_lag3_3d_ma_7d_ma  r=+0.957
+  + rem_min_lag2_lag3_3d_ma_7d_ma r=+0.956
+  + rem_min_lag1_lag3_7d_ma   r=+0.929
+Top negative correlations:
+  - steps_sum_lag1_lag3_7d_ma r=-0.344
+  - steps_sum_lag2_lag3_7d_ma r=-0.344
+  - steps_sum_lag1_lag3_3d_ma_7d_ma r=-0.342
+  - steps_sum_lag1_lag2_3d_ma_7d_ma r=-0.338
+  - steps_sum_lag3_3d_ma_7d_ma r=-0.338
+
+=== steps_sum_lag2_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + steps_sum_lag1_lag2_lag3_7d_ma r=+0.996
+  + steps_sum_lag1_lag3_3d_ma_7d_ma r=+0.989
+  + steps_sum_lag1_lag2_lag3_3d_ma_7d_ma r=+0.988
+  + steps_sum_lag2_lag3_7d_ma r=+0.985
+  + steps_sum_lag3_3d_ma_7d_ma r=+0.961
+Top negative correlations:
+  - rem_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.420
+  - rem_min_lag2_lag3_3d_ma_7d_ma r=-0.380
+  - basal_kcal_7d_ma          r=-0.362
+  - rem_min_lag1_lag2_lag3_7d_ma r=-0.352
+  - basal_kcal_3d_ma          r=-0.343
+
+=== active_kcal_lag2_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + active_kcal_lag1_lag2_lag3_7d_ma r=+0.986
+  + active_kcal_lag1_lag2_lag3_3d_ma_7d_ma r=+0.969
+  + active_kcal_lag1_lag3_3d_ma_7d_ma r=+0.969
+  + active_kcal_lag2_lag3_7d_ma r=+0.959
+  + active_kcal_lag3_3d_ma_7d_ma r=+0.890
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.380
+  - glucose_mean_7d_ma        r=-0.336
+  - resting_hr_bpm_7d_ma      r=-0.273
+  - resting_hr_bpm_3d_ma_7d_ma r=-0.272
+  - resting_hr_bpm_lag1_7d_ma r=-0.266
+
+=== basal_kcal_lag2_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + basal_kcal_lag1_lag2_lag3_7d_ma r=+0.992
+  + basal_kcal_lag1_lag2_lag3_3d_ma_7d_ma r=+0.968
+  + basal_kcal_lag1_lag3_3d_ma_7d_ma r=+0.968
+  + basal_kcal_lag2_lag3_7d_ma r=+0.961
+  + basal_kcal_lag3_3d_ma_7d_ma r=+0.886
+Top negative correlations:
+  - deep_min_lag1_lag2_3d_ma_7d_ma r=-0.412
+  - deep_min_lag3_3d_ma_7d_ma r=-0.412
+  - deep_min_lag1_lag3_3d_ma_7d_ma r=-0.377
+  - deep_min_lag1_lag3_7d_ma  r=-0.372
+  - deep_min_lag2_3d_ma_7d_ma r=-0.355
+
+=== resting_hr_bpm_lag2_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_lag1_lag2_lag3_7d_ma r=+0.983
+  + resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=+0.956
+  + resting_hr_bpm_lag1_lag2_lag3_3d_ma_7d_ma r=+0.956
+  + resting_hr_bpm_lag2_lag3_7d_ma r=+0.940
+  + resting_hr_bpm_lag1_lag2_3d_ma_7d_ma r=+0.851
+Top negative correlations:
+  - hrv_sdnn_ms_lag1_lag2_3d_ma_7d_ma r=-0.429
+  - hrv_sdnn_ms_lag3_3d_ma_7d_ma r=-0.429
+  - hrv_sdnn_ms_lag2_3d_ma_7d_ma r=-0.423
+  - hrv_sdnn_ms_lag2_lag3_7d_ma r=-0.423
+  - hrv_sdnn_ms_lag1_lag3_7d_ma r=-0.423
+
+=== hrv_sdnn_ms_lag2_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag1_lag2_lag3_7d_ma r=+0.994
+  + hrv_sdnn_ms_lag1_lag3_3d_ma_7d_ma r=+0.978
+  + hrv_sdnn_ms_lag1_lag2_lag3_3d_ma_7d_ma r=+0.978
+  + hrv_sdnn_ms_lag2_lag3_7d_ma r=+0.972
+  + hrv_sdnn_ms_lag3_3d_ma_7d_ma r=+0.922
+Top negative correlations:
+  - resting_hr_bpm_lag1_lag2_lag3_3d_ma_7d_ma r=-0.420
+  - resting_hr_bpm_lag2_lag3_3d_ma_7d_ma r=-0.400
+  - resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=-0.393
+  - resting_hr_bpm_lag2_lag3_7d_ma r=-0.371
+  - resting_hr_bpm_lag1_lag2_lag3_7d_ma r=-0.370
+
+=== vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag1_lag2_lag3_7d_ma r=+0.993
+  + vo2max_ml_kg_min_lag1_lag3_3d_ma_7d_ma r=+0.982
+  + vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma_7d_ma r=+0.982
+  + vo2max_ml_kg_min_lag2_lag3_7d_ma r=+0.975
+  + vo2max_ml_kg_min_lag3_3d_ma_7d_ma r=+0.938
+Top negative correlations:
+  - glucose_mean_7d_ma        r=-0.556
+  - glucose_mean_3d_ma_7d_ma  r=-0.541
+  - glucose_mean_3d_ma        r=-0.514
+  - basal_kcal_3d_ma_7d_ma    r=-0.503
+  - basal_kcal_7d_ma          r=-0.499
+
+=== total_min_lag2_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + total_min_lag1_lag2_lag3_7d_ma r=+0.983
+  + total_min_lag1_lag2_lag3_3d_ma_7d_ma r=+0.974
+  + total_min_lag1_lag3_3d_ma_7d_ma r=+0.974
+  + total_min_lag2_lag3_7d_ma r=+0.958
+  + total_min_lag1_lag2_3d_ma_7d_ma r=+0.911
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.116
+  - basal_kcal_lag1_lag3_7d_ma r=-0.064
+  - basal_kcal_lag1_lag2_3d_ma_7d_ma r=-0.062
+  - basal_kcal_lag3_3d_ma_7d_ma r=-0.062
+  - basal_kcal_lag2_3d_ma_7d_ma r=-0.062
+
+=== core_min_lag2_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + core_min_lag1_lag2_lag3_7d_ma r=+0.983
+  + core_min_lag1_lag3_3d_ma_7d_ma r=+0.971
+  + core_min_lag1_lag2_lag3_3d_ma_7d_ma r=+0.971
+  + core_min_lag2_lag3_7d_ma  r=+0.955
+  + core_min_lag3_3d_ma_7d_ma r=+0.902
+Top negative correlations:
+  - steps_sum_lag1_lag2_lag3_3d_ma r=-0.219
+  - steps_sum_lag2_lag3_7d_ma r=-0.209
+  - steps_sum_lag1_lag3_7d_ma r=-0.207
+  - steps_sum_lag1_lag3_3d_ma_7d_ma r=-0.205
+  - steps_sum_lag1_lag2_3d_ma_7d_ma r=-0.201
+
+=== deep_min_lag2_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + deep_min_lag1_lag2_lag3_7d_ma r=+0.951
+  + deep_min_lag1_lag3_3d_ma_7d_ma r=+0.932
+  + deep_min_lag1_lag2_lag3_3d_ma_7d_ma r=+0.931
+  + deep_min_lag2_lag3_7d_ma  r=+0.875
+  + deep_min_lag3_3d_ma_7d_ma r=+0.774
+Top negative correlations:
+  - basal_kcal_lag1_lag2_lag3_3d_ma_7d_ma r=-0.375
+  - basal_kcal_lag2_lag3_3d_ma_7d_ma r=-0.338
+  - basal_kcal_lag1_lag2_lag3_7d_ma r=-0.337
+  - basal_kcal_lag2_lag3_7d_ma r=-0.310
+  - basal_kcal_lag1_lag3_3d_ma_7d_ma r=-0.306
+
+=== rem_min_lag2_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + rem_min_lag1_lag2_lag3_7d_ma r=+0.970
+  + rem_min_lag1_lag3_3d_ma_7d_ma r=+0.956
+  + rem_min_lag1_lag2_lag3_3d_ma_7d_ma r=+0.956
+  + rem_min_lag2_lag3_7d_ma   r=+0.928
+  + rem_min_lag1_lag2_3d_ma_7d_ma r=+0.851
+Top negative correlations:
+  - steps_sum_lag2_lag3_7d_ma r=-0.384
+  - steps_sum_lag1_lag3_3d_ma_7d_ma r=-0.380
+  - steps_sum_lag2_lag3_3d_ma_7d_ma r=-0.380
+  - steps_sum_lag1_lag2_lag3_7d_ma r=-0.379
+  - steps_sum_lag1_lag2_lag3_3d_ma_7d_ma r=-0.365
+
+=== steps_sum_lag1_lag2_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + steps_sum_lag2_lag3_3d_ma_7d_ma r=+0.988
+  + steps_sum_lag1_lag2_lag3_7d_ma r=+0.984
+  + steps_sum_lag1_lag3_3d_ma_7d_ma r=+0.960
+  + steps_sum_lag2_lag3_7d_ma r=+0.951
+  + steps_sum_lag3_3d_ma_7d_ma r=+0.922
+Top negative correlations:
+  - rem_min_lag1_lag2_lag3_3d_ma_7d_ma r=-0.416
+  - basal_kcal_7d_ma          r=-0.378
+  - rem_min_lag2_lag3_3d_ma_7d_ma r=-0.365
+  - basal_kcal_3d_ma_7d_ma    r=-0.353
+  - glucose_mean_3d_ma_7d_ma  r=-0.347
+
+=== active_kcal_lag1_lag2_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + active_kcal_lag2_lag3_3d_ma_7d_ma r=+0.969
+  + active_kcal_lag1_lag2_lag3_7d_ma r=+0.959
+  + active_kcal_lag1_lag3_3d_ma_7d_ma r=+0.891
+  + active_kcal_lag2_lag3_7d_ma r=+0.871
+  + active_kcal_lag3_3d_ma_7d_ma r=+0.778
+Top negative correlations:
+  - glucose_mean_3d_ma_7d_ma  r=-0.351
+  - glucose_mean_7d_ma        r=-0.302
+  - resting_hr_bpm_lag1_7d_ma r=-0.273
+  - resting_hr_bpm_lag1_3d_ma_7d_ma r=-0.272
+  - resting_hr_bpm_3d_ma_7d_ma r=-0.270
+
+=== basal_kcal_lag1_lag2_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + basal_kcal_lag2_lag3_3d_ma_7d_ma r=+0.968
+  + basal_kcal_lag1_lag2_lag3_7d_ma r=+0.961
+  + basal_kcal_lag1_lag3_3d_ma_7d_ma r=+0.886
+  + basal_kcal_lag2_lag3_7d_ma r=+0.883
+  + basal_kcal_lag1_lag2_3d_ma_7d_ma r=+0.773
+Top negative correlations:
+  - deep_min_lag1_lag3_3d_ma_7d_ma r=-0.410
+  - deep_min_3d_ma_7d_ma      r=-0.380
+  - deep_min_lag2_lag3_3d_ma_7d_ma r=-0.375
+  - deep_min_lag2_lag3_7d_ma  r=-0.370
+  - deep_min_lag3_3d_ma_7d_ma r=-0.351
+
+=== resting_hr_bpm_lag1_lag2_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + resting_hr_bpm_lag2_lag3_3d_ma_7d_ma r=+0.956
+  + resting_hr_bpm_lag1_lag2_lag3_7d_ma r=+0.940
+  + resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=+0.851
+  + resting_hr_bpm_lag2_lag3_7d_ma r=+0.824
+  + resting_hr_bpm_lag3_3d_ma_7d_ma r=+0.720
+Top negative correlations:
+  - hrv_sdnn_ms_lag1_lag3_3d_ma_7d_ma r=-0.427
+  - hrv_sdnn_ms_lag3_3d_ma_7d_ma r=-0.422
+  - hrv_sdnn_ms_lag1_lag2_3d_ma_7d_ma r=-0.422
+  - hrv_sdnn_ms_lag1_lag2_lag3_7d_ma r=-0.422
+  - hrv_sdnn_ms_lag2_lag3_7d_ma r=-0.421
+
+=== hrv_sdnn_ms_lag1_lag2_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + hrv_sdnn_ms_lag2_lag3_3d_ma_7d_ma r=+0.978
+  + hrv_sdnn_ms_lag1_lag2_lag3_7d_ma r=+0.971
+  + hrv_sdnn_ms_lag1_lag3_3d_ma_7d_ma r=+0.921
+  + hrv_sdnn_ms_lag2_lag3_7d_ma r=+0.907
+  + hrv_sdnn_ms_lag3_3d_ma_7d_ma r=+0.840
+Top negative correlations:
+  - resting_hr_bpm_lag1_lag2_lag3_3d_ma_7d_ma r=-0.399
+  - resting_hr_bpm_lag2_lag3_3d_ma_7d_ma r=-0.392
+  - resting_hr_bpm_lag1_lag2_lag3_7d_ma r=-0.369
+  - resting_hr_bpm_lag1_lag3_3d_ma_7d_ma r=-0.355
+  - vo2max_ml_kg_min_lag1_lag3_3d_ma_7d_ma r=-0.348
+
+=== vo2max_ml_kg_min_lag1_lag2_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + vo2max_ml_kg_min_lag2_lag3_3d_ma_7d_ma r=+0.982
+  + vo2max_ml_kg_min_lag1_lag2_lag3_7d_ma r=+0.975
+  + vo2max_ml_kg_min_lag1_lag3_3d_ma_7d_ma r=+0.936
+  + vo2max_ml_kg_min_lag2_lag3_7d_ma r=+0.922
+  + vo2max_ml_kg_min_lag3_3d_ma_7d_ma r=+0.874
+Top negative correlations:
+  - glucose_mean_7d_ma        r=-0.575
+  - glucose_mean_3d_ma_7d_ma  r=-0.561
+  - glucose_mean_3d_ma        r=-0.510
+  - basal_kcal_3d_ma_7d_ma    r=-0.502
+  - basal_kcal_lag1_3d_ma_7d_ma r=-0.490
+
+=== total_min_lag1_lag2_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + total_min_lag2_lag3_3d_ma_7d_ma r=+0.974
+  + total_min_lag1_lag2_lag3_7d_ma r=+0.958
+  + total_min_lag1_lag3_3d_ma_7d_ma r=+0.911
+  + total_min_lag2_lag3_7d_ma r=+0.883
+  + total_min_lag1_lag2_3d_ma_7d_ma r=+0.830
+Top negative correlations:
+  - basal_kcal_lag2_lag3_7d_ma r=-0.057
+  - basal_kcal_lag1_lag3_3d_ma_7d_ma r=-0.054
+  - basal_kcal_lag3_3d_ma_7d_ma r=-0.053
+  - basal_kcal_lag1_lag2_3d_ma_7d_ma r=-0.053
+  - basal_kcal_lag1_lag3_7d_ma r=-0.050
+
+=== core_min_lag1_lag2_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + core_min_lag2_lag3_3d_ma_7d_ma r=+0.971
+  + core_min_lag1_lag2_lag3_7d_ma r=+0.955
+  + core_min_lag1_lag3_3d_ma_7d_ma r=+0.902
+  + core_min_lag2_lag3_7d_ma  r=+0.872
+  + core_min_lag3_3d_ma_7d_ma r=+0.815
+Top negative correlations:
+  - steps_sum_lag2_lag3_7d_ma r=-0.236
+  - steps_sum_lag1_lag2_lag3_7d_ma r=-0.236
+  - steps_sum_lag2_lag3_3d_ma_7d_ma r=-0.233
+  - steps_sum_lag1_lag3_3d_ma_7d_ma r=-0.232
+  - steps_sum_lag1_lag2_lag3_3d_ma r=-0.222
+
+=== deep_min_lag1_lag2_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + deep_min_lag2_lag3_3d_ma_7d_ma r=+0.931
+  + deep_min_lag1_lag2_lag3_7d_ma r=+0.875
+  + deep_min_lag1_lag3_3d_ma_7d_ma r=+0.773
+  + deep_min_lag2_lag3_7d_ma  r=+0.678
+  + deep_min_lag3_3d_ma_7d_ma r=+0.581
+Top negative correlations:
+  - basal_kcal_lag1_lag2_lag3_3d_ma_7d_ma r=-0.334
+  - basal_kcal_lag1_lag2_lag3_7d_ma r=-0.306
+  - basal_kcal_lag2_lag3_3d_ma_7d_ma r=-0.301
+  - basal_kcal_lag2_lag3_7d_ma r=-0.264
+  - basal_kcal_lag1_lag3_3d_ma_7d_ma r=-0.263
+
+=== rem_min_lag1_lag2_lag3_3d_ma_7d_ma ===
+Top positive correlations:
+  + rem_min_lag2_lag3_3d_ma_7d_ma r=+0.956
+  + rem_min_lag1_lag2_lag3_7d_ma r=+0.928
+  + rem_min_lag1_lag3_3d_ma_7d_ma r=+0.849
+  + rem_min_lag2_lag3_7d_ma   r=+0.802
+  + core_min_lag1_lag2_lag3_3d_ma_7d_ma r=+0.778
+Top negative correlations:
+  - steps_sum_lag1_lag2_lag3_7d_ma r=-0.422
+  - steps_sum_lag2_lag3_3d_ma_7d_ma r=-0.420
+  - steps_sum_lag1_lag2_lag3_3d_ma_7d_ma r=-0.416
+  - steps_sum_lag2_lag3_7d_ma r=-0.405
+  - steps_sum_lag1_lag3_3d_ma_7d_ma r=-0.401
+
+=== energy_score ===
+Top positive correlations:
+  + active_kcal               r=+0.837
+  + basal_kcal                r=+0.831
+  + active_kcal_3d_ma         r=+0.583
+  + active_kcal_7d_ma         r=+0.402
+  + basal_kcal_3d_ma          r=+0.330
+Top negative correlations:
+  - deep_min_lag2_3d_ma       r=-0.156
+  - hrv_sdnn_ms_3d_ma         r=-0.149
+  - deep_min_3d_ma            r=-0.143
+  - steps_sum_lag1_lag2_lag3  r=-0.143
+  - hrv_sdnn_ms_lag2          r=-0.136
