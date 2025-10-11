@@ -16,6 +16,10 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import re
 
+from statsmodels.stats.multitest import multipletests
+from scipy.stats import pearsonr
+
+
 from pb_client import get_token, fetch_records
 
 
@@ -261,6 +265,62 @@ def make_daily_features(base_url, email, password, user_id, start, end,
 # =========================
 # ---- MODEL HELPERS ----
 # =========================
+
+def significant_correlations(feat: pd.DataFrame,
+                             min_abs_r: float = 0.20,
+                             alpha: float = 0.10,
+                             per_target_top_k: int = 10):
+    """
+    For every numeric column, compute Pearson r with every other numeric column,
+    get p-values, apply BH-FDR (per target), and return only significant pairs:
+      |r| >= min_abs_r AND q < alpha.
+    Returns: dict[target] -> {"top_pos": [(feat, r, p, q), ...],
+                              "top_neg": [(feat, r, p, q), ...]}
+    """
+    numeric = feat.select_dtypes(include=[np.number]).copy()
+    targets = list(numeric.columns)
+    out = {}
+    for tgt in targets:
+        others = [c for c in targets if c != tgt]
+        if not others:
+            out[tgt] = {"top_pos": [], "top_neg": []}
+            continue
+
+        # compute r and p for tgt vs all others
+        r_list, p_list = [], []
+        for c in others:
+            x = numeric[tgt]
+            y = numeric[c]
+            mask = x.notna() & y.notna()
+            if mask.sum() < 6:  # tiny n guard
+                r_list.append(np.nan); p_list.append(np.nan); continue
+            r, p = pearsonr(x[mask], y[mask])
+            r_list.append(r); p_list.append(p)
+
+        pairs = pd.DataFrame({"feature": others, "r": r_list, "p": p_list}).dropna()
+        if pairs.empty:
+            out[tgt] = {"top_pos": [], "top_neg": []}
+            continue
+
+        # FDR per target
+        _, qvals, _, _ = multipletests(pairs["p"].values, method="fdr_bh")
+        pairs["q"] = qvals
+
+        # filter by effect size + FDR
+        sig = pairs[(pairs["r"].abs() >= min_abs_r) & (pairs["q"] < alpha)].copy()
+        if sig.empty:
+            out[tgt] = {"top_pos": [], "top_neg": []}
+            continue
+
+        sig_pos = sig.sort_values(["r"], ascending=False).head(per_target_top_k)
+        sig_neg = sig.sort_values(["r"], ascending=True).head(per_target_top_k)
+
+        out[tgt] = {
+            "top_pos": [(row["feature"], float(row["r"]), float(row["p"]), float(row["q"])) for _, row in sig_pos.iterrows()],
+            "top_neg": [(row["feature"], float(row["r"]), float(row["p"]), float(row["q"])) for _, row in sig_neg.iterrows()],
+        }
+    return out
+
 
 def drop_high_vif(data: pd.DataFrame, X_cols: List[str], thresh: float = 10.0) -> List[str]:
     """Greedy VIF pruning; safe for tiny or empty sets."""
@@ -533,6 +593,23 @@ def main():
             for k,v in top_neg.items():
                 f.write(f"  - {k:25s} r={v:+.3f}\n")
     print(f"💾 top_correlations.txt saved ({len(numeric_cols)} targets)")
+
+        # Significant correlations with FDR (descriptive significance)
+    sig_corrs = significant_correlations(feat, min_abs_r=0.20, alpha=0.10, per_target_top_k=10)
+    # Save human-readable and JSON
+    with open(outdir / "significant_correlations.txt", "w") as f:
+        for tgt, d in sig_corrs.items():
+            f.write(f"\n=== {tgt} ===\n")
+            f.write("Top positive (q<0.10, |r|>=0.20):\n")
+            for name, r, p, qv in d["top_pos"]:
+                f.write(f"  + {name:28s} r={r:+.3f}  p={p:.4g}  q={qv:.4g}\n")
+            f.write("Top negative (q<0.10, |r|>=0.20):\n")
+            for name, r, p, qv in d["top_neg"]:
+                f.write(f"  - {name:28s} r={r:+.3f}  p={p:.4g}  q={qv:.4g}\n")
+
+    with open(outdir / "significant_correlations.json", "w") as f:
+        json.dump(sig_corrs, f, indent=2)
+
     
 
     # choose targets
@@ -557,36 +634,39 @@ def main():
     print(f"🎯 Targets to model: {targets}")
 
     all_metrics = {}
+    all_ols_summaries = []   # collect text of all OLS summaries
+    all_hac_summaries = []   # collect text of all HAC summaries
+    all_effect_rows = []     # collect rows for a single CSV of effects (OLS HC3)
 
     for tgt in targets:
         try:
             print(f"\n🚀 Running model for target: {tgt}")
             res = fit_models(feat, tgt)
 
-            subdir = outdir  # ✅ keep all outputs flat
+            # ===== collect per-model artifacts (NO per-target files) =====
+            # OLS/HAC summaries as text blocks for the big files
+            all_ols_summaries.append(f"\n=== {tgt} (n={res['n_obs']}) ===\n{res['ols'].summary()}\n")
+            all_hac_summaries.append(f"\n=== {tgt} (n={res['n_obs']}) ===\n{res['hac'].summary()}\n")
 
-            # write per-target artifacts
-            (subdir / "daily_features.columns.txt").write_text("\n".join(feat.columns))
-
-            # === compact per-target outputs ===
-            # write the OLS and HAC summaries into unified flat files
-            (subdir / f"{tgt}_model_ols.txt").write_text(str(res["ols"].summary()))
-            (subdir / f"{tgt}_model_hac.txt").write_text(str(res["hac"].summary()))
-
-            # also keep a quick human summary of top effects
+            # Effects table (use OLS HC3; add FDR across predictors within this model)
             coefs = res["ols"].params.drop("const", errors="ignore")
             pvals = res["ols"].pvalues.drop("const", errors="ignore")
-            top = (
-                pd.DataFrame({"coef": coefs, "p": pvals})
-                .sort_values("p")
-                .head(5)
-            )
-            lines = [f"Target: {tgt}", f"n={res['n_obs']}", ""]
-            for i, row in top.iterrows():
-                direction = "↑" if row["coef"] > 0 else "↓"
-                lines.append(f"- {i}: {direction}{abs(row['coef']):.4f} (p={row['p']:.3f})")
-            (subdir / f"{tgt}_top_effects.txt").write_text("\n".join(lines))
+            if len(pvals) > 0:
+                _, q = multipletests(pvals.values, method="fdr_bh")[:2]
+            else:
+                q = np.array([])
 
+            for (name, coef), p, qv in zip(coefs.items(), pvals.values, q):
+                all_effect_rows.append({
+                    "target": tgt,
+                    "predictor": name,
+                    "coef": float(coef),
+                    "p": float(p),
+                    "q": float(qv),
+                    "n_obs": int(res["n_obs"])
+                })
+
+            # Metrics registry
             all_metrics[tgt] = {
                 "n_obs": res["n_obs"],
                 "r2": float(res["ols"].rsquared),
@@ -598,6 +678,16 @@ def main():
 
         except Exception as e:
             print(f"❌ Failed {tgt}: {e}")
+
+        # === Write consolidated model outputs ===
+    (outdir / "all_models_ols.txt").write_text("".join(all_ols_summaries) if all_ols_summaries else "")
+    (outdir / "all_models_hac.txt").write_text("".join(all_hac_summaries) if all_hac_summaries else "")
+
+    if all_effect_rows:
+        eff_df = pd.DataFrame(all_effect_rows).sort_values(["target","q","p","predictor"])
+        eff_df.to_csv(outdir / "all_effects.csv", index=False)
+    else:
+        pd.DataFrame(columns=["target","predictor","coef","p","q","n_obs"]).to_csv(outdir / "all_effects.csv", index=False)
 
 
     # combined summary
@@ -641,19 +731,20 @@ def main():
     combined = []
     for tgt, vals in all_metrics.items():
         entry = {"target": tgt, "metrics": vals}
-        top_path = outdir / f"{tgt}_top_effects.txt"
-        if top_path.exists():
-            try:
-                lines = open(top_path).read().splitlines()
-                top = [ln for ln in lines if "coef=" in ln][:5]
-                entry["top_effects"] = top
-            except Exception as e:
-                entry["top_effects"] = [f"(error reading {top_path.name}: {e})"]
-        else:
-            entry["top_effects"] = []
+
+        # keep any existing 'top_effects' logic if you want; otherwise drop it:
+        entry["top_effects"] = []
+
+        # attach significant descriptive correlations (if any)
+        sc = sig_corrs.get(tgt, {"top_pos": [], "top_neg": []})
+        # make it compact for JSON
+        entry["significant_correlations"] = {
+            "top_pos": [{"feature": n, "r": r, "p": p, "q": q} for (n, r, p, q) in sc["top_pos"]],
+            "top_neg": [{"feature": n, "r": r, "p": p, "q": q} for (n, r, p, q) in sc["top_neg"]],
+        }
+
         combined.append(entry)
 
-    import json
     with open(outdir / "combined_models.json", "w") as f:
         json.dump(combined, f, indent=2)
     print(f"📦 Consolidated summary saved to {outdir/'combined_models.json'}")
