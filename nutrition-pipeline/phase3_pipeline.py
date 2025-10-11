@@ -227,11 +227,16 @@ def make_daily_features(base_url, email, password, user_id, start, end,
     # 🔹 Remove any duplicated column names that might appear after merges
     base = base.loc[:, ~base.columns.duplicated()]
 
-    # lags 1..3 for numeric columns (but not for glucose_mean itself)
+        # lags 1..3 for numeric columns (but not for glucose_mean itself)
     for lag in [1,2,3]:
         for c in base.select_dtypes(include=[np.number]).columns:
             if c!="glucose_mean":
                 base[f"{c}_lag{lag}"]=base[c].shift(lag)
+
+    # rolling averages for all numeric features (3- & 7-day)
+    for w in [3,7]:
+        for c in base.select_dtypes(include=[np.number]).columns:
+            base[f"{c}_{w}d_ma"] = base[c].rolling(w, min_periods=2).mean()
 
     # moving averages (glucose)
     if "glucose_mean" in base.columns:
@@ -250,6 +255,7 @@ def make_daily_features(base_url, email, password, user_id, start, end,
     base["dow_cos"]=np.cos(2*np.pi*base["dow"]/7)
 
     return base
+
 
 
 # =========================
@@ -403,19 +409,36 @@ def save_metrics(res: dict, d: Path, ts: str) -> Path:
     return p
 
 def write_human_summary(res: dict, outdir: Path) -> None:
+    from statsmodels.stats.multitest import multipletests
+
     model = res["hac"]
-    coefs = model.params.drop("const",errors="ignore")
-    pvals = model.pvalues.drop("const",errors="ignore")
-    eff = (pd.DataFrame({"coef":coefs,"p":pvals}).sort_values("p").head(5))
+    coefs = model.params.drop("const", errors="ignore")
+    pvals = model.pvalues.drop("const", errors="ignore")
+
+    # FDR (Benjamini–Hochberg) correction
+    if len(pvals) > 1:
+        _, qvals, _, _ = multipletests(pvals, method="fdr_bh")
+    else:
+        qvals = np.ones_like(pvals)
+
+    eff = (
+        pd.DataFrame({"coef": coefs, "p": pvals, "q": qvals})
+        .sort_values("q")
+        .head(10)
+    )
+
     lines = [
         f"Target: {res['target']}",
         f"n={res['n_obs']}  R²={model.rsquared:.3f}  adjR²={model.rsquared_adj:.3f}",
-        "Top effects (HAC):"
+        "Top effects (HAC, FDR-corrected):"
     ]
-    for i,r in eff.iterrows():
-        direction = "↑" if r["coef"]>0 else "↓"
-        lines.append(f"- {i}: {direction}{abs(r['coef']):.3f} (p={r['p']:.3f})")
-    (outdir/"summary_readable.txt").write_text("\n".join(lines))
+    for i, r in eff.iterrows():
+        direction = "↑" if r["coef"] > 0 else "↓"
+        lines.append(
+            f"- {i}: {direction}{abs(r['coef']):.3f} (p={r['p']:.3f}, q={r['q']:.3f})"
+        )
+    (outdir / "summary_readable.txt").write_text("\n".join(lines))
+
 
 def make_pdf_report(d: Path, ts: str, metrics_path: Path) -> None:
     pdfp = d / f"model_report_{ts}.pdf"
@@ -480,6 +503,11 @@ def main():
         args.map_heart, args.map_sleep
     )
     feat.to_csv(outdir / "daily_features.csv", index=False)
+
+        # remove numeric columns with <10 unique values (avoid constants)
+    for c in feat.select_dtypes(include=[np.number]).columns:
+        if feat[c].nunique() < 10:
+            feat.drop(columns=[c], inplace=True)
 
     # choose targets
     # === Phase A: full predictability map ===
