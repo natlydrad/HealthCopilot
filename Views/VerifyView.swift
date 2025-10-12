@@ -20,10 +20,8 @@ struct VerifyView: View {
                     meal: meal,
                     baseURL: SyncManager.shared.baseURL,
                     token: SyncManager.shared.token ?? "",
-                    onTap: {
-                        mealToEdit = meal
-                        isEditingSheetPresented = true
-                    }
+                    onTap: { mealToEdit = meal }
+
                 )
             }
             .onDelete { offsets in
@@ -37,25 +35,20 @@ struct VerifyView: View {
             SyncManager.shared.fetchMeals()
         }
         // Simple sheet – no heavy generic Binding to infer
-        .sheet(isPresented: $isEditingSheetPresented) {
-            if let meal = mealToEdit {
-                EditMealSheet(
-                    meal: meal,
-                    onSave: { newText, newDate, newImageData in
-                        store.updateMeal(meal: meal,
-                                         newText: newText,
-                                         newDate: newDate,
-                                         newImageData: newImageData)
-                        mealToEdit = nil
-                        isEditingSheetPresented = false
-                    },
-                    onCancel: {
-                        mealToEdit = nil
-                        isEditingSheetPresented = false
-                    }
-                )
-            }
+        .sheet(item: $mealToEdit) { meal in
+            EditMealSheet(
+                meal: meal,
+                onSave: { newText, newDate, newImageData in
+                    store.updateMeal(meal: meal,
+                                     newText: newText,
+                                     newDate: newDate,
+                                     newImageData: newImageData)
+                    mealToEdit = nil
+                },
+                onCancel: { mealToEdit = nil }
+            )
         }
+
         .navigationTitle("Verify Meals")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
