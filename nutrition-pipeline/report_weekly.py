@@ -59,53 +59,88 @@ def summarize_week(df, start, norms=None, effects=None):
     week = df[(df["date"] >= start) & (df["date"] <= end)]
     if week.empty:
         return f"_No data for week starting {start.date()}._"
-    all_stats = []
-    num_cols = [c for c in df.columns if c != "date" and np.issubdtype(df[c].dtype, np.number)]
+
+    # === only keep core metrics ===
+    KEEP = [
+        "steps_sum", "active_kcal", "basal_kcal",
+        "resting_hr_bpm", "hrv_sdnn_ms", "vo2max_ml_kg_min",
+        "glucose_mean", "sleep_hours", "rem_min", "deep_min", "core_min", "total_min"
+    ]
+    df = df[[c for c in df.columns if c in KEEP or c == "date"]]
+    week = week[[c for c in week.columns if c in KEEP or c == "date"]]
+
+    CATEGORIES = {
+        "Activity": ["steps_sum", "active_kcal"],
+        "Cardiovascular": ["resting_hr_bpm", "hrv_sdnn_ms", "vo2max_ml_kg_min"],
+        "Metabolic": ["glucose_mean"],
+        "Sleep": ["sleep_hours", "rem_min", "deep_min", "core_min", "total_min"],
+        "Energy": ["basal_kcal"]
+    }
+
+    PRETTY = {
+        "steps_sum": "Daily steps",
+        "active_kcal": "Active calories",
+        "basal_kcal": "Basal calories",
+        "resting_hr_bpm": "Resting HR",
+        "hrv_sdnn_ms": "HRV (SDNN)",
+        "vo2max_ml_kg_min": "VO₂max",
+        "glucose_mean": "Mean glucose",
+        "sleep_hours": "Sleep hours",
+        "rem_min": "REM sleep (min)",
+        "deep_min": "Deep sleep (min)",
+        "core_min": "Core sleep (min)",
+        "total_min": "Total sleep (min)"
+    }
+
     lines = [f"# 🩺 Weekly Health Report ({start.date()} – {end.date()})", ""]
     lines.append(f"Data coverage: {len(week)} / 7 days.\n")
 
-    for col in num_cols:
-        week_mean = week[col].mean(skipna=True)
-        all_mean = df[col].mean(skipna=True)
-        if not np.isfinite(week_mean) or not np.isfinite(all_mean):
-            continue
-        change = ((week_mean - all_mean) / all_mean * 100) if all_mean else 0
-        arrow = "↑" if change > 0 else ("↓" if change < 0 else "→")
-        pct_str = f"{change:+.1f}%" if abs(change) >= 0.5 else "≈0%"
-        desc = f"- **{col.replace('_',' ')}**: {arrow} {pct_str} vs all-time (avg {all_mean:.2f})."
-        # Add population context if available
-        if norms is not None:
-            try:
-                ref = lookup_norm(col, week_mean, norms=norms)
-                if ref:
-                    mean, sd, pct, src = ref
-                    desc += f" → {pct:.0f}ᵗʰ percentile (ref μ={mean:.1f}, σ={sd:.1f})."
-            except Exception:
-                pass
-        lines.append(desc)
-        all_stats.append((col, change))
-    lines.append("")
+    # === loop by category ===
+    for cat, cols in CATEGORIES.items():
+        section_lines = []
+        for col in cols:
+            if col not in df.columns: 
+                continue
+            week_mean = week[col].mean(skipna=True)
+            all_mean = df[col].mean(skipna=True)
+            if not np.isfinite(week_mean) or not np.isfinite(all_mean): 
+                continue
+            change = ((week_mean - all_mean) / all_mean * 100) if all_mean else 0
+            arrow = "↑" if change > 0 else ("↓" if change < 0 else "→")
+            pct_str = f"{change:+.1f}%" if abs(change) >= 0.5 else "≈0%"
+            desc = f"- **{PRETTY[col]}**: {arrow} {pct_str} vs all-time (avg {all_mean:.1f})."
 
-    # highlight top changes
-    top = sorted(all_stats, key=lambda x: abs(x[1]), reverse=True)[:5]
-    if top:
-        lines.append("## Highlights")
-        for col, ch in top:
-            if abs(ch) >= 5:
-                lines.append(f"✅ {col.replace('_',' ')} changed {ch:+.1f}% vs baseline.")
-        lines.append("")
+            # Add percentile context if available
+            if norms is not None:
+                try:
+                    ref = lookup_norm(col, week_mean, norms=norms)
+                    if ref:
+                        mean, sd, pct, src = ref
+                        desc += f" → {pct:.0f}ᵗʰ percentile (ref μ={mean:.1f}, σ={sd:.1f})."
+                        if pct < 25:
+                            desc += " ⚠️ below norm."
+                        elif pct > 75:
+                            desc += " ✅ above norm."
+                except Exception:
+                    pass
+            section_lines.append(desc)
 
-    # integrate effects for top levers
+        if section_lines:
+            lines.append(f"## {cat}")
+            lines += section_lines
+            lines.append("")
+
+    # === top 3 significant levers ===
     if effects is not None and not effects.empty:
-        sig = effects[effects["q"] < 0.05].copy()
-        sig = sig.sort_values("q").groupby("target").head(2)
+        sig = effects[effects["q"] < 0.05].sort_values("q").head(3)
         if not sig.empty:
             lines.append("## Key Relationships")
             for _, r in sig.iterrows():
-                direction = "↑" if r["coef"] > 0 else "↓"
-                lines.append(f"{direction} **{r['predictor']}** → {direction if r['coef']>0 else '↓'} {r['target']} (p={r['p']:.3f}, q={r['q']:.3f})")
+                dir_symbol = "↑" if r["coef"] > 0 else "↓"
+                lines.append(f"{dir_symbol} **{r['predictor']}** → {dir_symbol if r['coef']>0 else '↓'} {r['target']} (p={r['p']:.3f}, q={r['q']:.3f})")
             lines.append("")
     return "\n".join(lines)
+
 
 def main():
     latest = load_latest_results()
