@@ -41,9 +41,11 @@ struct MealRow: View {
             Group {
                 if let pbId = meal.pbId,
                    let photo = meal.photo,
-                   let url = URL(string: "\(baseURL)/api/files/meals/\(pbId)/\(photo)") {
-                    // ✅ Server-hosted image
+                   !photo.isEmpty,
+                   let url = URL(string: "\(baseURL)/api/files/meals/\(pbId)/\(photo)"),
+                   url.scheme?.hasPrefix("http") == true {
                     AuthorizedAsyncImage(url: url, token: token)
+
                         .onAppear {
                             print("🖼️ THUMB (PB): \(pbId) \(photo)")
                         }
