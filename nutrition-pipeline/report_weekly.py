@@ -31,19 +31,106 @@ def load_norm_bank(path="norms_param.csv"):
     if not p.exists(): return None
     return pd.read_csv(p)
 
-def lookup_norm(metric, value, age=AGE, sex=SEX, norms=None):
-    if norms is None or norms.empty or metric not in norms.metric.values:
-        return None
-    ref = norms[(norms.metric == metric) &
-                (norms.age_min <= age) & (norms.age_max >= age) &
-                (norms.sex.str.lower().isin([sex.lower(), "any", "all"]))]
+# --- Population norm lookup ----------------------------------
 
-    if ref.empty: return None
-    ref = ref.iloc[0]
-    mean, sd = float(ref["mean"]), float(ref["sd"])
-    z = (value - mean) / sd if sd > 0 else 0
-    pct = 0.5 * (1 + erf(z / sqrt(2))) * 100
-    return mean, sd, pct, ref.get("source", "")
+def lookup_norm(name: str):
+    norms = {
+        "glucose_mean": {"mu": 100.0, "sigma": 10.0, "label": "24 h CGM reference"},
+        "steps_sum": {"mu": 7500.0, "sigma": 3000.0, "label": "daily average"},
+        "active_kcal": {"mu": 450.0, "sigma": 250.0, "label": "daily average"},
+        "basal_kcal": {"mu": 1500.0, "sigma": 200.0, "label": "daily average"},
+        "resting_hr_bpm": {"mu": 72.0, "sigma": 9.0, "label": "resting average"},
+        "hrv_sdnn_ms": {"mu": 50.0, "sigma": 20.0, "label": "resting average"},
+        "vo2max_ml_kg_min": {"mu": 38.5, "sigma": 7.0, "label": "population average"},
+        "total_min": {"mu": 432.0, "sigma": 66.0, "label": "daily sleep"},
+        "core_min": {"mu": 270.0, "sigma": 50.0, "label": "daily sleep"},
+        "deep_min": {"mu": 80.0, "sigma": 30.0, "label": "daily sleep"},
+        "rem_min": {"mu": 100.0, "sigma": 30.0, "label": "daily sleep"},
+    }
+    return norms.get(name.lower(), None)
+
+
+# --- Helper to convert z-score -> percentile + emoji ----------
+
+def percentile_from_z(z):
+    from math import erf, sqrt
+    pct = 50 * (1 + erf(z / sqrt(2)))
+    if pct < 10 or pct > 90:
+        flag = "🔴"
+    elif pct < 25 or pct > 75:
+        flag = "🟠"
+    else:
+        flag = "🟢"
+    return pct, flag
+
+
+# --- Write weekly report with clearer labels ------------------
+
+def write_weekly_report(outdir, week_df, all_df, effects, week_range):
+    lines = []
+    start, end = week_range
+    lines.append(f"# 🩺 Weekly Health Report ({start.date()} – {end.date()})\n")
+    lines.append(f"Data coverage: {len(week_df)} / 7 days.\n")
+
+    # --- COACH SUMMARY ---
+    deltas = []
+    for metric in ["steps_sum", "hrv_sdnn_ms", "deep_min", "glucose_mean"]:
+        if metric in week_df.columns:
+            mu_all = all_df[metric].mean()
+            mu_week = week_df[metric].mean()
+            change = (mu_week - mu_all) / mu_all * 100
+            deltas.append((metric, change))
+    summary = []
+    if any(m == "steps_sum" and c > 10 for m, c in deltas):
+        summary.append("You walked more than usual 🏃‍♀️ and kept strong activity.")
+    if any(m == "hrv_sdnn_ms" and c > 5 for m, c in deltas):
+        summary.append("Your recovery metrics (HRV) improved 💪.")
+    if any(m == "glucose_mean" and c > 0 for m, c in deltas):
+        summary.append("Glucose averaged slightly higher than your long-term norm ⚠️.")
+    if any(m == "deep_min" and c < 0 for m, c in deltas):
+        summary.append("Deep sleep dipped below your baseline 😴.")
+    if not summary:
+        summary.append("This week stayed close to your baseline across most systems.")
+    lines.append("## Overview\n" + " ".join(summary) + "\n")
+
+    # --- Per-domain metrics ---
+    sections = {
+        "Activity": ["steps_sum", "active_kcal"],
+        "Cardiovascular": ["resting_hr_bpm", "hrv_sdnn_ms", "vo2max_ml_kg_min"],
+        "Metabolic": ["glucose_mean"],
+        "Sleep": ["total_min", "core_min", "deep_min", "rem_min"],
+        "Energy": ["basal_kcal"],
+    }
+
+    for section, metrics in sections.items():
+        lines.append(f"\n## {section}")
+        for m in metrics:
+            if m not in week_df.columns:
+                continue
+            mu_all = all_df[m].mean()
+            mu_week = week_df[m].mean()
+            pct_diff = (mu_week - mu_all) / mu_all * 100
+            norm = lookup_norm(m)
+            if norm:
+                z = (mu_week - norm["mu"]) / norm["sigma"]
+                pct, flag = percentile_from_z(z)
+                label = norm.get("label", "")
+                lines.append(
+                    f"- **{m.replace('_',' ').title()}**: "
+                    f"vs-self {pct_diff:+.1f}%  |  vs-population {pct:.0f}ᵗʰ pct ({label}) {flag}"
+                )
+            else:
+                lines.append(f"- **{m}**: vs-self {pct_diff:+.1f}%")
+
+    # --- Relationships ---
+    lines.append("\n## Key Relationships")
+    for _, row in effects.head(3).iterrows():
+        pred, tgt = row["predictor"], row["target"]
+        direction = "↑" if row["coef"] > 0 else "↓"
+        lines.append(f"{direction} **{pred}** → {direction} **{tgt}** (p={row['p']:.3f})")
+
+    (outdir / f"weekly_report_{start.date()}.md").write_text("\n".join(lines))
+    print(f"✅ Weekly report written to {outdir}/weekly_report_{start.date()}.md")
 
 # ---------- Core ----------
 def load_latest_results(root=ROOT):
@@ -146,16 +233,22 @@ def main():
     latest = load_latest_results()
     df = pd.read_csv(latest / "daily_features.csv", parse_dates=["date"])
     effects_path = latest / "all_effects.csv"
-    effects = pd.read_csv(effects_path) if effects_path.exists() else None
+    effects = pd.read_csv(effects_path) if effects_path.exists() else pd.DataFrame()
     norms = load_norm_bank()
 
     # pick most recent full week
     max_date = df["date"].max().normalize()
     start = max_date - timedelta(days=6)
-    out = summarize_week(df, start, norms=norms, effects=effects)
-    out_path = latest / f"weekly_report_{start.date()}.md"
-    out_path.write_text(out)
-    print(f"📝 Weekly report saved to {out_path}")
+    end = max_date
+
+    # use the *new* write_weekly_report instead of summarize_week
+    write_weekly_report(
+        outdir=latest,
+        week_df=df[(df["date"] >= start) & (df["date"] <= end)],
+        all_df=df,
+        effects=effects,
+        week_range=(start, end),
+    )
 
 if __name__ == "__main__":
     main()
