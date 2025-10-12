@@ -6,6 +6,40 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		586DBAC02E9C4344006C3DCA /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAAC2E9C4344006C3DCA /* DashboardView.swift */; };
+		586DBAC12E9C4344006C3DCA /* GlucoseScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAB02E9C4344006C3DCA /* GlucoseScreen.swift */; };
+		586DBAC22E9C4344006C3DCA /* MealHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAB42E9C4344006C3DCA /* MealHistoryView.swift */; };
+		586DBAC32E9C4344006C3DCA /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAAA2E9C4344006C3DCA /* ChatView.swift */; };
+		586DBAC42E9C4344006C3DCA /* VerifySubviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBABD2E9C4344006C3DCA /* VerifySubviews.swift */; };
+		586DBAC52E9C4344006C3DCA /* HealthSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAA22E9C4344006C3DCA /* HealthSyncManager.swift */; };
+		586DBAC62E9C4344006C3DCA /* MealLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAB62E9C4344006C3DCA /* MealLog.swift */; };
+		586DBAC72E9C4344006C3DCA /* MealLogManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAA32E9C4344006C3DCA /* MealLogManager.swift */; };
+		586DBAC82E9C4344006C3DCA /* Meal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAA62E9C4344006C3DCA /* Meal.swift */; };
+		586DBAC92E9C4344006C3DCA /* HealthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAA12E9C4344006C3DCA /* HealthManager.swift */; };
+		586DBACA2E9C4344006C3DCA /* MealRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAB72E9C4344006C3DCA /* MealRowView.swift */; };
+		586DBACB2E9C4344006C3DCA /* HealthCopilotApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBA9D2E9C4344006C3DCA /* HealthCopilotApp.swift */; };
+		586DBACC2E9C4344006C3DCA /* MealInsightView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAB52E9C4344006C3DCA /* MealInsightView.swift */; };
+		586DBACD2E9C4344006C3DCA /* 0.ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAA82E9C4344006C3DCA /* 0.ContentView.swift */; };
+		586DBACE2E9C4344006C3DCA /* GenInsightView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAAD2E9C4344006C3DCA /* GenInsightView.swift */; };
+		586DBACF2E9C4344006C3DCA /* CombinedDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAAB2E9C4344006C3DCA /* CombinedDetailView.swift */; };
+		586DBAD02E9C4344006C3DCA /* CameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBABA2E9C4344006C3DCA /* CameraView.swift */; };
+		586DBAD12E9C4344006C3DCA /* HealthKitManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAA02E9C4344006C3DCA /* HealthKitManager.swift */; };
+		586DBAD22E9C4344006C3DCA /* LogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBABB2E9C4344006C3DCA /* LogView.swift */; };
+		586DBAD32E9C4344006C3DCA /* HealthSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAB22E9C4344006C3DCA /* HealthSummary.swift */; };
+		586DBAD42E9C4344006C3DCA /* SyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAA42E9C4344006C3DCA /* SyncManager.swift */; };
+		586DBAD52E9C4344006C3DCA /* GlucoseModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAAF2E9C4344006C3DCA /* GlucoseModels.swift */; };
+		586DBAD62E9C4344006C3DCA /* VerifyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBABE2E9C4344006C3DCA /* VerifyView.swift */; };
+		586DBAD72E9C4344006C3DCA /* GPTVisionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBA9F2E9C4344006C3DCA /* GPTVisionService.swift */; };
+		586DBAD82E9C4344006C3DCA /* NutritionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAB82E9C4344006C3DCA /* NutritionView.swift */; };
+		586DBAD92E9C4344006C3DCA /* GlucoseGraphView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAAE2E9C4344006C3DCA /* GlucoseGraphView.swift */; };
+		586DBADA2E9C4344006C3DCA /* 0.HealthCopilotApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAA92E9C4344006C3DCA /* 0.HealthCopilotApp.swift */; };
+		586DBADB2E9C4344006C3DCA /* InsightGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAB32E9C4344006C3DCA /* InsightGenerator.swift */; };
+		586DBADC2E9C4344006C3DCA /* SyncStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBABC2E9C4344006C3DCA /* SyncStatusView.swift */; };
+		586DBADD2E9C4344006C3DCA /* GPTService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAB12E9C4344006C3DCA /* GPTService.swift */; };
+		586DBADE2E9C4344006C3DCA /* MealStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAA72E9C4344006C3DCA /* MealStore.swift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		581C378D2E17599E002D6789 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,27 +61,41 @@
 		581C377F2E17599C002D6789 /* HealthCopilot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HealthCopilot.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		581C378C2E17599E002D6789 /* HealthCopilotTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HealthCopilotTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		581C37962E17599E002D6789 /* HealthCopilotUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HealthCopilotUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		586DBA9D2E9C4344006C3DCA /* HealthCopilotApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthCopilotApp.swift; sourceTree = "<group>"; };
+		586DBA9E2E9C4344006C3DCA /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		586DBA9F2E9C4344006C3DCA /* GPTVisionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPTVisionService.swift; sourceTree = "<group>"; };
+		586DBAA02E9C4344006C3DCA /* HealthKitManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitManager.swift; sourceTree = "<group>"; };
+		586DBAA12E9C4344006C3DCA /* HealthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthManager.swift; sourceTree = "<group>"; };
+		586DBAA22E9C4344006C3DCA /* HealthSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSyncManager.swift; sourceTree = "<group>"; };
+		586DBAA32E9C4344006C3DCA /* MealLogManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealLogManager.swift; sourceTree = "<group>"; };
+		586DBAA42E9C4344006C3DCA /* SyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncManager.swift; sourceTree = "<group>"; };
+		586DBAA62E9C4344006C3DCA /* Meal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Meal.swift; sourceTree = "<group>"; };
+		586DBAA72E9C4344006C3DCA /* MealStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealStore.swift; sourceTree = "<group>"; };
+		586DBAA82E9C4344006C3DCA /* 0.ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = 0.ContentView.swift; sourceTree = "<group>"; };
+		586DBAA92E9C4344006C3DCA /* 0.HealthCopilotApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = 0.HealthCopilotApp.swift; sourceTree = "<group>"; };
+		586DBAAA2E9C4344006C3DCA /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		586DBAAB2E9C4344006C3DCA /* CombinedDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CombinedDetailView.swift; sourceTree = "<group>"; };
+		586DBAAC2E9C4344006C3DCA /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		586DBAAD2E9C4344006C3DCA /* GenInsightView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenInsightView.swift; sourceTree = "<group>"; };
+		586DBAAE2E9C4344006C3DCA /* GlucoseGraphView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlucoseGraphView.swift; sourceTree = "<group>"; };
+		586DBAAF2E9C4344006C3DCA /* GlucoseModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlucoseModels.swift; sourceTree = "<group>"; };
+		586DBAB02E9C4344006C3DCA /* GlucoseScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlucoseScreen.swift; sourceTree = "<group>"; };
+		586DBAB12E9C4344006C3DCA /* GPTService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPTService.swift; sourceTree = "<group>"; };
+		586DBAB22E9C4344006C3DCA /* HealthSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSummary.swift; sourceTree = "<group>"; };
+		586DBAB32E9C4344006C3DCA /* InsightGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightGenerator.swift; sourceTree = "<group>"; };
+		586DBAB42E9C4344006C3DCA /* MealHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealHistoryView.swift; sourceTree = "<group>"; };
+		586DBAB52E9C4344006C3DCA /* MealInsightView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealInsightView.swift; sourceTree = "<group>"; };
+		586DBAB62E9C4344006C3DCA /* MealLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealLog.swift; sourceTree = "<group>"; };
+		586DBAB72E9C4344006C3DCA /* MealRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealRowView.swift; sourceTree = "<group>"; };
+		586DBAB82E9C4344006C3DCA /* NutritionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NutritionView.swift; sourceTree = "<group>"; };
+		586DBABA2E9C4344006C3DCA /* CameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraView.swift; sourceTree = "<group>"; };
+		586DBABB2E9C4344006C3DCA /* LogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogView.swift; sourceTree = "<group>"; };
+		586DBABC2E9C4344006C3DCA /* SyncStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncStatusView.swift; sourceTree = "<group>"; };
+		586DBABD2E9C4344006C3DCA /* VerifySubviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerifySubviews.swift; sourceTree = "<group>"; };
+		586DBABE2E9C4344006C3DCA /* VerifyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerifyView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		586529DB2E17FE6C007E7A74 /* Exceptions for "HealthCopilot" folder in "HealthCopilot" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = 581C377E2E17599C002D6789 /* HealthCopilot */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		581C37812E17599C002D6789 /* HealthCopilot */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				586529DB2E17FE6C007E7A74 /* Exceptions for "HealthCopilot" folder in "HealthCopilot" target */,
-			);
-			path = HealthCopilot;
-			sourceTree = "<group>";
-		};
 		581C378F2E17599E002D6789 /* HealthCopilotTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = HealthCopilotTests;
@@ -88,7 +136,13 @@
 		581C37762E17599C002D6789 = {
 			isa = PBXGroup;
 			children = (
-				581C37812E17599C002D6789 /* HealthCopilot */,
+				586DBA9D2E9C4344006C3DCA /* HealthCopilotApp.swift */,
+				586DBA9E2E9C4344006C3DCA /* Info.plist */,
+				586DBAA52E9C4344006C3DCA /* Managers */,
+				586DBAA62E9C4344006C3DCA /* Meal.swift */,
+				586DBAA72E9C4344006C3DCA /* MealStore.swift */,
+				586DBAB92E9C4344006C3DCA /* Scratch */,
+				586DBABF2E9C4344006C3DCA /* Views */,
 				581C378F2E17599E002D6789 /* HealthCopilotTests */,
 				581C37992E17599E002D6789 /* HealthCopilotUITests */,
 				581C37802E17599C002D6789 /* Products */,
@@ -105,6 +159,55 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		586DBAA52E9C4344006C3DCA /* Managers */ = {
+			isa = PBXGroup;
+			children = (
+				586DBA9F2E9C4344006C3DCA /* GPTVisionService.swift */,
+				586DBAA02E9C4344006C3DCA /* HealthKitManager.swift */,
+				586DBAA12E9C4344006C3DCA /* HealthManager.swift */,
+				586DBAA22E9C4344006C3DCA /* HealthSyncManager.swift */,
+				586DBAA32E9C4344006C3DCA /* MealLogManager.swift */,
+				586DBAA42E9C4344006C3DCA /* SyncManager.swift */,
+			);
+			path = Managers;
+			sourceTree = "<group>";
+		};
+		586DBAB92E9C4344006C3DCA /* Scratch */ = {
+			isa = PBXGroup;
+			children = (
+				586DBAA82E9C4344006C3DCA /* 0.ContentView.swift */,
+				586DBAA92E9C4344006C3DCA /* 0.HealthCopilotApp.swift */,
+				586DBAAA2E9C4344006C3DCA /* ChatView.swift */,
+				586DBAAB2E9C4344006C3DCA /* CombinedDetailView.swift */,
+				586DBAAC2E9C4344006C3DCA /* DashboardView.swift */,
+				586DBAAD2E9C4344006C3DCA /* GenInsightView.swift */,
+				586DBAAE2E9C4344006C3DCA /* GlucoseGraphView.swift */,
+				586DBAAF2E9C4344006C3DCA /* GlucoseModels.swift */,
+				586DBAB02E9C4344006C3DCA /* GlucoseScreen.swift */,
+				586DBAB12E9C4344006C3DCA /* GPTService.swift */,
+				586DBAB22E9C4344006C3DCA /* HealthSummary.swift */,
+				586DBAB32E9C4344006C3DCA /* InsightGenerator.swift */,
+				586DBAB42E9C4344006C3DCA /* MealHistoryView.swift */,
+				586DBAB52E9C4344006C3DCA /* MealInsightView.swift */,
+				586DBAB62E9C4344006C3DCA /* MealLog.swift */,
+				586DBAB72E9C4344006C3DCA /* MealRowView.swift */,
+				586DBAB82E9C4344006C3DCA /* NutritionView.swift */,
+			);
+			path = Scratch;
+			sourceTree = "<group>";
+		};
+		586DBABF2E9C4344006C3DCA /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				586DBABA2E9C4344006C3DCA /* CameraView.swift */,
+				586DBABB2E9C4344006C3DCA /* LogView.swift */,
+				586DBABC2E9C4344006C3DCA /* SyncStatusView.swift */,
+				586DBABD2E9C4344006C3DCA /* VerifySubviews.swift */,
+				586DBABE2E9C4344006C3DCA /* VerifyView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -119,9 +222,6 @@
 			buildRules = (
 			);
 			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				581C37812E17599C002D6789 /* HealthCopilot */,
 			);
 			name = HealthCopilot;
 			packageProductDependencies = (
@@ -249,6 +349,37 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				586DBAC02E9C4344006C3DCA /* DashboardView.swift in Sources */,
+				586DBAC12E9C4344006C3DCA /* GlucoseScreen.swift in Sources */,
+				586DBAC22E9C4344006C3DCA /* MealHistoryView.swift in Sources */,
+				586DBAC32E9C4344006C3DCA /* ChatView.swift in Sources */,
+				586DBAC42E9C4344006C3DCA /* VerifySubviews.swift in Sources */,
+				586DBAC52E9C4344006C3DCA /* HealthSyncManager.swift in Sources */,
+				586DBAC62E9C4344006C3DCA /* MealLog.swift in Sources */,
+				586DBAC72E9C4344006C3DCA /* MealLogManager.swift in Sources */,
+				586DBAC82E9C4344006C3DCA /* Meal.swift in Sources */,
+				586DBAC92E9C4344006C3DCA /* HealthManager.swift in Sources */,
+				586DBACA2E9C4344006C3DCA /* MealRowView.swift in Sources */,
+				586DBACB2E9C4344006C3DCA /* HealthCopilotApp.swift in Sources */,
+				586DBACC2E9C4344006C3DCA /* MealInsightView.swift in Sources */,
+				586DBACD2E9C4344006C3DCA /* 0.ContentView.swift in Sources */,
+				586DBACE2E9C4344006C3DCA /* GenInsightView.swift in Sources */,
+				586DBACF2E9C4344006C3DCA /* CombinedDetailView.swift in Sources */,
+				586DBAD02E9C4344006C3DCA /* CameraView.swift in Sources */,
+				586DBAD12E9C4344006C3DCA /* HealthKitManager.swift in Sources */,
+				586DBAD22E9C4344006C3DCA /* LogView.swift in Sources */,
+				586DBAD32E9C4344006C3DCA /* HealthSummary.swift in Sources */,
+				586DBAD42E9C4344006C3DCA /* SyncManager.swift in Sources */,
+				586DBAD52E9C4344006C3DCA /* GlucoseModels.swift in Sources */,
+				586DBAD62E9C4344006C3DCA /* VerifyView.swift in Sources */,
+				586DBAD72E9C4344006C3DCA /* GPTVisionService.swift in Sources */,
+				586DBAD82E9C4344006C3DCA /* NutritionView.swift in Sources */,
+				586DBAD92E9C4344006C3DCA /* GlucoseGraphView.swift in Sources */,
+				586DBADA2E9C4344006C3DCA /* 0.HealthCopilotApp.swift in Sources */,
+				586DBADB2E9C4344006C3DCA /* InsightGenerator.swift in Sources */,
+				586DBADC2E9C4344006C3DCA /* SyncStatusView.swift in Sources */,
+				586DBADD2E9C4344006C3DCA /* GPTService.swift in Sources */,
+				586DBADE2E9C4344006C3DCA /* MealStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -408,13 +539,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = HealthCopilot/HealthCopilot.entitlements;
+				CODE_SIGN_ENTITLEMENTS = HealthCopilot.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = MQR4ZQ59DP;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "$(SRCROOT)/HealthCopilot/Info.plist";
+				INFOPLIST_FILE = "$(SRCROOT)/Info.plist";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -439,13 +570,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = HealthCopilot/HealthCopilot.entitlements;
+				CODE_SIGN_ENTITLEMENTS = HealthCopilot.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = MQR4ZQ59DP;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "$(SRCROOT)/HealthCopilot/Info.plist";
+				INFOPLIST_FILE = "$(SRCROOT)/Info.plist";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
