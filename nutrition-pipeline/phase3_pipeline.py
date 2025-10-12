@@ -776,6 +776,11 @@ def main():
 
     interpret_results(outdir)   # <-- add this line
 
+<<<<<<< HEAD
+=======
+    
+
+>>>>>>> ebf6a02
 # =========================
 # ----- AUTO INTERPRET ----
 # =========================
@@ -847,5 +852,14 @@ def interpret_results(outdir: Path):
         print(f"\n⚠️ Auto-interpreter failed: {e}")
 
 
+<<<<<<< HEAD
 if __name__=="__main__":
     main()
+=======
+if __name__ == "__main__":
+    main()
+    # After stats finish, generate the human report automatically
+    import os
+    os.system("python3 unified_experiments.py")
+
+>>>>>>> ebf6a02
