@@ -1,0 +1,378 @@
+# 🩺 Weekly Health Report (2025-10-01 – 2025-10-07)
+
+Data coverage: 7 / 7 days.
+
+- **steps sum**: ↑ +115.5% vs all-time (avg 10067.55). → 100ᵗʰ percentile (ref μ=7500.0, σ=3000.0).
+- **glucose mean**: ↑ +2.6% vs all-time (avg 106.30). → 96ᵗʰ percentile (ref μ=95.0, σ=8.0).
+- **active kcal**: ↑ +6.4% vs all-time (avg 401.06). → 46ᵗʰ percentile (ref μ=450.0, σ=250.0).
+- **basal kcal**: ↓ -4.6% vs all-time (avg 1595.52). → 54ᵗʰ percentile (ref μ=1500.0, σ=200.0).
+- **resting hr bpm**: ↓ -0.9% vs all-time (avg 58.66). → 6ᵗʰ percentile (ref μ=72.0, σ=9.0).
+- **hrv sdnn ms**: ↑ +11.6% vs all-time (avg 104.82). → 100ᵗʰ percentile (ref μ=50.0, σ=20.0).
+- **vo2max ml kg min**: ↑ +132.5% vs all-time (avg 12.73). → 10ᵗʰ percentile (ref μ=38.5, σ=7.0).
+- **total min**: ↑ +5.5% vs all-time (avg 439.50). → 68ᵗʰ percentile (ref μ=432.0, σ=66.0).
+- **core min**: ↑ +12.8% vs all-time (avg 257.49). → 66ᵗʰ percentile (ref μ=270.0, σ=50.0).
+- **deep min**: ↑ +11.6% vs all-time (avg 44.10). → 15ᵗʰ percentile (ref μ=80.0, σ=30.0).
+- **rem min**: ↑ +20.1% vs all-time (avg 96.51). → 70ᵗʰ percentile (ref μ=100.0, σ=30.0).
+- **inbed min**: ↓ -100.0% vs all-time (avg 4.25).
+- **steps sum lag1**: ↑ +132.0% vs all-time (avg 9996.38).
+- **active kcal lag1**: ↑ +12.5% vs all-time (avg 400.73).
+- **basal kcal lag1**: ↓ -1.3% vs all-time (avg 1597.45).
+- **resting hr bpm lag1**: ↓ -2.3% vs all-time (avg 58.64).
+- **hrv sdnn ms lag1**: ↑ +9.5% vs all-time (avg 104.66).
+- **vo2max ml kg min lag1**: ↑ +135.7% vs all-time (avg 12.61).
+- **total min lag1**: ↑ +6.9% vs all-time (avg 439.40).
+- **core min lag1**: ↑ +12.3% vs all-time (avg 257.26).
+- **deep min lag1**: ↑ +27.9% vs all-time (avg 44.22).
+- **rem min lag1**: ↑ +20.0% vs all-time (avg 96.33).
+- **inbed min lag1**: ↓ -100.0% vs all-time (avg 4.27).
+- **steps sum lag2**: ↑ +139.0% vs all-time (avg 9987.42).
+- **active kcal lag2**: ↑ +9.3% vs all-time (avg 400.95).
+- **basal kcal lag2**: ↓ -4.8% vs all-time (avg 1597.41).
+- **resting hr bpm lag2**: ↓ -1.1% vs all-time (avg 58.66).
+- **hrv sdnn ms lag2**: ↑ +16.4% vs all-time (avg 104.66).
+- **vo2max ml kg min lag2**: ↑ +138.8% vs all-time (avg 12.49).
+- **total min lag2**: ↑ +6.3% vs all-time (avg 439.18).
+- **core min lag2**: ↑ +10.9% vs all-time (avg 257.07).
+- **deep min lag2**: ↑ +32.5% vs all-time (avg 44.14).
+- **rem min lag2**: ↑ +20.0% vs all-time (avg 96.18).
+- **inbed min lag2**: ↓ -100.0% vs all-time (avg 4.29).
+- **steps sum lag1 lag2**: ↑ +159.7% vs all-time (avg 10009.24).
+- **active kcal lag1 lag2**: ↑ +21.6% vs all-time (avg 402.71).
+- **basal kcal lag1 lag2**: ↓ -3.4% vs all-time (avg 1598.19).
+- **resting hr bpm lag1 lag2**: ↓ ≈0% vs all-time (avg 58.70).
+- **hrv sdnn ms lag1 lag2**: ↑ +17.4% vs all-time (avg 104.66).
+- **vo2max ml kg min lag1 lag2**: ↑ +177.2% vs all-time (avg 12.56).
+- **total min lag1 lag2**: ↑ +4.3% vs all-time (avg 438.71).
+- **core min lag1 lag2**: ↑ +7.9% vs all-time (avg 256.62).
+- **deep min lag1 lag2**: ↑ +30.2% vs all-time (avg 44.04).
+- **rem min lag1 lag2**: ↑ +18.2% vs all-time (avg 96.08).
+- **inbed min lag1 lag2**: ↓ -100.0% vs all-time (avg 4.32).
+- **steps sum lag3**: ↑ +159.7% vs all-time (avg 10009.24).
+- **active kcal lag3**: ↑ +21.6% vs all-time (avg 402.71).
+- **basal kcal lag3**: ↓ -3.4% vs all-time (avg 1598.19).
+- **resting hr bpm lag3**: ↓ ≈0% vs all-time (avg 58.70).
+- **hrv sdnn ms lag3**: ↑ +17.4% vs all-time (avg 104.66).
+- **vo2max ml kg min lag3**: ↑ +177.2% vs all-time (avg 12.56).
+- **total min lag3**: ↑ +4.3% vs all-time (avg 438.71).
+- **core min lag3**: ↑ +7.9% vs all-time (avg 256.62).
+- **deep min lag3**: ↑ +30.2% vs all-time (avg 44.04).
+- **rem min lag3**: ↑ +18.2% vs all-time (avg 96.08).
+- **inbed min lag3**: ↓ -100.0% vs all-time (avg 4.32).
+- **steps sum lag1 lag3**: ↑ +133.2% vs all-time (avg 9875.22).
+- **active kcal lag1 lag3**: ↑ +12.4% vs all-time (avg 401.39).
+- **basal kcal lag1 lag3**: ↓ -3.1% vs all-time (avg 1598.42).
+- **resting hr bpm lag1 lag3**: ↓ -2.1% vs all-time (avg 58.68).
+- **hrv sdnn ms lag1 lag3**: ↑ +20.3% vs all-time (avg 104.65).
+- **vo2max ml kg min lag1 lag3**: ↑ +180.6% vs all-time (avg 12.44).
+- **total min lag1 lag3**: ↑ +4.9% vs all-time (avg 438.89).
+- **core min lag1 lag3**: ↑ +11.8% vs all-time (avg 256.82).
+- **deep min lag1 lag3**: ↑ +9.5% vs all-time (avg 43.89).
+- **rem min lag1 lag3**: ↑ +18.0% vs all-time (avg 95.99).
+- **inbed min lag1 lag3**: ↓ -100.0% vs all-time (avg 4.34).
+- **steps sum lag2 lag3**: ↑ +118.5% vs all-time (avg 9791.21).
+- **active kcal lag2 lag3**: ↑ +4.6% vs all-time (avg 400.55).
+- **basal kcal lag2 lag3**: ↓ -3.2% vs all-time (avg 1598.35).
+- **resting hr bpm lag2 lag3**: ↓ -4.3% vs all-time (avg 58.65).
+- **hrv sdnn ms lag2 lag3**: ↑ +24.7% vs all-time (avg 104.70).
+- **vo2max ml kg min lag2 lag3**: ↑ +183.9% vs all-time (avg 12.32).
+- **total min lag2 lag3**: ↑ +8.1% vs all-time (avg 438.82).
+- **core min lag2 lag3**: ↑ +15.5% vs all-time (avg 256.66).
+- **deep min lag2 lag3**: ↑ +7.8% vs all-time (avg 43.81).
+- **rem min lag2 lag3**: ↑ +24.4% vs all-time (avg 95.96).
+- **inbed min lag2 lag3**: ↓ -100.0% vs all-time (avg 4.37).
+- **steps sum lag1 lag2 lag3**: ↑ +115.1% vs all-time (avg 9705.95).
+- **active kcal lag1 lag2 lag3**: ↑ +0.6% vs all-time (avg 400.09).
+- **basal kcal lag1 lag2 lag3**: ↓ -3.1% vs all-time (avg 1598.47).
+- **resting hr bpm lag1 lag2 lag3**: ↓ -3.1% vs all-time (avg 58.69).
+- **hrv sdnn ms lag1 lag2 lag3**: ↑ +26.2% vs all-time (avg 104.61).
+- **vo2max ml kg min lag1 lag2 lag3**: ↑ +186.5% vs all-time (avg 12.19).
+- **total min lag1 lag2 lag3**: ↑ +10.6% vs all-time (avg 438.80).
+- **core min lag1 lag2 lag3**: ↑ +17.7% vs all-time (avg 256.55).
+- **deep min lag1 lag2 lag3**: ↑ +19.4% vs all-time (avg 43.84).
+- **rem min lag1 lag2 lag3**: ↑ +21.4% vs all-time (avg 95.80).
+- **inbed min lag1 lag2 lag3**: ↓ -100.0% vs all-time (avg 4.39).
+- **steps sum 3d ma**: ↑ +128.6% vs all-time (avg 10022.88).
+- **glucose mean 3d ma**: ↑ +1.7% vs all-time (avg 106.26).
+- **active kcal 3d ma**: ↑ +9.3% vs all-time (avg 401.19).
+- **basal kcal 3d ma**: ↓ -3.6% vs all-time (avg 1597.91).
+- **resting hr bpm 3d ma**: ↓ -1.5% vs all-time (avg 58.71).
+- **hrv sdnn ms 3d ma**: ↑ +12.5% vs all-time (avg 104.70).
+- **vo2max ml kg min 3d ma**: ↑ +135.0% vs all-time (avg 12.64).
+- **total min 3d ma**: ↑ +6.1% vs all-time (avg 439.73).
+- **core min 3d ma**: ↑ +12.0% vs all-time (avg 257.27).
+- **deep min 3d ma**: ↑ +23.2% vs all-time (avg 44.44).
+- **rem min 3d ma**: ↑ +19.7% vs all-time (avg 96.61).
+- **inbed min 3d ma**: ↓ -100.0% vs all-time (avg 4.20).
+- **steps sum lag1 3d ma**: ↑ +143.4% vs all-time (avg 10003.30).
+- **active kcal lag1 3d ma**: ↑ +14.4% vs all-time (avg 401.74).
+- **basal kcal lag1 3d ma**: ↓ -3.2% vs all-time (avg 1598.81).
+- **resting hr bpm lag1 3d ma**: ↓ -1.4% vs all-time (avg 58.72).
+- **hrv sdnn ms lag1 3d ma**: ↑ +14.4% vs all-time (avg 104.64).
+- **vo2max ml kg min lag1 3d ma**: ↑ +149.9% vs all-time (avg 12.59).
+- **total min lag1 3d ma**: ↑ +5.7% vs all-time (avg 439.47).
+- **core min lag1 3d ma**: ↑ +10.4% vs all-time (avg 256.98).
+- **deep min lag1 3d ma**: ↑ +29.4% vs all-time (avg 44.43).
+- **rem min lag1 3d ma**: ↑ +19.1% vs all-time (avg 96.47).
+- **inbed min lag1 3d ma**: ↓ -100.0% vs all-time (avg 4.22).
+- **steps sum lag2 3d ma**: ↑ +143.9% vs all-time (avg 9963.18).
+- **active kcal lag2 3d ma**: ↑ +14.4% vs all-time (avg 401.96).
+- **basal kcal lag2 3d ma**: ↓ -3.8% vs all-time (avg 1599.14).
+- **resting hr bpm lag2 3d ma**: ↓ -1.3% vs all-time (avg 58.73).
+- **hrv sdnn ms lag2 3d ma**: ↑ +18.0% vs all-time (avg 104.64).
+- **vo2max ml kg min lag2 3d ma**: ↑ +164.8% vs all-time (avg 12.53).
+- **total min lag2 3d ma**: ↑ +5.1% vs all-time (avg 439.31).
+- **core min lag2 3d ma**: ↑ +10.2% vs all-time (avg 256.84).
+- **deep min lag2 3d ma**: ↑ +23.3% vs all-time (avg 44.32).
+- **rem min lag2 3d ma**: ↑ +18.4% vs all-time (avg 96.36).
+- **inbed min lag2 3d ma**: ↓ -100.0% vs all-time (avg 4.25).
+- **steps sum lag1 lag2 3d ma**: ↑ +137.2% vs all-time (avg 9898.01).
+- **active kcal lag1 lag2 3d ma**: ↑ +12.8% vs all-time (avg 401.83).
+- **basal kcal lag1 lag2 3d ma**: ↓ -3.3% vs all-time (avg 1599.46).
+- **resting hr bpm lag1 lag2 3d ma**: ↓ -2.4% vs all-time (avg 58.73).
+- **hrv sdnn ms lag1 lag2 3d ma**: ↑ +20.8% vs all-time (avg 104.65).
+- **vo2max ml kg min lag1 lag2 3d ma**: ↑ +179.8% vs all-time (avg 12.47).
+- **total min lag1 lag2 3d ma**: ↑ +5.7% vs all-time (avg 439.19).
+- **core min lag1 lag2 3d ma**: ↑ +11.7% vs all-time (avg 256.70).
+- **deep min lag1 lag2 3d ma**: ↑ +15.1% vs all-time (avg 44.21).
+- **rem min lag1 lag2 3d ma**: ↑ +19.9% vs all-time (avg 96.29).
+- **inbed min lag1 lag2 3d ma**: ↓ -100.0% vs all-time (avg 4.27).
+- **steps sum lag3 3d ma**: ↑ +137.2% vs all-time (avg 9898.01).
+- **active kcal lag3 3d ma**: ↑ +12.8% vs all-time (avg 401.83).
+- **basal kcal lag3 3d ma**: ↓ -3.3% vs all-time (avg 1599.46).
+- **resting hr bpm lag3 3d ma**: ↓ -2.4% vs all-time (avg 58.73).
+- **hrv sdnn ms lag3 3d ma**: ↑ +20.8% vs all-time (avg 104.65).
+- **vo2max ml kg min lag3 3d ma**: ↑ +179.8% vs all-time (avg 12.47).
+- **total min lag3 3d ma**: ↑ +5.7% vs all-time (avg 439.19).
+- **core min lag3 3d ma**: ↑ +11.7% vs all-time (avg 256.70).
+- **deep min lag3 3d ma**: ↑ +15.1% vs all-time (avg 44.21).
+- **rem min lag3 3d ma**: ↑ +19.9% vs all-time (avg 96.29).
+- **inbed min lag3 3d ma**: ↓ -100.0% vs all-time (avg 4.27).
+- **steps sum lag1 lag3 3d ma**: ↑ +122.2% vs all-time (avg 9796.85).
+- **active kcal lag1 lag3 3d ma**: ↑ +5.8% vs all-time (avg 400.96).
+- **basal kcal lag1 lag3 3d ma**: ↓ -3.2% vs all-time (avg 1599.56).
+- **resting hr bpm lag1 lag3 3d ma**: ↓ -3.3% vs all-time (avg 58.73).
+- **hrv sdnn ms lag1 lag3 3d ma**: ↑ +23.8% vs all-time (avg 104.64).
+- **vo2max ml kg min lag1 lag3 3d ma**: ↑ +182.9% vs all-time (avg 12.35).
+- **total min lag1 lag3 3d ma**: ↑ +7.8% vs all-time (avg 439.22).
+- **core min lag1 lag3 3d ma**: ↑ +15.0% vs all-time (avg 256.68).
+- **deep min lag1 lag3 3d ma**: ↑ +11.5% vs all-time (avg 44.15).
+- **rem min lag1 lag3 3d ma**: ↑ +20.9% vs all-time (avg 96.19).
+- **inbed min lag1 lag3 3d ma**: ↓ -100.0% vs all-time (avg 4.29).
+- **steps sum lag2 lag3 3d ma**: ↑ +110.1% vs all-time (avg 9705.14).
+- **active kcal lag2 lag3 3d ma**: ↑ +1.3% vs all-time (avg 400.51).
+- **basal kcal lag2 lag3 3d ma**: ↓ -3.1% vs all-time (avg 1599.57).
+- **resting hr bpm lag2 lag3 3d ma**: ↓ -4.0% vs all-time (avg 58.73).
+- **hrv sdnn ms lag2 lag3 3d ma**: ↑ +24.0% vs all-time (avg 104.54).
+- **vo2max ml kg min lag2 lag3 3d ma**: ↑ +185.7% vs all-time (avg 12.22).
+- **total min lag2 lag3 3d ma**: ↑ +9.9% vs all-time (avg 439.10).
+- **core min lag2 lag3 3d ma**: ↑ +17.9% vs all-time (avg 256.46).
+- **deep min lag2 lag3 3d ma**: ↑ +13.7% vs all-time (avg 44.15).
+- **rem min lag2 lag3 3d ma**: ↑ +21.5% vs all-time (avg 96.11).
+- **inbed min lag2 lag3 3d ma**: ↓ -100.0% vs all-time (avg 4.32).
+- **steps sum lag1 lag2 lag3 3d ma**: ↑ +97.0% vs all-time (avg 9595.70).
+- **active kcal lag1 lag2 lag3 3d ma**: ↓ -3.3% vs all-time (avg 399.91).
+- **basal kcal lag1 lag2 lag3 3d ma**: ↓ -3.1% vs all-time (avg 1599.55).
+- **resting hr bpm lag1 lag2 lag3 3d ma**: ↓ -3.2% vs all-time (avg 58.74).
+- **hrv sdnn ms lag1 lag2 lag3 3d ma**: ↑ +21.2% vs all-time (avg 104.39).
+- **vo2max ml kg min lag1 lag2 lag3 3d ma**: ↑ +174.5% vs all-time (avg 12.09).
+- **total min lag1 lag2 lag3 3d ma**: ↑ +10.8% vs all-time (avg 438.89).
+- **core min lag1 lag2 lag3 3d ma**: ↑ +20.0% vs all-time (avg 256.23).
+- **deep min lag1 lag2 lag3 3d ma**: ↑ +14.8% vs all-time (avg 44.12).
+- **rem min lag1 lag2 lag3 3d ma**: ↑ +18.9% vs all-time (avg 95.97).
+- **inbed min lag1 lag2 lag3 3d ma**: ↓ -100.0% vs all-time (avg 4.34).
+- **steps sum 7d ma**: ↑ +132.0% vs all-time (avg 9856.06).
+- **glucose mean 7d ma**: ↓ -0.7% vs all-time (avg 106.05).
+- **active kcal 7d ma**: ↑ +10.0% vs all-time (avg 399.75).
+- **basal kcal 7d ma**: ↓ -3.1% vs all-time (avg 1593.86).
+- **resting hr bpm 7d ma**: ↓ -1.7% vs all-time (avg 58.47).
+- **hrv sdnn ms 7d ma**: ↑ +18.0% vs all-time (avg 104.71).
+- **vo2max ml kg min 7d ma**: ↑ +161.9% vs all-time (avg 12.48).
+- **total min 7d ma**: ↑ +6.7% vs all-time (avg 438.88).
+- **core min 7d ma**: ↑ +12.8% vs all-time (avg 256.75).
+- **deep min 7d ma**: ↑ +19.1% vs all-time (avg 44.31).
+- **rem min 7d ma**: ↑ +20.0% vs all-time (avg 96.36).
+- **inbed min 7d ma**: ↓ -100.0% vs all-time (avg 4.20).
+- **steps sum lag1 7d ma**: ↑ +129.5% vs all-time (avg 9789.93).
+- **active kcal lag1 7d ma**: ↑ +9.0% vs all-time (avg 399.60).
+- **basal kcal lag1 7d ma**: ↓ -2.9% vs all-time (avg 1594.26).
+- **resting hr bpm lag1 7d ma**: ↓ -2.2% vs all-time (avg 58.47).
+- **hrv sdnn ms lag1 7d ma**: ↑ +19.3% vs all-time (avg 104.64).
+- **vo2max ml kg min lag1 7d ma**: ↑ +169.9% vs all-time (avg 12.38).
+- **total min lag1 7d ma**: ↑ +7.5% vs all-time (avg 438.74).
+- **core min lag1 7d ma**: ↑ +13.9% vs all-time (avg 256.56).
+- **deep min lag1 7d ma**: ↑ +19.7% vs all-time (avg 44.29).
+- **rem min lag1 7d ma**: ↑ +20.0% vs all-time (avg 96.25).
+- **inbed min lag1 7d ma**: ↓ -100.0% vs all-time (avg 4.22).
+- **steps sum lag2 7d ma**: ↑ +122.1% vs all-time (avg 9714.64).
+- **active kcal lag2 7d ma**: ↑ +5.8% vs all-time (avg 399.32).
+- **basal kcal lag2 7d ma**: ↓ -3.1% vs all-time (avg 1594.35).
+- **resting hr bpm lag2 7d ma**: ↓ -2.1% vs all-time (avg 58.48).
+- **hrv sdnn ms lag2 7d ma**: ↑ +20.3% vs all-time (avg 104.59).
+- **vo2max ml kg min lag2 7d ma**: ↑ +172.2% vs all-time (avg 12.29).
+- **total min lag2 7d ma**: ↑ +8.1% vs all-time (avg 438.57).
+- **core min lag2 7d ma**: ↑ +15.2% vs all-time (avg 256.38).
+- **deep min lag2 7d ma**: ↑ +17.3% vs all-time (avg 44.22).
+- **rem min lag2 7d ma**: ↑ +19.5% vs all-time (avg 96.14).
+- **inbed min lag2 7d ma**: ↓ -100.0% vs all-time (avg 4.25).
+- **steps sum lag1 lag2 7d ma**: ↑ +113.4% vs all-time (avg 9634.69).
+- **active kcal lag1 lag2 7d ma**: ↑ +3.6% vs all-time (avg 399.10).
+- **basal kcal lag1 lag2 7d ma**: ↓ -2.4% vs all-time (avg 1594.75).
+- **resting hr bpm lag1 lag2 7d ma**: ↓ -2.5% vs all-time (avg 58.48).
+- **hrv sdnn ms lag1 lag2 7d ma**: ↑ +19.7% vs all-time (avg 104.49).
+- **vo2max ml kg min lag1 lag2 7d ma**: ↑ +174.2% vs all-time (avg 12.19).
+- **total min lag1 lag2 7d ma**: ↑ +9.9% vs all-time (avg 438.41).
+- **core min lag1 lag2 7d ma**: ↑ +15.1% vs all-time (avg 256.22).
+- **deep min lag1 lag2 7d ma**: ↑ +12.2% vs all-time (avg 44.14).
+- **rem min lag1 lag2 7d ma**: ↑ +16.9% vs all-time (avg 96.03).
+- **inbed min lag1 lag2 7d ma**: ↓ -100.0% vs all-time (avg 4.27).
+- **steps sum lag3 7d ma**: ↑ +113.4% vs all-time (avg 9634.69).
+- **active kcal lag3 7d ma**: ↑ +3.6% vs all-time (avg 399.10).
+- **basal kcal lag3 7d ma**: ↓ -2.4% vs all-time (avg 1594.75).
+- **resting hr bpm lag3 7d ma**: ↓ -2.5% vs all-time (avg 58.48).
+- **hrv sdnn ms lag3 7d ma**: ↑ +19.7% vs all-time (avg 104.49).
+- **vo2max ml kg min lag3 7d ma**: ↑ +174.2% vs all-time (avg 12.19).
+- **total min lag3 7d ma**: ↑ +9.9% vs all-time (avg 438.41).
+- **core min lag3 7d ma**: ↑ +15.1% vs all-time (avg 256.22).
+- **deep min lag3 7d ma**: ↑ +12.2% vs all-time (avg 44.14).
+- **rem min lag3 7d ma**: ↑ +16.9% vs all-time (avg 96.03).
+- **inbed min lag3 7d ma**: ↓ -100.0% vs all-time (avg 4.27).
+- **steps sum lag1 lag3 7d ma**: ↑ +100.5% vs all-time (avg 9541.72).
+- **active kcal lag1 lag3 7d ma**: ↓ -0.6% vs all-time (avg 398.60).
+- **basal kcal lag1 lag3 7d ma**: ↓ -2.0% vs all-time (avg 1595.03).
+- **resting hr bpm lag1 lag3 7d ma**: ↓ -2.9% vs all-time (avg 58.48).
+- **hrv sdnn ms lag1 lag3 7d ma**: ↑ +19.2% vs all-time (avg 104.39).
+- **vo2max ml kg min lag1 lag3 7d ma**: ↑ +170.9% vs all-time (avg 12.06).
+- **total min lag1 lag3 7d ma**: ↑ +12.1% vs all-time (avg 438.30).
+- **core min lag1 lag3 7d ma**: ↑ +15.6% vs all-time (avg 256.10).
+- **deep min lag1 lag3 7d ma**: ↑ +5.3% vs all-time (avg 44.06).
+- **rem min lag1 lag3 7d ma**: ↑ +15.3% vs all-time (avg 95.93).
+- **inbed min lag1 lag3 7d ma**: ↓ -100.0% vs all-time (avg 4.29).
+- **steps sum lag2 lag3 7d ma**: ↑ +95.0% vs all-time (avg 9464.65).
+- **active kcal lag2 lag3 7d ma**: ↓ -4.4% vs all-time (avg 398.30).
+- **basal kcal lag2 lag3 7d ma**: ↓ -1.6% vs all-time (avg 1595.29).
+- **resting hr bpm lag2 lag3 7d ma**: ↓ -3.0% vs all-time (avg 58.49).
+- **hrv sdnn ms lag2 lag3 7d ma**: ↑ +18.4% vs all-time (avg 104.27).
+- **vo2max ml kg min lag2 lag3 7d ma**: ↑ +161.6% vs all-time (avg 11.94).
+- **total min lag2 lag3 7d ma**: ↑ +14.6% vs all-time (avg 438.17).
+- **core min lag2 lag3 7d ma**: ↑ +15.5% vs all-time (avg 255.93).
+- **deep min lag2 lag3 7d ma**: ↑ +3.8% vs all-time (avg 44.04).
+- **rem min lag2 lag3 7d ma**: ↑ +14.0% vs all-time (avg 95.83).
+- **inbed min lag2 lag3 7d ma**: ↓ -100.0% vs all-time (avg 4.32).
+- **steps sum lag1 lag2 lag3 7d ma**: ↑ +91.5% vs all-time (avg 9396.10).
+- **active kcal lag1 lag2 lag3 7d ma**: ↓ -6.8% vs all-time (avg 398.18).
+- **basal kcal lag1 lag2 lag3 7d ma**: ↓ -1.3% vs all-time (avg 1595.57).
+- **resting hr bpm lag1 lag2 lag3 7d ma**: ↓ -2.5% vs all-time (avg 58.50).
+- **hrv sdnn ms lag1 lag2 lag3 7d ma**: ↑ +16.5% vs all-time (avg 104.12).
+- **vo2max ml kg min lag1 lag2 lag3 7d ma**: ↑ +151.8% vs all-time (avg 11.81).
+- **total min lag1 lag2 lag3 7d ma**: ↑ +15.7% vs all-time (avg 437.97).
+- **core min lag1 lag2 lag3 7d ma**: ↑ +13.9% vs all-time (avg 255.70).
+- **deep min lag1 lag2 lag3 7d ma**: ↑ +3.6% vs all-time (avg 44.02).
+- **rem min lag1 lag2 lag3 7d ma**: ↑ +10.0% vs all-time (avg 95.70).
+- **inbed min lag1 lag2 lag3 7d ma**: ↓ -100.0% vs all-time (avg 4.34).
+- **steps sum 3d ma 7d ma**: ↑ +127.7% vs all-time (avg 9794.16).
+- **glucose mean 3d ma 7d ma**: ↓ -1.5% vs all-time (avg 105.88).
+- **active kcal 3d ma 7d ma**: ↑ +8.2% vs all-time (avg 399.88).
+- **basal kcal 3d ma 7d ma**: ↓ -3.1% vs all-time (avg 1595.64).
+- **resting hr bpm 3d ma 7d ma**: ↓ -2.1% vs all-time (avg 58.55).
+- **hrv sdnn ms 3d ma 7d ma**: ↑ +19.2% vs all-time (avg 104.64).
+- **vo2max ml kg min 3d ma 7d ma**: ↑ +167.6% vs all-time (avg 12.40).
+- **total min 3d ma 7d ma**: ↑ +7.2% vs all-time (avg 439.51).
+- **core min 3d ma 7d ma**: ↑ +13.8% vs all-time (avg 256.91).
+- **deep min 3d ma 7d ma**: ↑ +18.2% vs all-time (avg 44.45).
+- **rem min 3d ma 7d ma**: ↑ +19.4% vs all-time (avg 96.54).
+- **inbed min 3d ma 7d ma**: ↓ -100.0% vs all-time (avg 4.22).
+- **steps sum lag1 3d ma 7d ma**: ↑ +121.5% vs all-time (avg 9720.44).
+- **active kcal lag1 3d ma 7d ma**: ↑ +6.0% vs all-time (avg 399.67).
+- **basal kcal lag1 3d ma 7d ma**: ↓ -2.9% vs all-time (avg 1595.95).
+- **resting hr bpm lag1 3d ma 7d ma**: ↓ -2.4% vs all-time (avg 58.55).
+- **hrv sdnn ms lag1 3d ma 7d ma**: ↑ +19.8% vs all-time (avg 104.57).
+- **vo2max ml kg min lag1 3d ma 7d ma**: ↑ +171.7% vs all-time (avg 12.31).
+- **total min lag1 3d ma 7d ma**: ↑ +8.3% vs all-time (avg 439.36).
+- **core min lag1 3d ma 7d ma**: ↑ +14.6% vs all-time (avg 256.74).
+- **deep min lag1 3d ma 7d ma**: ↑ +15.9% vs all-time (avg 44.40).
+- **rem min lag1 3d ma 7d ma**: ↑ +18.4% vs all-time (avg 96.43).
+- **inbed min lag1 3d ma 7d ma**: ↓ -100.0% vs all-time (avg 4.25).
+- **steps sum lag2 3d ma 7d ma**: ↑ +111.9% vs all-time (avg 9637.78).
+- **active kcal lag2 3d ma 7d ma**: ↑ +2.9% vs all-time (avg 399.33).
+- **basal kcal lag2 3d ma 7d ma**: ↓ -2.6% vs all-time (avg 1596.22).
+- **resting hr bpm lag2 3d ma 7d ma**: ↓ -2.6% vs all-time (avg 58.55).
+- **hrv sdnn ms lag2 3d ma 7d ma**: ↑ +19.7% vs all-time (avg 104.49).
+- **vo2max ml kg min lag2 3d ma 7d ma**: ↑ +172.0% vs all-time (avg 12.20).
+- **total min lag2 3d ma 7d ma**: ↑ +9.8% vs all-time (avg 439.21).
+- **core min lag2 3d ma 7d ma**: ↑ +15.2% vs all-time (avg 256.59).
+- **deep min lag2 3d ma 7d ma**: ↑ +11.2% vs all-time (avg 44.32).
+- **rem min lag2 3d ma 7d ma**: ↑ +16.9% vs all-time (avg 96.33).
+- **inbed min lag2 3d ma 7d ma**: ↓ -100.0% vs all-time (avg 4.27).
+- **steps sum lag1 lag2 3d ma 7d ma**: ↑ +102.9% vs all-time (avg 9554.49).
+- **active kcal lag1 lag2 3d ma 7d ma**: ↓ -0.5% vs all-time (avg 399.00).
+- **basal kcal lag1 lag2 3d ma 7d ma**: ↓ -2.1% vs all-time (avg 1596.54).
+- **resting hr bpm lag1 lag2 3d ma 7d ma**: ↓ -2.9% vs all-time (avg 58.56).
+- **hrv sdnn ms lag1 lag2 3d ma 7d ma**: ↑ +19.1% vs all-time (avg 104.38).
+- **vo2max ml kg min lag1 lag2 3d ma 7d ma**: ↑ +168.5% vs all-time (avg 12.08).
+- **total min lag1 lag2 3d ma 7d ma**: ↑ +12.0% vs all-time (avg 439.09).
+- **core min lag1 lag2 3d ma 7d ma**: ↑ +15.3% vs all-time (avg 256.44).
+- **deep min lag1 lag2 3d ma 7d ma**: ↑ +6.7% vs all-time (avg 44.26).
+- **rem min lag1 lag2 3d ma 7d ma**: ↑ +15.0% vs all-time (avg 96.23).
+- **inbed min lag1 lag2 3d ma 7d ma**: ↓ -100.0% vs all-time (avg 4.29).
+- **steps sum lag3 3d ma 7d ma**: ↑ +102.9% vs all-time (avg 9554.49).
+- **active kcal lag3 3d ma 7d ma**: ↓ -0.5% vs all-time (avg 399.00).
+- **basal kcal lag3 3d ma 7d ma**: ↓ -2.1% vs all-time (avg 1596.54).
+- **resting hr bpm lag3 3d ma 7d ma**: ↓ -2.9% vs all-time (avg 58.56).
+- **hrv sdnn ms lag3 3d ma 7d ma**: ↑ +19.1% vs all-time (avg 104.38).
+- **vo2max ml kg min lag3 3d ma 7d ma**: ↑ +168.5% vs all-time (avg 12.08).
+- **total min lag3 3d ma 7d ma**: ↑ +12.0% vs all-time (avg 439.09).
+- **core min lag3 3d ma 7d ma**: ↑ +15.3% vs all-time (avg 256.44).
+- **deep min lag3 3d ma 7d ma**: ↑ +6.7% vs all-time (avg 44.26).
+- **rem min lag3 3d ma 7d ma**: ↑ +15.0% vs all-time (avg 96.23).
+- **inbed min lag3 3d ma 7d ma**: ↓ -100.0% vs all-time (avg 4.29).
+- **steps sum lag1 lag3 3d ma 7d ma**: ↑ +95.6% vs all-time (avg 9474.95).
+- **active kcal lag1 lag3 3d ma 7d ma**: ↓ -4.0% vs all-time (avg 398.69).
+- **basal kcal lag1 lag3 3d ma 7d ma**: ↓ -1.7% vs all-time (avg 1596.82).
+- **resting hr bpm lag1 lag3 3d ma 7d ma**: ↓ -2.9% vs all-time (avg 58.56).
+- **hrv sdnn ms lag1 lag3 3d ma 7d ma**: ↑ +18.1% vs all-time (avg 104.26).
+- **vo2max ml kg min lag1 lag3 3d ma 7d ma**: ↑ +161.1% vs all-time (avg 11.95).
+- **total min lag1 lag3 3d ma 7d ma**: ↑ +13.9% vs all-time (avg 438.94).
+- **core min lag1 lag3 3d ma 7d ma**: ↑ +14.8% vs all-time (avg 256.26).
+- **deep min lag1 lag3 3d ma 7d ma**: ↑ +3.8% vs all-time (avg 44.23).
+- **rem min lag1 lag3 3d ma 7d ma**: ↑ +12.8% vs all-time (avg 96.12).
+- **inbed min lag1 lag3 3d ma 7d ma**: ↓ -100.0% vs all-time (avg 4.32).
+- **steps sum lag2 lag3 3d ma 7d ma**: ↑ +91.2% vs all-time (avg 9404.30).
+- **active kcal lag2 lag3 3d ma 7d ma**: ↓ -6.7% vs all-time (avg 398.55).
+- **basal kcal lag2 lag3 3d ma 7d ma**: ↓ -1.4% vs all-time (avg 1597.10).
+- **resting hr bpm lag2 lag3 3d ma 7d ma**: ↓ -2.6% vs all-time (avg 58.57).
+- **hrv sdnn ms lag2 lag3 3d ma 7d ma**: ↑ +16.2% vs all-time (avg 104.11).
+- **vo2max ml kg min lag2 lag3 3d ma 7d ma**: ↑ +151.4% vs all-time (avg 11.82).
+- **total min lag2 lag3 3d ma 7d ma**: ↑ +15.3% vs all-time (avg 438.75).
+- **core min lag2 lag3 3d ma 7d ma**: ↑ +13.5% vs all-time (avg 256.04).
+- **deep min lag2 lag3 3d ma 7d ma**: ↑ +2.1% vs all-time (avg 44.20).
+- **rem min lag2 lag3 3d ma 7d ma**: ↑ +9.9% vs all-time (avg 96.01).
+- **inbed min lag2 lag3 3d ma 7d ma**: ↓ -100.0% vs all-time (avg 4.34).
+- **steps sum lag1 lag2 lag3 3d ma 7d ma**: ↑ +88.1% vs all-time (avg 9340.78).
+- **active kcal lag1 lag2 lag3 3d ma 7d ma**: ↓ -8.8% vs all-time (avg 398.51).
+- **basal kcal lag1 lag2 lag3 3d ma 7d ma**: ↓ -1.1% vs all-time (avg 1597.37).
+- **resting hr bpm lag1 lag2 lag3 3d ma 7d ma**: ↓ -2.1% vs all-time (avg 58.59).
+- **hrv sdnn ms lag1 lag2 lag3 3d ma 7d ma**: ↑ +13.8% vs all-time (avg 103.97).
+- **vo2max ml kg min lag1 lag2 lag3 3d ma 7d ma**: ↑ +141.5% vs all-time (avg 11.69).
+- **total min lag1 lag2 lag3 3d ma 7d ma**: ↑ +15.7% vs all-time (avg 438.50).
+- **core min lag1 lag2 lag3 3d ma 7d ma**: ↑ +10.9% vs all-time (avg 255.78).
+- **deep min lag1 lag2 lag3 3d ma 7d ma**: ↑ +0.5% vs all-time (avg 44.16).
+- **rem min lag1 lag2 lag3 3d ma 7d ma**: ↑ +6.3% vs all-time (avg 95.89).
+- **inbed min lag1 lag2 lag3 3d ma 7d ma**: ↓ -100.0% vs all-time (avg 4.37).
+- **energy score**: ↓ -2.4% vs all-time (avg 1996.57).
+- **dow**: ↑ +0.9% vs all-time (avg 2.97).
+- **is weekend**: ↑ +1.1% vs all-time (avg 0.28).
+- **month**: ↑ +48.9% vs all-time (avg 6.72).
+- **dow sin**: ↓ -100.0% vs all-time (avg 0.00).
+- **dow cos**: ↓ -100.0% vs all-time (avg 0.01).
+
+## Highlights
+✅ vo2max ml kg min lag1 lag2 lag3 changed +186.5% vs baseline.
+✅ vo2max ml kg min lag2 lag3 3d ma changed +185.7% vs baseline.
+✅ vo2max ml kg min lag2 lag3 changed +183.9% vs baseline.
+✅ vo2max ml kg min lag1 lag3 3d ma changed +182.9% vs baseline.
+✅ vo2max ml kg min lag1 lag3 changed +180.6% vs baseline.
+
+## Key Relationships
+↑ **deep_min_lag1** → ↑ rem_min (p=0.000, q=0.000)
+↑ **vo2max_ml_kg_min_lag3** → ↑ steps_sum (p=0.000, q=0.000)
+↑ **vo2max_ml_kg_min_lag2** → ↑ core_min (p=0.016, q=0.016)
