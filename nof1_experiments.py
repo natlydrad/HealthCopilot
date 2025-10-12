@@ -20,6 +20,31 @@ from datetime import datetime, timedelta
 import numpy as np, pandas as pd
 import statsmodels.api as sm
 
+# ---------- Normative helper (optional Phase 4 integration) ----------
+def load_norm_bank(path="norms_param.csv"):
+    import pandas as pd
+    p = Path(path)
+    if not p.exists(): return None
+    return pd.read_csv(p)
+
+def lookup_norm(metric, age=22, sex="f", norms=None):
+    """Return (ref_mean, ref_sd, percentile, note) if available."""
+    import numpy as np
+    from math import erf, sqrt
+    if norms is None or norms.empty: return None
+    ref = norms[(norms.metric == metric) &
+                (norms.age_min <= age) & (norms.age_max >= age) &
+                (norms.sex.str.lower().isin([sex.lower(), "any", "all"]))]
+
+    if ref.empty: return None
+    ref = ref.iloc[0]
+    mean, sd = float(ref["mean"]), float(ref["sd"])
+    def pct(x):
+        z = (x - mean) / sd
+        return 0.5 * (1 + erf(z / sqrt(2))) * 100
+    return mean, sd, pct, ref.get("source", "")
+
+
 # ============================================================
 #  🔍 Load results + shared helpers (from interpret_insights)
 # ============================================================
@@ -302,87 +327,129 @@ def _evaluate_if_possible(df,target,lever):
     return {"dm":dm,"its":its}
 
 # ---------- Write Markdown ----------
-def write_markdown(pairs,df):
-    lines=["# 🧪 Experiments To Run (with scientific justification)\n"]
+def write_markdown(pairs, df):
+    lines = ["# 🧪 Experiments To Run (with scientific justification)\n"]
     if not pairs:
         lines.append("_No significant, actionable levers found (after filtering out derived/self features)._")
-        OUT_DOC.write_text("\n".join(lines)); return
+        OUT_DOC.write_text("\n".join(lines))
+        return
 
     # group by target
-    grouped={}
-    for p in pairs: grouped.setdefault(p["target"],[]).append(p)
+    grouped = {}
+    for p in pairs:
+        grouped.setdefault(p["target"], []).append(p)
 
-    for tgt,items in grouped.items():
-        if not items: 
+    for tgt, items in grouped.items():
+        if not items:
             continue
-        info=TARGET_INFO.get(tgt,{})
-        better=BETTER_DIRECTION.get(tgt,"better")
-        arrow="↓" if better=="lower" else ("↑" if better=="higher" else "→")
-        lines.append(f"\n## Goal: {arrow} {tgt.replace('_',' ')}")
-        if info.get("why"): lines.append(f"**Why this goal matters:** {info['why']}")
-        if info.get("healthy_range"): lines.append(f"**Healthy range:** {info['healthy_range']}")
-        if info.get("external_levers"): lines.append(f"**Other influencing factors:** {', '.join(info['external_levers'])}.")
+        info = TARGET_INFO.get(tgt, {})
+        better = BETTER_DIRECTION.get(tgt, "better")
+        arrow = "↓" if better == "lower" else ("↑" if better == "higher" else "→")
+        lines.append(f"\n## Goal: {arrow} {tgt.replace('_', ' ')}")
+        if info.get("why"):
+            lines.append(f"**Why this goal matters:** {info['why']}")
+        if info.get("healthy_range"):
+            lines.append(f"**Healthy range:** {info['healthy_range']}")
+        if info.get("external_levers"):
+            lines.append(f"**Other influencing factors:** {', '.join(info['external_levers'])}.")
 
         kept = sorted(items, key=lambda p: (p["q"], -abs(p["r"])))[:MAX_EXPS_PER_TARGET]
-        for i,p in enumerate(kept,1):
-            lev=p["lever"]; levname=_human(lev)
-            move=_recommend_direction(tgt,p["r"])
+        for i, p in enumerate(kept, 1):
+            lev = p["lever"]
+            levname = _human(lev)
+            move = _recommend_direction(tgt, p["r"])
             lines.append(f"\n### Experiment {i} — {levname} ({'↑' if move=='increase' else '↓'})")
-            lines.append(f"**Source of evidence:** Found in your data (r={p['r']:.2f}, q={p['q']:.3f}). When your {levname} {move}s, your {tgt.replace('_',' ')} tends to {'increase' if p['r']>0 else 'decrease'}.")
+            lines.append(
+                f"**Source of evidence:** Found in your data (r={p['r']:.2f}, q={p['q']:.3f}). "
+                f"When your {levname} {move}s, your {tgt.replace('_',' ')} tends to "
+                f"{'increase' if p['r']>0 else 'decrease'}."
+            )
 
-            # Baseline + explicit targets (steps example)
+            # baseline + norms
             baseline = np.nanmedian(df[lev]) if lev in df else np.nan
             if np.isfinite(baseline):
-                # show baseline and optimization note if already healthy
                 lines.append(f"**Your baseline:** {int(round(baseline)):,} {levname}.")
+
+                # --- Normative comparison ---
+                try:
+                    ref = lookup_norm(lev, age, sex, norms)
+                    if ref:
+                        ref_mean, ref_sd, pct, src = ref
+                        perc = pct(baseline)
+                        if np.isfinite(perc):
+                            lines.append(
+                                f"_Population context:_ {levname} at {baseline:.1f} → "
+                                f"≈ {perc:.0f}ᵗʰ percentile vs peers "
+                                f"(ref μ {ref_mean:.1f}, σ {ref_sd:.1f}, {src})."
+                            )
+                            if perc < 25:
+                                lines.append("_You’re below typical range — this is a corrective experiment._")
+                            elif perc > 75:
+                                lines.append("_Already above average — this is an optimization/maintenance experiment._")
+                            else:
+                                lines.append("_Within typical range — moderate improvement may still help._")
+                except Exception as e:
+                    lines.append(f"_Norm reference unavailable ({e})._")
+
+                # optional healthy-range note
                 if info.get("healthy_range") and tgt in df.columns:
-                    # add soft note only if target baseline within healthy range (best-effort heuristic)
                     tgt_med = float(np.nanmedian(df[tgt])) if tgt in df else np.nan
                     if np.isfinite(tgt_med):
-                        lines.append(f"_Note: your current median {tgt.replace('_',' ')} is ~{tgt_med:.1f}; if this is already within the healthy range above, this is an optimization/maintenance experiment rather than corrective._")
-                if lev == "steps_sum":
-                    lines.append(f"**Targets (steps):** Week2 = {int(baseline)+2000:,}, Week3 = {int(baseline)+3000:,}, Week4 maintain.")
+                        lines.append(
+                            f"_Note: your current median {tgt.replace('_',' ')} is ~{tgt_med:.1f}; "
+                            "if this is already within the healthy range above, this is an optimization/maintenance experiment rather than corrective._"
+                        )
 
-            # Design choice
-            if lev in ("steps_sum","outdoor_minutes","sleep_hours","vo2max_ml_kg_min"):
+                # explicit step targets
+                if lev == "steps_sum":
+                    lines.append(
+                        f"**Targets (steps):** Week2 = {int(baseline)+2000:,}, "
+                        f"Week3 = {int(baseline)+3000:,}, Week4 maintain."
+                    )
+
+            # === Design choice ===
+            if lev in ("steps_sum", "outdoor_minutes", "sleep_hours", "vo2max_ml_kg_min"):
                 lines.append("\n**Design:** Stepped multi-week program (gradual dose).")
                 lines.append("**Why this design:** Adaptation accumulates over days/weeks; stepped dosing + segmented regression (ITS) captures level/slope changes better than on/off toggles.")
-            elif lev in ("late_meal_count","screen_time_h","alcohol_units","added_sugar_g","sat_fat_g","meditation_min","eating_window_h","bedtime_hour","waketime_hour","water_l","fiber_g","protein_g"):
-                # default ABAB with clear A/B definitions
+            elif lev in (
+                "late_meal_count", "screen_time_h", "alcohol_units", "added_sugar_g",
+                "sat_fat_g", "meditation_min", "eating_window_h", "bedtime_hour",
+                "waketime_hour", "water_l", "fiber_g", "protein_g"
+            ):
                 blocks, block_len = 4, 2
-                total_days = blocks*block_len
+                total_days = blocks * block_len
                 lines.append("\n**Design:** ABAB with randomized 2-day blocks (A=OFF/control, B=ON/intervention).")
                 lines.append(f"- **Total duration:** ~{total_days} days across {blocks} blocks of {block_len} days.")
                 lines.append("- **A (OFF):** your usual pattern.")
-                lines.append("- **B (ON):** apply the lever rule for that day/block (e.g., no late meals; no screens after 9pm; 0 drinks; ≥10–15 min meditation).")
+                lines.append("- **B (ON):** apply the lever rule for that day/block (e.g., no late meals; no screens after 9 pm; 0 drinks; ≥10–15 min meditation).")
                 lines.append("**Why this design:** Fast, reversible effects with minimal carryover; within-person replication; HAC accounts for autocorrelation.")
             else:
-                # Fallback (still ABAB, but generic)
                 blocks, block_len = 4, 2
-                total_days = blocks*block_len
+                total_days = blocks * block_len
                 lines.append("\n**Design:** ABAB 2-day blocks; A=usual, B=apply the lever.")
                 lines.append(f"- **Total duration:** ~{total_days} days.")
                 lines.append("**Why this design:** Replicated contrasts, reduced bias from weekday rhythms.")
 
-            # Expected direction (lever → target)
+            # === Expected direction ===
             lines.append(f"**Expected direction:** {move} {levname} → {('higher' if better=='higher' else 'lower')} {tgt.replace('_',' ')}.")
 
-            # Stats if inferable from existing data
-            stats=_evaluate_if_possible(df,tgt,lev)
+            # === Stats ===
+            stats = _evaluate_if_possible(df, tgt, lev)
             if stats:
-                dm,its=stats["dm"],stats["its"]
+                dm, its = stats["dm"], stats["its"]
                 lines.append("\n**What your data so far suggests:**")
-                if dm and dm["n"]>0 and np.isfinite(dm["coef"]):
-                    eff="increase" if dm["coef"]>0 else "decrease"
+                if dm and dm["n"] > 0 and np.isfinite(dm["coef"]):
+                    eff = "increase" if dm["coef"] > 0 else "decrease"
                     lines.append(f"- Diff-in-means (HAC): {eff} of {abs(dm['coef']):.2f} (p={dm['p']:.3f}, n={dm['n']}).")
                 if its:
-                    if np.isfinite(its.get("level_change_p",np.nan)) and its["level_change_p"]<0.05:
+                    if np.isfinite(its.get("level_change_p", np.nan)) and its["level_change_p"] < 0.05:
                         lines.append(f"- ITS: immediate {'increase' if its['level_change_coef']>0 else 'decrease'} after ON periods (p={its['level_change_p']:.3f}).")
-                    elif np.isfinite(its.get("slope_change_p",np.nan)) and its["slope_change_p"]<0.1:
+                    elif np.isfinite(its.get("slope_change_p", np.nan)) and its["slope_change_p"] < 0.1:
                         lines.append(f"- ITS: gradual {'upward' if its['slope_change_coef']>0 else 'downward'} trend over time (p={its['slope_change_p']:.3f}).")
                     else:
                         lines.append("- ITS: no clear trend yet — likely needs more cycles or stronger contrast.")
 
+            # === Next steps ===
             lines.append("\n**Next steps:**")
             lines.append("- Run the full design window. If effects move in the expected direction across ≥2 consecutive blocks/weeks, maintain for 2–4 more weeks and re-check.")
             lines.append("- If no change, pair this lever with another (e.g., earlier bedtime or reduced alcohol) and re-test.")
@@ -410,6 +477,10 @@ def main():
                         pairs.append(p)
         except:
             pass
+
+    global norms, age, sex
+    norms = load_norm_bank()
+    age, sex = 22, "f"
 
     write_markdown(pairs, df)
 

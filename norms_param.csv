@@ -1,0 +1,15 @@
+domain,metric,age_min,age_max,sex,mean,sd,unit,source
+cardio,vo2max_ml_kg_min,20,29,f,38.5,7.0,mL/kg/min,ACSM starter
+cardio,resting_hr_bpm,20,29,f,72.0,9.0,bpm,NHANES starter
+cardio,hrv_sdnn_ms,20,29,f,50.0,20.0,ms,Starter
+activity,steps_sum,18,39,any,7500.0,3000.0,steps,CDC starter
+activity,active_kcal,18,39,any,450.0,250.0,kcal,Starter
+activity,basal_kcal,18,39,any,1500.0,200.0,kcal,Starter
+sleep,sleep_duration_h,18,39,any,7.2,1.1,h,NSF starter
+sleep,total_min,18,39,any,432.0,66.0,min,NSF starter
+sleep,sleep_efficiency_pct,18,39,any,88.0,5.0,pct,Starter
+metabolic,glucose_mean,18,39,any,95.0,8.0,mg/dL,Starter
+metabolic,glucose_cv_pct,18,39,any,16.0,4.0,pct,Starter
+sleep,core_min,18,39,any,270.0,50.0,min,Starter
+sleep,deep_min,18,39,any,80.0,30.0,min,Starter
+sleep,rem_min,18,39,any,100.0,30.0,min,Starter

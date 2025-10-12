@@ -776,6 +776,63 @@ def main():
 
     interpret_results(outdir)   # <-- add this line
 
+    # === PHASE 4: Normative Comparison ===
+    try:
+        from pathlib import Path
+        import pandas as pd
+        from norm_compare import load_norms, compare_to_norms, render_markdown
+
+        age, sex = 22, "f"  # TODO: pull from profile.json later
+
+        pretty = {
+            "vo2max_ml_kg_min": "VO₂ max",
+            "resting_hr_bpm": "Resting heart rate",
+            "hrv_sdnn_ms": "HRV (SDNN)",
+            "steps_sum": "Steps",
+            "active_kcal": "Active calories",
+            "basal_kcal": "Basal calories",
+            "sleep_duration_h": "Sleep duration",
+            "total_min": "Sleep minutes (total)",
+            "core_min": "Core sleep (min)",
+            "deep_min": "Deep sleep (min)",
+            "rem_min": "REM sleep (min)",
+            "sleep_efficiency_pct": "Sleep efficiency",
+            "glucose_mean": "Glucose (mean)",
+            "glucose_cv_pct": "Glucose CV",
+        }
+        units = {
+            "vo2max_ml_kg_min": "mL/kg/min","resting_hr_bpm":"bpm","hrv_sdnn_ms":"ms",
+            "steps_sum":"steps","active_kcal":"kcal","basal_kcal":"kcal",
+            "sleep_duration_h":"h","total_min":"min","core_min":"min","deep_min":"min","rem_min":"min",
+            "sleep_efficiency_pct":"%","glucose_mean":"mg/dL","glucose_cv_pct":"%"
+        }
+        prefs = {
+            "vo2max_ml_kg_min":"higher","resting_hr_bpm":"lower","hrv_sdnn_ms":"higher",
+            "steps_sum":"higher","active_kcal":"higher","basal_kcal":"range",
+            "sleep_duration_h":"range","total_min":"range","core_min":"higher","deep_min":"higher","rem_min":"higher",
+            "sleep_efficiency_pct":"higher","glucose_mean":"lower","glucose_cv_pct":"lower"
+        }
+
+        daily = pd.read_csv(outdir / "daily_features.csv", parse_dates=["date"])
+        if "sleep_duration_h" not in daily.columns and "total_min" in daily.columns:
+            daily["sleep_duration_h"] = daily["total_min"] / 60.0
+
+        norms = load_norms(Path("norms_param.csv"))
+        exist = [m for m in prefs.keys() if m in daily.columns]
+        prefs = {m:prefs[m] for m in exist}
+        pretty = {m:pretty[m] for m in exist if m in pretty}
+        units = {m:units[m] for m in exist if m in units}
+
+        table = compare_to_norms(daily, age, sex, norms, prefs, pretty, units, window_days=90)
+        table.to_csv(outdir / "norm_compare.csv", index=False)
+
+        md = render_markdown(table, datetime.now().strftime("%b %d, %Y"))
+        (outdir / "norm_compare_report.md").write_text(md)
+        print(f"🌍 Normative comparison saved → {outdir/'norm_compare.csv'} and norm_compare_report.md")
+    except Exception as e:
+        print(f"⚠️ Normative comparison skipped: {e}")
+
+
 # =========================
 # ----- AUTO INTERPRET ----
 # =========================
