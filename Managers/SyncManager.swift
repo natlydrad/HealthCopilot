@@ -899,215 +899,70 @@ extension SyncManager {
     }
 }
 
+// === SyncManager+DailyUploads.swift ===
 extension SyncManager {
-
-    func uploadStep(timestamp: Date, steps: Int) async {
-        guard let token = token, let userId = userId else { return }
-
-        // Round to nearest minute for consistency
-        let rounded = Date(timeIntervalSince1970:
-            (timestamp.timeIntervalSince1970 / 60.0).rounded() * 60.0)
-        let df = ISO8601DateFormatter()
-        let ts = df.string(from: rounded)
-
-        // Prepare request headers
-        var headers: [String: String] = [
-            "Authorization": "Bearer \(token)",
-            "Content-Type": "application/json"
-        ]
-
-        // 1️⃣ First: check if this timestamp already exists for this user
-        guard let filterURL = URL(string:
-            "\(baseURL)/api/collections/steps/records?filter=user='\(userId)'&&timestamp='\(ts)'")
-        else { return }
-
-        do {
-            let (data, resp) = try await URLSession.shared.data(from: filterURL)
-            let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
-            guard (200..<300).contains(code) else {
-                print("❌ [uploadStep] lookup HTTP \(code)")
-                return
-            }
-
-            // Try to decode PocketBase list response
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let items = json["items"] as? [[String: Any]],
-               let existing = items.first,
-               let recordId = existing["id"] as? String {
-
-                // 2️⃣ If record exists → PATCH update instead of creating duplicate
-                guard let patchURL = URL(string: "\(baseURL)/api/collections/steps/records/\(recordId)") else { return }
-
-                var patchReq = URLRequest(url: patchURL)
-                patchReq.httpMethod = "PATCH"
-                patchReq.allHTTPHeaderFields = headers
-                patchReq.httpBody = try? JSONSerialization.data(withJSONObject: [
-                    "steps": steps,
-                    "source": "HealthKit"
-                ])
-
-                let (_, patchResp) = try await URLSession.shared.data(for: patchReq)
-                let patchCode = (patchResp as? HTTPURLResponse)?.statusCode ?? -1
-                if (200..<300).contains(patchCode) {
-                    print("♻️ [uploadStep] updated existing step @ \(ts)")
-                } else {
-                    print("❌ [uploadStep] PATCH failed (\(patchCode))")
-                }
-
-            } else {
-                // 3️⃣ Otherwise, POST new record
-                guard let postURL = URL(string: "\(baseURL)/api/collections/steps/records") else { return }
-                var postReq = URLRequest(url: postURL)
-                postReq.httpMethod = "POST"
-                postReq.allHTTPHeaderFields = headers
-                postReq.httpBody = try? JSONSerialization.data(withJSONObject: [
-                    "user": userId,
-                    "timestamp": ts,
-                    "steps": steps,
-                    "source": "HealthKit"
-                ])
-
-                let (data, postResp) = try await URLSession.shared.data(for: postReq)
-                let postCode = (postResp as? HTTPURLResponse)?.statusCode ?? -1
-                if (200..<300).contains(postCode) {
-                    print("✅ [uploadStep] created step @ \(ts)")
-                } else {
-                    print("❌ [uploadStep] POST HTTP \(postCode):",
-                          String(data: data, encoding: .utf8) ?? "")
-                }
-            }
-        } catch {
-            print("🌐 [uploadStep] network error:", error.localizedDescription)
-        }
-    }
     
-    // inside SyncManager
-    func stepExists(timestamp: Date) async -> Bool {
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime]
-        let t = iso.string(from: timestamp)
-        let url = "\(self.baseURL)/api/collections/steps/records?filter=timestamp='\(t)'"
-        do {
-            let (data, _) = try await URLSession.shared.data(from: URL(string: url)!)
-            if let res = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let items = res["items"] as? [[String: Any]] {
-                return !items.isEmpty
-            }
-        } catch { print("⚠️ stepExists error:", error) }
-        return false
-    }
-    
-    func fetchExistingStepDates() async -> [Date] {
-        guard let token = token, let userId = userId else { return [] }
-
-        guard let url = URL(string:
-            "\(baseURL)/api/collections/steps/records?filter=(user=\"\(userId)\")&perPage=10000&fields=timestamp"
-        ) else { return [] }
-
-        var req = URLRequest(url: url)
-        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
-        do {
-            let (data, resp) = try await URLSession.shared.data(for: req)
-            guard (resp as? HTTPURLResponse)?.statusCode == 200 else { return [] }
-
-            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let items = json["items"] as? [[String: Any]] {
-                let df = ISO8601DateFormatter()
-                return items.compactMap {
-                    guard let ts = $0["timestamp"] as? String else { return nil }
-                    return df.date(from: ts)
-                }
-            }
-        } catch {
-            print("⚠️ [fetchExistingStepDates] error:", error.localizedDescription)
+    // MARK: - Fetch existing daily dates
+    private func fetchExistingDailyDates(collection: String) async -> [Date] {
+        guard let url = URL(string: "\(baseURL)/api/collections/\(collection)/records") else {
+            print("⚠️ Invalid URL for \(collection)")
+            return []
         }
-
-        return []
-    }
-
-
-    func fetchExistingGlucoseDates() async -> [Date] {
-        guard let token = token, let userId = userId else { return [] }
-
-        guard let url = URL(string:
-            "\(baseURL)/api/collections/glucose/records?filter=(user=\"\(userId)\")&perPage=10000&fields=timestamp"
-        ) else { return [] }
-
+        
         var req = URLRequest(url: url)
-        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
-        do {
-            let (data, resp) = try await URLSession.shared.data(for: req)
-            guard (resp as? HTTPURLResponse)?.statusCode == 200 else { return [] }
-
-            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let items = json["items"] as? [[String: Any]] {
-                let df = ISO8601DateFormatter()
-                return items.compactMap {
-                    guard let ts = $0["timestamp"] as? String else { return nil }
-                    return df.date(from: ts)
-                }
-            }
-        } catch {
-            print("⚠️ [fetchExistingGlucoseDates] error:", error.localizedDescription)
-        }
-
-        return []
-    }
-
-
-    func uploadGlucose(timestamp: Date, mgdl: Double) async {
-        guard let token = token, let userId = userId else { return }
-
-        let rounded = Date(timeIntervalSince1970:
-            (timestamp.timeIntervalSince1970 / 60.0).rounded() * 60.0)
-        let df = ISO8601DateFormatter()
-        let ts = df.string(from: rounded)
-
-        let body: [String: Any] = [
-            "user": userId,
-            "timestamp": ts,
-            "value_mgdl": mgdl,
-            "source": "HealthKit"
-        ]
-
-        guard let url = URL(string: "\(baseURL)/api/collections/glucose/records") else { return }
-
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.httpMethod = "GET"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
-
+        
+        if let token = token {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
         do {
-            let (data, resp) = try await URLSession.shared.data(for: req)
-            let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
-            if (200..<300).contains(code) {
-                print("✅ [uploadGlucose] created glucose @ \(ts)")
-            } else {
-                print("❌ [uploadGlucose] HTTP \(code):", String(data: data, encoding: .utf8) ?? "")
+            let (data, response) = try await URLSession.shared.data(for: req)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                print("⚠️ [SyncManager] Non-200 fetching \(collection)")
+                return []
+            }
+            
+            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let items = json["items"] as? [[String: Any]] else {
+                print("⚠️ [SyncManager] Unexpected JSON for \(collection)")
+                return []
+            }
+            
+            let iso = ISO8601DateFormatter()
+            return items.compactMap { rec in
+                if let s = rec["date"] as? String {
+                    return iso.date(from: s)
+                }
+                return nil
             }
         } catch {
-            print("🌐 [uploadGlucose] network error:", error.localizedDescription)
+            print("⚠️ [SyncManager] Failed to fetch existing dates for \(collection): \(error)")
+            return []
         }
     }
-
-
-}
-
-// === SyncManager+DailyUploads.swift (you can paste into SyncManager.swift) ===
-
-extension SyncManager {
-    // Sleep daily
+    
+    func fetchExistingSleepDays() async -> [Date] {
+        await fetchExistingDailyDates(collection: "sleep_daily")
+    }
+    func fetchExistingEnergyDays() async -> [Date] {
+        await fetchExistingDailyDates(collection: "energy_daily")
+    }
+    func fetchExistingHeartDays() async -> [Date] {
+        await fetchExistingDailyDates(collection: "heart_daily")
+    }
+    func fetchExistingBodyDays() async -> [Date] {
+        await fetchExistingDailyDates(collection: "body_daily")
+    }
+    
+    // MARK: - Upload helpers
     func uploadSleepDaily(date: Date,
                           totalMin: Double,
                           remMin: Double,
                           deepMin: Double,
                           coreMin: Double,
                           inBedMin: Double) async {
-        // PB collection: "sleep_daily"
-        // fields: date (date), total_min, rem_min, deep_min, core_min, inbed_min
         await upsertDaily(collection: "sleep_daily", date: date, payload: [
             "total_min": totalMin,
             "rem_min": remMin,
@@ -1116,16 +971,14 @@ extension SyncManager {
             "inbed_min": inBedMin
         ])
     }
-
-    // Energy daily
+    
     func uploadEnergyDaily(date: Date, activeKcal: Double, basalKcal: Double) async {
         await upsertDaily(collection: "energy_daily", date: date, payload: [
             "active_kcal": activeKcal,
             "basal_kcal": basalKcal
         ])
     }
-
-    // Heart daily
+    
     func uploadHeartDaily(date: Date, restingHR: Double?, hrvSDNNms: Double?, vo2max: Double?) async {
         await upsertDaily(collection: "heart_daily", date: date, payload: [
             "resting_hr_bpm": restingHR as Any,
@@ -1133,94 +986,74 @@ extension SyncManager {
             "vo2max_ml_kg_min": vo2max as Any
         ])
     }
-
-    // Body daily
+    
     func uploadBodyDaily(date: Date, weightKg: Double?, bodyFatPct: Double?) async {
         await upsertDaily(collection: "body_daily", date: date, payload: [
             "weight_kg": weightKg as Any,
             "bodyfat_pct": bodyFatPct as Any
         ])
     }
-
-    // MARK: - Shared upsert helper for date-keyed daily collections
+    
+    // MARK: - Shared upsert helper
     fileprivate func upsertDaily(collection: String, date: Date, payload: [String: Any]) async {
-    // Normalize to midnight for safety, then pass to pbUpsert
-    let day = Calendar.current.startOfDay(for: date)
-    await self.pbUpsert(collection: collection, date: day, payload: payload)
-}
-
-
-    // Stub to implement with your HTTP layer
+        let day = Calendar.current.startOfDay(for: date)
+        await pbUpsert(collection: collection, date: day, payload: payload)
+    }
+    
+    // MARK: - Core HTTP upsert
     fileprivate func pbUpsert(collection: String, date: Date, payload: [String: Any]) async {
         guard let token = token, let userId = userId else {
             print("❌ [pbUpsert] missing token/userId")
             return
         }
-
-        // Convert date to YYYY-MM-DD for PocketBase "date" fields
+        
         let df = DateFormatter()
         df.locale = Locale(identifier: "en_US_POSIX")
         df.timeZone = TimeZone(secondsFromGMT: 0)
         df.dateFormat = "yyyy-MM-dd"
         let dateStr = df.string(from: Calendar.current.startOfDay(for: date))
-
-        // Build filter for this user + date
+        
+        // Build filter
         let dfFull = ISO8601DateFormatter()
         dfFull.formatOptions = [.withInternetDateTime]
         let start = dfFull.string(from: Calendar.current.startOfDay(for: date))
         let end = dfFull.string(from: Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: date))!)
         let filterRaw = "user='\(userId)' && date>='\(start)' && date<'\(end)'"
-
-
         let filter = filterRaw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? filterRaw
         let listURL = URL(string: "\(baseURL)/api/collections/\(collection)/records?filter=\(filter)&perPage=1")!
-
+        
         do {
-            // 🔍 Check if record exists
+            // Check existing
             let (listData, listResp) = try await URLSession.shared.data(from: listURL)
             let listCode = (listResp as? HTTPURLResponse)?.statusCode ?? -1
             guard (200..<300).contains(listCode) else {
                 print("❌ [\(collection)] lookup HTTP \(listCode): \(String(data: listData, encoding: .utf8) ?? "")")
                 return
             }
-
+            
             var recordId: String?
             if let json = try? JSONSerialization.jsonObject(with: listData) as? [String: Any],
                let items = json["items"] as? [[String: Any]],
-               let match = items.first(where: { rec in
-                   if let ds = rec["date"] as? String,
-                      let d = ISO8601DateFormatter().date(from: ds) {
-                       return d >= Calendar.current.startOfDay(for: date) &&
-                              d < Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: date))!
-                   }
-                   return false
-               }),
+               let match = items.first,
                let id = match["id"] as? String {
                 recordId = id
             }
-
-            // Merge body
-            let iso = ISO8601DateFormatter()
-            iso.formatOptions = [.withInternetDateTime]
-            let dateISO = iso.string(from: Calendar.current.startOfDay(for: date))
-            var body: [String: Any] = ["user": userId, "date": dateISO]
-
+            
+            var body: [String: Any] = ["user": userId, "date": start]
             for (k, v) in payload { body[k] = v }
-
-            // Shared header setup
+            
             var headers: [String: String] = [
                 "Authorization": "Bearer \(token)",
                 "Content-Type": "application/json"
             ]
-
+            
             if let id = recordId {
-                // ♻️ PATCH existing record
+                // PATCH
                 let patchURL = URL(string: "\(baseURL)/api/collections/\(collection)/records/\(id)")!
                 var patchReq = URLRequest(url: patchURL)
                 patchReq.httpMethod = "PATCH"
                 patchReq.allHTTPHeaderFields = headers
                 patchReq.httpBody = try? JSONSerialization.data(withJSONObject: body)
-
                 let (data, resp) = try await URLSession.shared.data(for: patchReq)
                 let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
                 if (200..<300).contains(code) {
@@ -1228,15 +1061,13 @@ extension SyncManager {
                 } else {
                     print("❌ [\(collection)] PATCH HTTP \(code): \(String(data: data, encoding: .utf8) ?? "")")
                 }
-
             } else {
-                // 🆕 POST new record
+                // POST
                 let postURL = URL(string: "\(baseURL)/api/collections/\(collection)/records")!
                 var postReq = URLRequest(url: postURL)
                 postReq.httpMethod = "POST"
                 postReq.allHTTPHeaderFields = headers
                 postReq.httpBody = try? JSONSerialization.data(withJSONObject: body)
-
                 let (data, resp) = try await URLSession.shared.data(for: postReq)
                 let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
                 if (200..<300).contains(code) {
@@ -1249,5 +1080,188 @@ extension SyncManager {
             print("🌐 [\(collection)] network error:", error.localizedDescription)
         }
     }
-}
+    
+        func fetchExistingStepDates() async -> [Date] {
+            guard let token = token, let userId = userId else { return [] }
+
+            guard let url = URL(string:
+                "\(baseURL)/api/collections/steps/records?filter=(user=\"\(userId)\")&perPage=10000&fields=timestamp"
+            ) else { return [] }
+
+            var req = URLRequest(url: url)
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+            do {
+                let (data, resp) = try await URLSession.shared.data(for: req)
+                guard (resp as? HTTPURLResponse)?.statusCode == 200 else { return [] }
+
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let items = json["items"] as? [[String: Any]] {
+                    let df = ISO8601DateFormatter()
+                    return items.compactMap {
+                        guard let ts = $0["timestamp"] as? String else { return nil }
+                        return df.date(from: ts)
+                    }
+                }
+            } catch {
+                print("⚠️ [fetchExistingStepDates] error:", error.localizedDescription)
+            }
+
+            return []
+        }
+
+        func fetchExistingGlucoseDates() async -> [Date] {
+            guard let token = token, let userId = userId else { return [] }
+
+            guard let url = URL(string:
+                "\(baseURL)/api/collections/glucose/records?filter=(user=\"\(userId)\")&perPage=10000&fields=timestamp"
+            ) else { return [] }
+
+            var req = URLRequest(url: url)
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+            do {
+                let (data, resp) = try await URLSession.shared.data(for: req)
+                guard (resp as? HTTPURLResponse)?.statusCode == 200 else { return [] }
+
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let items = json["items"] as? [[String: Any]] {
+                    let df = ISO8601DateFormatter()
+                    return items.compactMap {
+                        guard let ts = $0["timestamp"] as? String else { return nil }
+                        return df.date(from: ts)
+                    }
+                }
+            } catch {
+                print("⚠️ [fetchExistingGlucoseDates] error:", error.localizedDescription)
+            }
+
+            return []
+        }
+
+        func uploadGlucose(timestamp: Date, mgdl: Double) async {
+            guard let token = token, let userId = userId else { return }
+
+            let rounded = Date(timeIntervalSince1970:
+                (timestamp.timeIntervalSince1970 / 60.0).rounded() * 60.0)
+            let df = ISO8601DateFormatter()
+            let ts = df.string(from: rounded)
+
+            let body: [String: Any] = [
+                "user": userId,
+                "timestamp": ts,
+                "value_mgdl": mgdl,
+                "source": "HealthKit"
+            ]
+
+            guard let url = URL(string: "\(baseURL)/api/collections/glucose/records") else { return }
+
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+            do {
+                let (data, resp) = try await URLSession.shared.data(for: req)
+                let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+                if (200..<300).contains(code) {
+                    print("✅ [uploadGlucose] created glucose @ \(ts)")
+                } else {
+                    print("❌ [uploadGlucose] HTTP \(code):", String(data: data, encoding: .utf8) ?? "")
+                }
+            } catch {
+                print("🌐 [uploadGlucose] network error:", error.localizedDescription)
+            }
+        }
+    
+    func uploadStep(timestamp: Date, steps: Int) async {
+            guard let token = token, let userId = userId else {
+                print("❌ [uploadStep] missing token/userId")
+                return
+            }
+
+            // Round to nearest minute for consistency
+            let rounded = Date(timeIntervalSince1970:
+                (timestamp.timeIntervalSince1970 / 60.0).rounded() * 60.0)
+            let df = ISO8601DateFormatter()
+            let ts = df.string(from: rounded)
+
+            let headers: [String: String] = [
+                "Authorization": "Bearer \(token)",
+                "Content-Type": "application/json"
+            ]
+
+            // 1️⃣ Check if this timestamp already exists
+            guard let filterURL = URL(string:
+                "\(baseURL)/api/collections/steps/records?filter=user='\(userId)'&&timestamp='\(ts)'"
+            ) else {
+                print("⚠️ [uploadStep] Invalid URL")
+                return
+            }
+
+            do {
+                let (data, resp) = try await URLSession.shared.data(from: filterURL)
+                let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+                guard (200..<300).contains(code) else {
+                    print("❌ [uploadStep] lookup HTTP \(code)")
+                    return
+                }
+
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let items = json["items"] as? [[String: Any]],
+                   let existing = items.first,
+                   let recordId = existing["id"] as? String {
+
+                    // 2️⃣ PATCH existing record
+                    guard let patchURL = URL(string:
+                        "\(baseURL)/api/collections/steps/records/\(recordId)"
+                    ) else { return }
+
+                    var patchReq = URLRequest(url: patchURL)
+                    patchReq.httpMethod = "PATCH"
+                    patchReq.allHTTPHeaderFields = headers
+                    patchReq.httpBody = try? JSONSerialization.data(withJSONObject: [
+                        "steps": steps,
+                        "source": "HealthKit"
+                    ])
+
+                    let (_, patchResp) = try await URLSession.shared.data(for: patchReq)
+                    let patchCode = (patchResp as? HTTPURLResponse)?.statusCode ?? -1
+                    if (200..<300).contains(patchCode) {
+                        print("♻️ [uploadStep] updated step @ \(ts)")
+                    } else {
+                        print("❌ [uploadStep] PATCH failed (\(patchCode))")
+                    }
+
+                } else {
+                    // 3️⃣ POST new record
+                    guard let postURL = URL(string:
+                        "\(baseURL)/api/collections/steps/records"
+                    ) else { return }
+
+                    var postReq = URLRequest(url: postURL)
+                    postReq.httpMethod = "POST"
+                    postReq.allHTTPHeaderFields = headers
+                    postReq.httpBody = try? JSONSerialization.data(withJSONObject: [
+                        "user": userId,
+                        "timestamp": ts,
+                        "steps": steps,
+                        "source": "HealthKit"
+                    ])
+
+                    let (data, postResp) = try await URLSession.shared.data(for: postReq)
+                    let postCode = (postResp as? HTTPURLResponse)?.statusCode ?? -1
+                    if (200..<300).contains(postCode) {
+                        print("✅ [uploadStep] created step @ \(ts)")
+                    } else {
+                        print("❌ [uploadStep] POST HTTP \(postCode):",
+                              String(data: data, encoding: .utf8) ?? "")
+                    }
+                }
+            } catch {
+                print("🌐 [uploadStep] network error:", error.localizedDescription)
+            }
+        }
+    }
 
