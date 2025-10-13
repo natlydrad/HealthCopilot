@@ -1175,7 +1175,7 @@ extension SyncManager {
                 let (data, resp) = try await URLSession.shared.data(for: req)
                 let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
                 if (200..<300).contains(code) {
-                    print("✅ [uploadGlucose] created glucose @ \(ts)")
+                    //print("✅ [uploadGlucose] created glucose @ \(ts)")
                 } else {
                     //print("❌ [uploadGlucose] HTTP \(code):", String(data: data, encoding: .utf8) ?? "")
                 }
@@ -1262,7 +1262,7 @@ extension SyncManager {
                     let (data, postResp) = try await URLSession.shared.data(for: postReq)
                     let postCode = (postResp as? HTTPURLResponse)?.statusCode ?? -1
                     if (200..<300).contains(postCode) {
-                        print("✅ [uploadStep] created step @ \(ts)")
+                        //print("✅ [uploadStep] created step @ \(ts)")
                     } else {
                         //print("❌ [uploadStep] POST HTTP \(postCode):",
                               //String(data: data, encoding: .utf8) ?? "")

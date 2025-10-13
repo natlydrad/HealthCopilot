@@ -50,13 +50,11 @@ struct SyncStatusBar: View {
 
             // 🔹 sync button
             Button("Sync Health Data") {
-                let syncer = HealthSyncManager.shared
-                syncer.syncSteps()
-                syncer.syncGlucose()
-                syncer.syncSleep(monthsBack: 6)
-                syncer.syncEnergy(monthsBack: 6)
-                syncer.syncHeart(monthsBack: 6)
+                Task {
+                    await HealthSyncManager.shared.bigSync(monthsBack: 6)
+                }
             }
+
             .buttonStyle(.borderedProminent)
             .padding(.top, 4)
 

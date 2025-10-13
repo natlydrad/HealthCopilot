@@ -41,417 +41,269 @@ final class HealthSyncManager: ObservableObject {
     private func last(_ key: String) -> Date? { UserDefaults.standard.object(forKey: key) as? Date }
     private func set(_ key: String, _ d: Date) { UserDefaults.standard.set(d, forKey: key) }
 
-    // MARK: - Sync Throttling + Overlap Config
-    private let throttleKeyAuto = "lastAutoSyncRecentAt"
-    private let throttleMinutes = 30
-    private let minuteOverlap: TimeInterval = 60 * 60 * 24       // 24h overlap for minute-level data
-    private let dayOverlap: TimeInterval = 60 * 60 * 24 * 3      // 3d overlap for daily data
-
-    private func shouldThrottle(_ key: String, minutes: Int) -> Bool {
-        guard let last = UserDefaults.standard.object(forKey: key) as? Date else { return false }
-        return Date().timeIntervalSince(last) < Double(minutes * 60)
-    }
-
-    private func setNow(_ key: String) {
-        UserDefaults.standard.set(Date(), forKey: key)
-    }
-
     // MARK: - Entrypoints
-    func syncAll(monthsBack: Int = 6) {
-        syncSteps()
-        syncGlucose()
-        syncSleep(monthsBack: monthsBack)
-        syncEnergy(monthsBack: monthsBack)
-        syncHeart(monthsBack: monthsBack)
-        syncBody(monthsBack: monthsBack)
-    }
 
-    /// Fast, safe sync for recent data; throttled every 30 min
-    func autoSyncRecent(days: Int = 7) {
-        if shouldThrottle(throttleKeyAuto, minutes: throttleMinutes) { return }
-        setNow(throttleKeyAuto)
-
-        let now = Date()
-        let todayStart = cal.startOfDay(for: now)
-        let dayEndExclusive = cal.date(byAdding: .day, value: 1, to: todayStart)! // start-of-tomorrow
-
-        // Start of the lookback window (7 days by default)
-        let lookbackStart = cal.date(byAdding: .day, value: -days, to: now)!
-
-        // Minute-level streams (cover last 7d but also respect previous anchors with overlap)
-        let stepsStart   = min(last(lastStepsKey)?.addingTimeInterval(-minuteOverlap) ?? now, lookbackStart)
-        let glucoseStart = min(last(lastGlucoseKey)?.addingTimeInterval(-minuteOverlap) ?? now, lookbackStart)
-
-        // Daily streams (exactly last 7d, aligned to day boundaries)
-        let dayRecentStart = cal.startOfDay(for: lookbackStart)
-
-        // Kick off
-        syncSteps(start: stepsStart, end: now)
-        syncGlucose(start: glucoseStart, end: now)
-
-        let dayStart = cal.startOfDay(for: dayRecentStart)
-        syncSleep(start:  dayStart, end: dayEndExclusive)
-        syncEnergy(start: dayStart, end: dayEndExclusive)
-        syncHeart(start:  dayStart, end: dayEndExclusive)
-        syncBody(start:   dayStart, end: dayEndExclusive)
-    }
-
-
-    func bigSync(monthsBack: Int = 60) {
+    func bigSync(monthsBack: Int = 12) async {
         let now = Date()
         let start = cal.date(byAdding: .month, value: -monthsBack, to: now)!
 
-        let stepsStart   = min(last(lastStepsKey)?.addingTimeInterval(-minuteOverlap) ?? now, start)
-        let glucoseStart = min(last(lastGlucoseKey)?.addingTimeInterval(-minuteOverlap) ?? now, start)
-        let dayStart = cal.startOfDay(for:
-            min(
-                last(lastSleepKey)?.addingTimeInterval(-dayOverlap)
-                ?? last(lastEnergyKey)?.addingTimeInterval(-dayOverlap)
-                ?? last(lastHeartKey)?.addingTimeInterval(-dayOverlap)
-                ?? last(lastBodyKey)?.addingTimeInterval(-dayOverlap)
-                ?? now,
-                start
-            )
-        )
+        print("🕓 Running Big Sync \(monthsBack)m back → \(start.formatted()) → \(now.formatted())")
 
-        syncSteps(start: stepsStart, end: now)
-        syncGlucose(start: glucoseStart, end: now)
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await self.syncSteps(start: start, end: now) }
+            group.addTask { await self.syncGlucose(start: start, end: now) }
+            group.addTask { await self.syncSleep(start: start, end: now) }
+            group.addTask { await self.syncEnergy(start: start, end: now) }
+            group.addTask { await self.syncHeart(start: start, end: now) }
+            group.addTask { await self.syncBody(start: start, end: now) }
+        }
 
-        let todayStart = cal.startOfDay(for: now)
-        let dayEndExclusive = cal.date(byAdding: .day, value: 1, to: todayStart)! // start-of-tomorrow
-
-        // 👇 use dayStart (not dayRecentStart)
-        syncSleep(start:  cal.startOfDay(for: dayStart), end: dayEndExclusive)
-        syncEnergy(start: cal.startOfDay(for: dayStart), end: dayEndExclusive)
-        syncHeart(start:  cal.startOfDay(for: dayStart), end: dayEndExclusive)
-        syncBody(start:   cal.startOfDay(for: dayStart), end: dayEndExclusive)
+        print("✅ Big Sync complete")
     }
 
+    func syncRecentDay() async {
+        print("⚡️ Running 24h auto-sync for all major metrics…")
+        let now = Date()
+        let start = cal.date(byAdding: .day, value: -1, to: now)!
+        let end = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
+
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await self.syncSteps(start: start, end: end) }
+            group.addTask { await self.syncGlucose(start: start, end: end) }
+            group.addTask { await self.syncSleep(start: start, end: end) }
+            group.addTask { await self.syncEnergy(start: start, end: end) }
+            group.addTask { await self.syncHeart(start: start, end: end) }
+            group.addTask { await self.syncBody(start: start, end: end) }
+        }
+    }
 
     // MARK: - Steps
-    func syncSteps() {
-        let now = Date()
-        let start = Calendar.current.date(byAdding: .day, value: -180, to: now)!
-        syncSteps(start: start, end: now)
-    }
-
-    func syncSteps(start: Date, end: Date) {
+    func syncSteps(start: Date, end: Date) async {
         stepsState = .syncing
-        Task.detached {
-            do {
-                print("📆 [syncSteps] \(start) → \(end)")
-
-                let raw = await withCheckedContinuation { cont in
-                    self.hk.fetchStepData(start: start, end: end, intervalMinutes: 5) {
-                        cont.resume(returning: $0)
-                    }
-                }
-
-                let existing = await self.sync.fetchExistingStepDates()
-                let existingSet = Set(existing.map { Calendar.current.startOfMinute(for: $0) })
-                var uploaded = Set<Date>()
-
-                for s in raw.sorted(by: { $0.date < $1.date }) where s.steps > 0 {
-                    let minute = Calendar.current.startOfMinute(for: s.date)
-                    guard !uploaded.contains(minute), !existingSet.contains(minute) else { continue }
-                    uploaded.insert(minute)
-                    await self.sync.uploadStep(timestamp: minute, steps: s.steps)
-                }
-
-                await MainActor.run {
-                    if let lastUploaded = uploaded.sorted().last {
-                        self.set(self.lastStepsKey, lastUploaded)
-                    } else {
-                        self.set(self.lastStepsKey, end)
-                    }
-                    self.stepsState = .upToDate(Date())
-                }
-
-                print("✅ [syncSteps] uploaded \(uploaded.count) new records")
-            } catch {
-                await MainActor.run { self.stepsState = .error(error.localizedDescription) }
+        print("📆 [syncSteps] \(start) → \(end)")
+        do {
+            let raw = await withCheckedContinuation { cont in
+                hk.fetchStepData(start: start, end: end, intervalMinutes: 5) { cont.resume(returning: $0) }
             }
+
+            let existing = await sync.fetchExistingStepDates()
+            let existingSet = Set(existing.map { cal.startOfMinute(for: $0) })
+            var uploaded = 0
+
+            for s in raw.sorted(by: { $0.date < $1.date }) where s.steps > 0 {
+                let minute = cal.startOfMinute(for: s.date)
+                guard !existingSet.contains(minute) else { continue }
+                await sync.uploadStep(timestamp: minute, steps: s.steps)
+                uploaded += 1
+            }
+
+            set(lastStepsKey, end)
+            stepsState = .upToDate(Date())
+            print("✅ [syncSteps] uploaded \(uploaded) new")
+        } catch {
+            stepsState = .error(error.localizedDescription)
         }
     }
 
     // MARK: - Glucose
-    func syncGlucose() {
-        let now = Date()
-        let start = self.cal.date(byAdding: .day, value: -180, to: now)!
-        syncGlucose(start: start, end: now)
-    }
-
-    func syncGlucose(start: Date, end: Date) {
+    func syncGlucose(start: Date, end: Date) async {
         glucoseState = .syncing
-        Task.detached { await self.runGlucoseSync(start: start, end: end) }
-    }
-
-    private func runGlucoseSync(start: Date, end: Date) async {
+        print("📆 [syncGlucose] \(start) → \(end)")
         do {
             let samples = await withCheckedContinuation { cont in
-                self.hk.fetchGlucoseData(start: start, end: end) { cont.resume(returning: $0) }
+                hk.fetchGlucoseData(start: start, end: end) { cont.resume(returning: $0) }
             }
 
-            let existing = await self.sync.fetchExistingGlucoseDates()
-            let existingSet = Set(existing.map { Calendar.current.startOfMinute(for: $0) })
-            var uploaded = Set<Date>()
+            let existing = await sync.fetchExistingGlucoseDates()
+            let existingSet = Set(existing.map { cal.startOfMinute(for: $0) })
+            var uploaded = 0
 
             for g in samples.sorted(by: { $0.date < $1.date }) {
-                let minute = Calendar.current.startOfMinute(for: g.date)
-                guard !uploaded.contains(minute), !existingSet.contains(minute) else { continue }
-                uploaded.insert(minute)
-                await self.sync.uploadGlucose(timestamp: minute, mgdl: g.value)
+                let minute = cal.startOfMinute(for: g.date)
+                guard !existingSet.contains(minute) else { continue }
+                await sync.uploadGlucose(timestamp: g.date, mgdl: g.value)
+                uploaded += 1
             }
 
-            await MainActor.run {
-                self.set(self.lastGlucoseKey, end)
-                self.glucoseState = .upToDate(Date())
-            }
+            set(lastGlucoseKey, end)
+            glucoseState = .upToDate(Date())
+            print("✅ [syncGlucose] uploaded \(uploaded) new")
         } catch {
-            await MainActor.run { self.glucoseState = .error(error.localizedDescription) }
+            glucoseState = .error(error.localizedDescription)
         }
     }
 
     // MARK: - Sleep
-    func syncSleep(monthsBack: Int = 6) {
-        let now = Date()
-        let start = self.cal.date(byAdding: .month, value: -monthsBack, to: now)!
-        syncSleep(start: start, end: now)
-    }
-
-    func syncSleep(start: Date, end: Date) {
+    func syncSleep(start: Date, end: Date) async {
         sleepState = .syncing
-        Task.detached {
-            do {
-                let episodes = await withCheckedContinuation { cont in
-                    self.hk.fetchSleepEpisodes(start: start, end: end) { cont.resume(returning: $0) }
-                }
-
-                struct Totals { var inBed=0.0, core=0.0, deep=0.0, rem=0.0, asleep=0.0 }
-                var byDay: [Date: Totals] = [:]
-
-                for e in episodes {
-                    let dur = e.end.timeIntervalSince(e.start) / 60.0
-                    let wakeDay = self.cal.startOfDay(for: e.end)
-                    var t = byDay[wakeDay, default: Totals()]
-                    switch e.stage {
-                    case "inBed": t.inBed += dur
-                    case "asleepCore": t.core += dur; t.asleep += dur
-                    case "asleepDeep": t.deep += dur; t.asleep += dur
-                    case "asleepREM": t.rem += dur;  t.asleep += dur
-                    default: t.asleep += dur
-                    }
-                    byDay[wakeDay] = t
-                }
-
-                let existingDays = await self.sync.fetchExistingSleepDays()
-                let existingSet = Set(existingDays.map { self.cal.startOfDay(for: $0) })
-
-                for (day, t) in byDay.sorted(by: { $0.key < $1.key }) {
-                    guard !existingSet.contains(day) else { continue }
-                    await self.sync.uploadSleepDaily(
-                        date: day,
-                        totalMin: t.asleep,
-                        remMin: t.rem,
-                        deepMin: t.deep,
-                        coreMin: t.core,
-                        inBedMin: t.inBed
-                    )
-                }
-
-                await MainActor.run {
-                    self.set(self.lastSleepKey, end)
-                    self.sleepState = .upToDate(Date())
-                }
-            } catch {
-                await MainActor.run { self.sleepState = .error(error.localizedDescription) }
+        print("😴 [syncSleep] \(start) → \(end)")
+        do {
+            let episodes = await withCheckedContinuation { cont in
+                hk.fetchSleepEpisodes(start: start, end: end) { cont.resume(returning: $0) }
             }
+
+            struct Totals { var inBed=0.0, core=0.0, deep=0.0, rem=0.0, asleep=0.0 }
+            var byDay: [Date: Totals] = [:]
+
+            for e in episodes {
+                let dur = e.end.timeIntervalSince(e.start) / 60.0
+                let wakeDay = cal.startOfDay(for: e.end)
+                var t = byDay[wakeDay, default: Totals()]
+                switch e.stage.lowercased() {
+                case "inbed": t.inBed += dur
+                case "core": t.core += dur; t.asleep += dur
+                case "deep": t.deep += dur; t.asleep += dur
+                case "rem":  t.rem += dur;  t.asleep += dur
+                default:
+                    t.asleep += dur
+                }
+                byDay[wakeDay] = t
+            }
+
+            if let s = episodes.first { print("🛌 Sample stage:", s.stage) }
+
+            let existingDays = await sync.fetchExistingSleepDays()
+            let existingSet = Set(existingDays.map { cal.startOfDay(for: $0) })
+
+            var uploaded = 0
+            for (day, t) in byDay.sorted(by: { $0.key < $1.key }) {
+                guard !existingSet.contains(day) else { continue }
+                await sync.uploadSleepDaily(
+                    date: day,
+                    totalMin: t.asleep,
+                    remMin: t.rem,
+                    deepMin: t.deep,
+                    coreMin: t.core,
+                    inBedMin: t.inBed
+                )
+                uploaded += 1
+            }
+
+            set(lastSleepKey, end)
+            sleepState = .upToDate(Date())
+            print("✅ [syncSleep] uploaded \(uploaded) new")
+        } catch {
+            sleepState = .error(error.localizedDescription)
         }
     }
 
     // MARK: - Energy
-    func syncEnergy(monthsBack: Int = 6) {
-        let now = Date()
-        let start = self.cal.date(byAdding: .month, value: -monthsBack, to: now)!
-        syncEnergy(start: start, end: now)
-    }
-
-    func syncEnergy(start: Date, end: Date) {
+    func syncEnergy(start: Date, end: Date) async {
         energyState = .syncing
-        Task.detached {
-            do {
-                async let active: [HealthKitManager.DailyValue] = withCheckedContinuation { cont in
-                    self.hk.fetchActiveEnergyDaily(start: start, end: end) { cont.resume(returning: $0) }
-                }
-                async let basal: [HealthKitManager.DailyValue] = withCheckedContinuation { cont in
-                    self.hk.fetchBasalEnergyDaily(start: start, end: end) { cont.resume(returning: $0) }
-                }
-
-                let (a, b) = await (active, basal)
-                let allDays = Set(a.map{$0.date}).union(b.map{$0.date})
-                for day in allDays.sorted() {
-                    let activeKcal = a.first(where: {$0.date==day})?.value ?? 0
-                    let basalKcal  = b.first(where: {$0.date==day})?.value ?? 0
-                    await self.sync.uploadEnergyDaily(date: day, activeKcal: activeKcal, basalKcal: basalKcal)
-                }
-
-                await MainActor.run {
-                    self.set(self.lastEnergyKey, end)
-                    self.energyState = .upToDate(Date())
-                }
-            } catch {
-                await MainActor.run { self.energyState = .error(error.localizedDescription) }
+        print("🔥 [syncEnergy] \(start) → \(end)")
+        do {
+            async let active: [HealthKitManager.DailyValue] = withCheckedContinuation { cont in
+                hk.fetchActiveEnergyDaily(start: start, end: end) { cont.resume(returning: $0) }
             }
+            async let basal: [HealthKitManager.DailyValue] = withCheckedContinuation { cont in
+                hk.fetchBasalEnergyDaily(start: start, end: end) { cont.resume(returning: $0) }
+            }
+
+            let (a, b) = await (active, basal)
+            let existingDays = await sync.fetchExistingEnergyDays()
+            let existingSet = Set(existingDays.map { cal.startOfDay(for: $0) })
+
+            let allDays = Set(a.map { cal.startOfDay(for: $0.date) })
+                .union(b.map { cal.startOfDay(for: $0.date) })
+
+            var uploaded = 0
+            for day in allDays.sorted() {
+                guard !existingSet.contains(day) else { continue }
+                let activeKcal = a.first(where: { cal.startOfDay(for: $0.date) == day })?.value ?? 0
+                let basalKcal  = b.first(where: { cal.startOfDay(for: $0.date) == day })?.value ?? 0
+                await sync.uploadEnergyDaily(date: day, activeKcal: activeKcal, basalKcal: basalKcal)
+                uploaded += 1
+            }
+
+            set(lastEnergyKey, end)
+            energyState = .upToDate(Date())
+            print("✅ [syncEnergy] uploaded \(uploaded) new")
+        } catch {
+            energyState = .error(error.localizedDescription)
         }
     }
 
     // MARK: - Heart
-    func syncHeart(monthsBack: Int = 6) {
-        let now = Date()
-        let start = self.cal.date(byAdding: .month, value: -monthsBack, to: now)!
-        syncHeart(start: start, end: now)
-    }
-
-    func syncHeart(start: Date, end: Date) {
+    func syncHeart(start: Date, end: Date) async {
         heartState = .syncing
-        Task.detached {
-            do {
-                async let rhr: [HealthKitManager.DailyValue] = withCheckedContinuation { cont in
-                    self.hk.fetchRestingHRDaily(start: start, end: end) { cont.resume(returning: $0) }
-                }
-                async let hrv: [HealthKitManager.DailyValue] = withCheckedContinuation { cont in
-                    self.hk.fetchHRVDaily(start: start, end: end) { cont.resume(returning: $0) }
-                }
-                async let vo2: [HealthKitManager.DailyValue] = withCheckedContinuation { cont in
-                    self.hk.fetchVO2MaxDaily(start: start, end: end) { cont.resume(returning: $0) }
-                }
-
-                let (r, h, v) = await (rhr, hrv, vo2)
-                let allDays = Set(r.map{$0.date}).union(h.map{$0.date}).union(v.map{$0.date})
-                for day in allDays.sorted() {
-                    let rhrBpm = r.first(where: {$0.date==day})?.value
-                    let hrvMs  = h.first(where: {$0.date==day})?.value
-                    let vo2mx  = v.first(where: {$0.date==day})?.value
-                    await self.sync.uploadHeartDaily(date: day,
-                                                     restingHR: rhrBpm,
-                                                     hrvSDNNms: hrvMs,
-                                                     vo2max: vo2mx)
-                }
-
-                await MainActor.run {
-                    self.set(self.lastHeartKey, end)
-                    self.heartState = .upToDate(Date())
-                }
-            } catch {
-                await MainActor.run { self.heartState = .error(error.localizedDescription) }
+        print("❤️ [syncHeart] \(start) → \(end)")
+        do {
+            async let rhr: [HealthKitManager.DailyValue] = withCheckedContinuation { cont in
+                hk.fetchRestingHRDaily(start: start, end: end) { cont.resume(returning: $0) }
             }
+            async let hrv: [HealthKitManager.DailyValue] = withCheckedContinuation { cont in
+                hk.fetchHRVDaily(start: start, end: end) { cont.resume(returning: $0) }
+            }
+            async let vo2: [HealthKitManager.DailyValue] = withCheckedContinuation { cont in
+                hk.fetchVO2MaxDaily(start: start, end: end) { cont.resume(returning: $0) }
+            }
+
+            let (r, h, v) = await (rhr, hrv, vo2)
+            let existingDays = await sync.fetchExistingHeartDays()
+            let existingSet = Set(existingDays.map { cal.startOfDay(for: $0) })
+
+            let allDays = Set(r.map { cal.startOfDay(for: $0.date) })
+                .union(h.map { cal.startOfDay(for: $0.date) })
+                .union(v.map { cal.startOfDay(for: $0.date) })
+
+            var uploaded = 0
+            for day in allDays.sorted() {
+                guard !existingSet.contains(day) else { continue }
+                let rhrBpm = r.first(where: { cal.startOfDay(for: $0.date) == day })?.value
+                let hrvMs  = h.first(where: { cal.startOfDay(for: $0.date) == day })?.value
+                let vo2mx  = v.first(where: { cal.startOfDay(for: $0.date) == day })?.value
+                await sync.uploadHeartDaily(date: day, restingHR: rhrBpm, hrvSDNNms: hrvMs, vo2max: vo2mx)
+                uploaded += 1
+            }
+
+            set(lastHeartKey, end)
+            heartState = .upToDate(Date())
+            print("✅ [syncHeart] uploaded \(uploaded) new")
+        } catch {
+            heartState = .error(error.localizedDescription)
         }
     }
 
     // MARK: - Body
-    func syncBody(monthsBack: Int = 6) {
-        let now = Date()
-        let start = self.cal.date(byAdding: .month, value: -monthsBack, to: now)!
-        syncBody(start: start, end: now)
-    }
-
-    func syncBody(start: Date, end: Date) {
+    func syncBody(start: Date, end: Date) async {
         bodyState = .syncing
-        Task.detached {
-            do {
-                async let w: [HealthKitManager.DailyValue] = withCheckedContinuation { cont in
-                    self.hk.fetchWeightDaily(start: start, end: end) { cont.resume(returning: $0) }
-                }
-                async let f: [HealthKitManager.DailyValue] = withCheckedContinuation { cont in
-                    self.hk.fetchBodyFatDaily(start: start, end: end) { cont.resume(returning: $0) }
-                }
-
-                let (weights, fats) = await (w, f)
-                let allDays = Set(weights.map{$0.date}).union(fats.map{$0.date})
-                for day in allDays.sorted() {
-                    let kg  = weights.first(where: {$0.date==day})?.value
-                    let pct = fats.first(where: {$0.date==day})?.value
-                    await self.sync.uploadBodyDaily(date: day, weightKg: kg, bodyFatPct: pct)
-                }
-
-                await MainActor.run {
-                    self.set(self.lastBodyKey, end)
-                    self.bodyState = .upToDate(Date())
-                }
-            } catch {
-                await MainActor.run { self.bodyState = .error(error.localizedDescription) }
+        print("⚖️ [syncBody] \(start) → \(end)")
+        do {
+            async let w: [HealthKitManager.DailyValue] = withCheckedContinuation { cont in
+                hk.fetchWeightDaily(start: start, end: end) { cont.resume(returning: $0) }
             }
-        }
-    }
-    
-    func syncRecentDay() async {
-        print("⚡️ Running 24h auto-sync for all major metrics…")
-        let now = Date()
-        let start = Calendar.current.date(byAdding: .day, value: -1, to: now)!
-        let end = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: now))! // start-of-tomorrow
-
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { await self.syncStepsRecent(daysBack: 1) }
-            group.addTask { await self.syncGlucoseRecent(daysBack: 1) }
-            group.addTask { await self.syncSleep(start: Calendar.current.startOfDay(for: start), end: end) }
-            group.addTask { await self.syncEnergy(start: Calendar.current.startOfDay(for: start), end: end) }
-            group.addTask { await self.syncHeart(start: Calendar.current.startOfDay(for: start), end: end) }
-            group.addTask { await self.syncBody(start: Calendar.current.startOfDay(for: start), end: end) }
-        }
-    }
-
-
-        // same code as your full ones, just with a `daysBack` param
-        func syncStepsRecent(daysBack: Int) async {
-            stepsState = .syncing
-            let now = Date()
-            let start = Calendar.current.date(byAdding: .day, value: -daysBack, to: now)!
-            print("⚡️ [syncStepsRecent] \(start) → \(now)")
-            let raw = await withCheckedContinuation { cont in
-                self.hk.fetchStepData(start: start, end: now, intervalMinutes: 5) {
-                    cont.resume(returning: $0)
-                }
+            async let f: [HealthKitManager.DailyValue] = withCheckedContinuation { cont in
+                hk.fetchBodyFatDaily(start: start, end: end) { cont.resume(returning: $0) }
             }
-            let existing = await self.sync.fetchExistingStepDates()
-            let existingSet = Set(existing.map { Calendar.current.startOfMinute(for: $0) })
+
+            let (weights, fats) = await (w, f)
+            let existingDays = await sync.fetchExistingBodyDays()
+            let existingSet = Set(existingDays.map { cal.startOfDay(for: $0) })
+
+            let allDays = Set(weights.map { cal.startOfDay(for: $0.date) })
+                .union(fats.map { cal.startOfDay(for: $0.date) })
+
             var uploaded = 0
-            for s in raw.sorted(by: { $0.date < $1.date }) where s.steps > 0 {
-                let m = Calendar.current.startOfMinute(for: s.date)
-                guard !existingSet.contains(m) else { continue }
-                await self.sync.uploadStep(timestamp: s.date, steps: s.steps)
+            for day in allDays.sorted() {
+                guard !existingSet.contains(day) else { continue }
+                let kg  = weights.first(where: { cal.startOfDay(for: $0.date) == day })?.value
+                let pct = fats.first(where: { cal.startOfDay(for: $0.date) == day })?.value
+                await sync.uploadBodyDaily(date: day, weightKg: kg, bodyFatPct: pct)
                 uploaded += 1
             }
-            await MainActor.run { self.stepsState = .upToDate(now) }
-            print("✅ [syncStepsRecent] uploaded \(uploaded) new")
-        }
 
-        func syncGlucoseRecent(daysBack: Int) async {
-            glucoseState = .syncing
-            let now = Date()
-            let start = Calendar.current.date(byAdding: .day, value: -daysBack, to: now)!
-            print("⚡️ [syncGlucoseRecent] \(start) → \(now)")
-            let samples = await withCheckedContinuation { cont in
-                self.hk.fetchGlucoseData(start: start, end: now) {
-                    cont.resume(returning: $0)
-                }
-            }
-            let existing = await self.sync.fetchExistingGlucoseDates()
-            let existingSet = Set(existing.map { Calendar.current.startOfMinute(for: $0) })
-            var uploaded = 0
-            for g in samples.sorted(by: { $0.date < $1.date }) {
-                let m = Calendar.current.startOfMinute(for: g.date)
-                guard !existingSet.contains(m) else { continue }
-                await self.sync.uploadGlucose(timestamp: g.date, mgdl: g.value)
-                uploaded += 1
-            }
-            await MainActor.run { self.glucoseState = .upToDate(now) }
-            print("✅ [syncGlucoseRecent] uploaded \(uploaded) new")
+            set(lastBodyKey, end)
+            bodyState = .upToDate(Date())
+            print("✅ [syncBody] uploaded \(uploaded) new")
+        } catch {
+            bodyState = .error(error.localizedDescription)
         }
     }
+}
 
-// Helper
+// MARK: - Helpers
 extension Calendar {
     func startOfMinute(for date: Date) -> Date {
-        return self.date(from: self.dateComponents([.year, .month, .day, .hour, .minute], from: date))!
+        self.date(from: self.dateComponents([.year, .month, .day, .hour, .minute], from: date))!
     }
 }
