@@ -225,25 +225,71 @@ final class HealthKitManager {
         store.execute(q)
     }
 
-    private func dailyAvg(type: HKQuantityType, start: Date, end: Date, unit: HKUnit,
-                          completion: @escaping ([DailyValue]) -> Void) {
+    private func dailyAvg(
+        type: HKQuantityType,
+        start: Date,
+        end: Date,
+        unit: HKUnit,
+        completion: @escaping ([DailyValue]) -> Void
+    ) {
+        let cal = Calendar.current
+
+        // 🩵 Expand window ±12 hours to catch early/late samples
+        let paddedStart = cal.date(byAdding: .hour, value: -12, to: start)!
+        let paddedEnd   = cal.date(byAdding: .hour, value: 12, to: end)!
+        
+        print("🔎 [dailyAvg] \(type.identifier) \(paddedStart) → \(paddedEnd)")
+
+
         var interval = DateComponents(); interval.day = 1
-        let anchor = Calendar.current.startOfDay(for: start)
-        let pred = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
-        let q = HKStatisticsCollectionQuery(quantityType: type, quantitySamplePredicate: pred,
-                                            options: [.discreteAverage], anchorDate: anchor, intervalComponents: interval)
-        q.initialResultsHandler = { _, results, _ in
+        let anchor = cal.startOfDay(for: paddedStart)
+
+        // Use a relaxed predicate (no .strictStartDate) so late-night samples aren’t excluded
+        let predicate = HKQuery.predicateForSamples(withStart: paddedStart, end: paddedEnd, options: [])
+
+        let query = HKStatisticsCollectionQuery(
+            quantityType: type,
+            quantitySamplePredicate: predicate,
+            options: [.discreteAverage],
+            anchorDate: anchor,
+            intervalComponents: interval
+        )
+
+        query.initialResultsHandler = { _, results, _ in
             var out: [DailyValue] = []
-            results?.enumerateStatistics(from: start, to: end) { stats, _ in
+
+            results?.enumerateStatistics(from: paddedStart, to: paddedEnd) { stats, _ in
                 if let avg = stats.averageQuantity() {
-                    out.append(DailyValue(date: Calendar.current.startOfDay(for: stats.startDate),
-                                          value: avg.doubleValue(for: unit)))
+                    out.append(DailyValue(
+                        date: cal.startOfDay(for: stats.startDate),
+                        value: avg.doubleValue(for: unit)
+                    ))
                 }
             }
-            DispatchQueue.main.async { completion(out.sorted{ $0.date < $1.date }) }
+
+            // sort + deliver on main thread
+            DispatchQueue.main.async {
+                completion(out.sorted { $0.date < $1.date })
+            }
+        }
+
+        store.execute(query)
+    }
+    
+    func debugListRestingHR(start: Date, end: Date) {
+        guard let qt = HKQuantityType.quantityType(forIdentifier: .restingHeartRate) else { return }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end)
+
+        let q = HKSampleQuery(sampleType: qt, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
+            guard let samples = samples as? [HKQuantitySample] else { return }
+            print("🧩 Found \(samples.count) resting HR samples:")
+            for s in samples {
+                print("   \(s.quantity.doubleValue(for: .count().unitDivided(by: .minute()))) bpm @ \(s.startDate)")
+            }
         }
         store.execute(q)
     }
+
 
     // Debug helper (optional)
     func debugListAllTypes() {
