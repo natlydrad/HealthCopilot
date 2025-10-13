@@ -67,25 +67,36 @@ final class HealthSyncManager: ObservableObject {
     }
 
     /// Fast, safe sync for recent data; throttled every 30 min
-    func autoSyncRecent() {
+    func autoSyncRecent(days: Int = 7) {
         if shouldThrottle(throttleKeyAuto, minutes: throttleMinutes) { return }
         setNow(throttleKeyAuto)
 
         let now = Date()
-        let stepsStart   = last(lastStepsKey)?.addingTimeInterval(-minuteOverlap) ?? now.addingTimeInterval(-3*24*60*60)
-        let glucoseStart = last(lastGlucoseKey)?.addingTimeInterval(-minuteOverlap) ?? now.addingTimeInterval(-3*24*60*60)
-        let dayRecentStart = last(lastSleepKey)?.addingTimeInterval(-dayOverlap)
-            ?? now.addingTimeInterval(-14*24*60*60)
+        let todayStart = cal.startOfDay(for: now)
+        let dayEndExclusive = cal.date(byAdding: .day, value: 1, to: todayStart)! // start-of-tomorrow
 
+        // Start of the lookback window (7 days by default)
+        let lookbackStart = cal.date(byAdding: .day, value: -days, to: now)!
+
+        // Minute-level streams (cover last 7d but also respect previous anchors with overlap)
+        let stepsStart   = min(last(lastStepsKey)?.addingTimeInterval(-minuteOverlap) ?? now, lookbackStart)
+        let glucoseStart = min(last(lastGlucoseKey)?.addingTimeInterval(-minuteOverlap) ?? now, lookbackStart)
+
+        // Daily streams (exactly last 7d, aligned to day boundaries)
+        let dayRecentStart = cal.startOfDay(for: lookbackStart)
+
+        // Kick off
         syncSteps(start: stepsStart, end: now)
         syncGlucose(start: glucoseStart, end: now)
-        syncSleep(start: cal.startOfDay(for: dayRecentStart), end: cal.startOfDay(for: now))
-        syncEnergy(start: cal.startOfDay(for: dayRecentStart), end: cal.startOfDay(for: now))
-        syncHeart(start: cal.startOfDay(for: dayRecentStart), end: cal.startOfDay(for: now))
-        syncBody(start: cal.startOfDay(for: dayRecentStart), end: cal.startOfDay(for: now))
+
+        let dayStart = cal.startOfDay(for: dayRecentStart)
+        syncSleep(start:  dayStart, end: dayEndExclusive)
+        syncEnergy(start: dayStart, end: dayEndExclusive)
+        syncHeart(start:  dayStart, end: dayEndExclusive)
+        syncBody(start:   dayStart, end: dayEndExclusive)
     }
 
-    /// Deep historical sync (safe to re-run; deduped)
+
     func bigSync(monthsBack: Int = 60) {
         let now = Date()
         let start = cal.date(byAdding: .month, value: -monthsBack, to: now)!
@@ -105,11 +116,17 @@ final class HealthSyncManager: ObservableObject {
 
         syncSteps(start: stepsStart, end: now)
         syncGlucose(start: glucoseStart, end: now)
-        syncSleep(start: dayStart, end: cal.startOfDay(for: now))
-        syncEnergy(start: dayStart, end: cal.startOfDay(for: now))
-        syncHeart(start: dayStart, end: cal.startOfDay(for: now))
-        syncBody(start: dayStart, end: cal.startOfDay(for: now))
+
+        let todayStart = cal.startOfDay(for: now)
+        let dayEndExclusive = cal.date(byAdding: .day, value: 1, to: todayStart)! // start-of-tomorrow
+
+        // 👇 use dayStart (not dayRecentStart)
+        syncSleep(start:  cal.startOfDay(for: dayStart), end: dayEndExclusive)
+        syncEnergy(start: cal.startOfDay(for: dayStart), end: dayEndExclusive)
+        syncHeart(start:  cal.startOfDay(for: dayStart), end: dayEndExclusive)
+        syncBody(start:   cal.startOfDay(for: dayStart), end: dayEndExclusive)
     }
+
 
     // MARK: - Steps
     func syncSteps() {
@@ -368,16 +385,21 @@ final class HealthSyncManager: ObservableObject {
     }
     
     func syncRecentDay() async {
-            print("⚡️ Running 24h auto-sync for all major metrics…")
-            await withTaskGroup(of: Void.self) { group in
-                group.addTask { await self.syncStepsRecent(daysBack: 1) }
-                group.addTask { await self.syncGlucoseRecent(daysBack: 1) }
-                group.addTask { await self.syncSleep(monthsBack: 0) }     // 1 day ≈ 0 months
-                group.addTask { await self.syncEnergy(monthsBack: 0) }
-                group.addTask { await self.syncHeart(monthsBack: 0) }
-                group.addTask { await self.syncBody(monthsBack: 0) }
-            }
+        print("⚡️ Running 24h auto-sync for all major metrics…")
+        let now = Date()
+        let start = Calendar.current.date(byAdding: .day, value: -1, to: now)!
+        let end = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: now))! // start-of-tomorrow
+
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await self.syncStepsRecent(daysBack: 1) }
+            group.addTask { await self.syncGlucoseRecent(daysBack: 1) }
+            group.addTask { await self.syncSleep(start: Calendar.current.startOfDay(for: start), end: end) }
+            group.addTask { await self.syncEnergy(start: Calendar.current.startOfDay(for: start), end: end) }
+            group.addTask { await self.syncHeart(start: Calendar.current.startOfDay(for: start), end: end) }
+            group.addTask { await self.syncBody(start: Calendar.current.startOfDay(for: start), end: end) }
         }
+    }
+
 
         // same code as your full ones, just with a `daysBack` param
         func syncStepsRecent(daysBack: Int) async {

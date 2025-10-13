@@ -174,24 +174,29 @@ struct LogView: View {
         pickedItem = nil
         pickedImageData = nil
     }
-    
     // MARK: - Health sync triggers
     
-    private func runAutoSyncLastDay() async {
-        if let last = lastAutoSync, Date().timeIntervalSince(last) < 300 {
-            print("🕒 Skipping auto-sync (<5 min since last)")
-            return
+    private func runAutoSyncLastDay() {
+        // don’t block the view’s task
+        Task { @MainActor in
+            if let last = lastAutoSync, Date().timeIntervalSince(last) < 300 {
+                print("🕒 Skipping auto-sync (<5 min since last)")
+                return
+            }
+            lastAutoSync = Date()
+            await healthSync.syncRecentDay() // uses 24h window + start-of-tomorrow end
         }
-        lastAutoSync = Date()
-        await healthSync.syncRecentDay()
     }
-
-    private func runBigSync() async {
+    
+    private func runBigSync() {
         guard !isBigSyncing else { return }
         isBigSyncing = true
         print("🕓 Running Big Sync (multi-year backfill)…")
-        await healthSync.syncAll(monthsBack: 36)
-        isBigSyncing = false
-        print("✅ Big Sync complete")
+        Task { @MainActor in
+            // Use the overlap-aware entrypoint (dedup-friendly)
+            await healthSync.bigSync(monthsBack: 36)
+            isBigSyncing = false
+            print("✅ Big Sync complete")
+        }
     }
 }

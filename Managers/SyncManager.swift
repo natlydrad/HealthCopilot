@@ -904,44 +904,53 @@ extension SyncManager {
     
     // MARK: - Fetch existing daily dates
     private func fetchExistingDailyDates(collection: String) async -> [Date] {
-        guard let url = URL(string: "\(baseURL)/api/collections/\(collection)/records") else {
-            print("⚠️ Invalid URL for \(collection)")
+        guard let token = token, let userId = userId else {
+            print("⚠️ [fetchExistingDailyDates] missing token/userId")
             return []
         }
-        
-        var req = URLRequest(url: url)
-        req.httpMethod = "GET"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        if let token = token {
+
+        var results: [Date] = []
+        var page = 1
+        let perPage = 200
+        let df = ISO8601DateFormatter()
+
+        while true {
+            // filter by user, project only 'date' to keep payload small
+            let filter = "user='\(userId)'"
+            guard let url = URL(string:
+                "\(baseURL)/api/collections/\(collection)/records?filter=\(filter.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!)&fields=date&perPage=\(perPage)&page=\(page)"
+            ) else { break }
+
+            var req = URLRequest(url: url)
+            req.httpMethod = "GET"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        
-        do {
-            let (data, response) = try await URLSession.shared.data(for: req)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                print("⚠️ [SyncManager] Non-200 fetching \(collection)")
-                return []
-            }
-            
-            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let items = json["items"] as? [[String: Any]] else {
-                print("⚠️ [SyncManager] Unexpected JSON for \(collection)")
-                return []
-            }
-            
-            let iso = ISO8601DateFormatter()
-            return items.compactMap { rec in
-                if let s = rec["date"] as? String {
-                    return iso.date(from: s)
+
+            do {
+                let (data, resp) = try await URLSession.shared.data(for: req)
+                guard (resp as? HTTPURLResponse)?.statusCode == 200,
+                      let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let items = json["items"] as? [[String: Any]]
+                else { break }
+
+                let dates = items.compactMap { rec -> Date? in
+                    guard let s = rec["date"] as? String else { return nil }
+                    return df.date(from: s)
                 }
-                return nil
+                results.append(contentsOf: dates)
+
+                // stop if fewer than perPage records returned
+                if items.count < perPage { break }
+                page += 1
+            } catch {
+                print("⚠️ [fetchExistingDailyDates] error:", error.localizedDescription)
+                break
             }
-        } catch {
-            print("⚠️ [SyncManager] Failed to fetch existing dates for \(collection): \(error)")
-            return []
         }
+
+        return results
     }
+
     
     func fetchExistingSleepDays() async -> [Date] {
         await fetchExistingDailyDates(collection: "sleep_daily")
@@ -1168,7 +1177,7 @@ extension SyncManager {
                 if (200..<300).contains(code) {
                     print("✅ [uploadGlucose] created glucose @ \(ts)")
                 } else {
-                    print("❌ [uploadGlucose] HTTP \(code):", String(data: data, encoding: .utf8) ?? "")
+                    //print("❌ [uploadGlucose] HTTP \(code):", String(data: data, encoding: .utf8) ?? "")
                 }
             } catch {
                 print("🌐 [uploadGlucose] network error:", error.localizedDescription)
@@ -1255,8 +1264,8 @@ extension SyncManager {
                     if (200..<300).contains(postCode) {
                         print("✅ [uploadStep] created step @ \(ts)")
                     } else {
-                        print("❌ [uploadStep] POST HTTP \(postCode):",
-                              String(data: data, encoding: .utf8) ?? "")
+                        //print("❌ [uploadStep] POST HTTP \(postCode):",
+                              //String(data: data, encoding: .utf8) ?? "")
                     }
                 }
             } catch {
