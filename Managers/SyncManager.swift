@@ -3,6 +3,13 @@ import UniformTypeIdentifiers
 import ImageIO
 import UIKit
 
+// 🌍 Shared UTC calendar across app
+let utcCal: Calendar = {
+    var c = Calendar(identifier: .gregorian)
+    c.timeZone = TimeZone(secondsFromGMT: 0)!
+    return c
+}()
+
 private let PB_PHOTO_FIELD = "image"
 
 private let pbDateFormatterMS: DateFormatter = {
@@ -1005,7 +1012,7 @@ extension SyncManager {
     
     // MARK: - Shared upsert helper
     fileprivate func upsertDaily(collection: String, date: Date, payload: [String: Any]) async {
-        let day = Calendar.current.startOfDay(for: date)
+        let day = utcCal.startOfDay(for: date)
         await pbUpsert(collection: collection, date: day, payload: payload)
     }
     
@@ -1015,31 +1022,35 @@ extension SyncManager {
             print("❌ [pbUpsert] missing token/userId")
             return
         }
-        
-        let df = DateFormatter()
-        df.locale = Locale(identifier: "en_US_POSIX")
-        df.timeZone = TimeZone(secondsFromGMT: 0)
-        df.dateFormat = "yyyy-MM-dd"
-        let dateStr = df.string(from: Calendar.current.startOfDay(for: date))
-        
-        // Build filter
+
+        // --- Define UTC calendar (for consistent day boundaries)
+        var utcCal = Calendar(identifier: .gregorian)
+        utcCal.timeZone = TimeZone(secondsFromGMT: 0)!
+
+        // --- Formatters
         let dfFull = ISO8601DateFormatter()
         dfFull.formatOptions = [.withInternetDateTime]
-        let start = dfFull.string(from: Calendar.current.startOfDay(for: date))
-        let end = dfFull.string(from: Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: date))!)
-        let filterRaw = "user='\(userId)' && date>='\(start)' && date<'\(end)'"
+
+        let dayStart = utcCal.startOfDay(for: date)
+        let dayEnd   = utcCal.date(byAdding: .day, value: 1, to: dayStart)!
+        let startIso = dfFull.string(from: dayStart)
+        let endIso   = dfFull.string(from: dayEnd)
+        let dayStr   = DateFormatter.localizedString(from: dayStart, dateStyle: .short, timeStyle: .none)
+
+        // --- Build precise date-range filter
+        let filterRaw = "user='\(userId)' && date>='\(startIso)' && date<'\(endIso)'"
         let filter = filterRaw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? filterRaw
         let listURL = URL(string: "\(baseURL)/api/collections/\(collection)/records?filter=\(filter)&perPage=1")!
-        
+
         do {
-            // Check existing
+            // --- Check for existing record
             let (listData, listResp) = try await URLSession.shared.data(from: listURL)
             let listCode = (listResp as? HTTPURLResponse)?.statusCode ?? -1
             guard (200..<300).contains(listCode) else {
-                print("❌ [\(collection)] lookup HTTP \(listCode): \(String(data: listData, encoding: .utf8) ?? "")")
+                print("❌ [\(collection)] list HTTP \(listCode)")
                 return
             }
-            
+
             var recordId: String?
             if let json = try? JSONSerialization.jsonObject(with: listData) as? [String: Any],
                let items = json["items"] as? [[String: Any]],
@@ -1047,48 +1058,60 @@ extension SyncManager {
                let id = match["id"] as? String {
                 recordId = id
             }
-            
-            var body: [String: Any] = ["user": userId, "date": start]
+
+            // --- Build request body
+            var body: [String: Any] = ["user": userId, "date": startIso]
             for (k, v) in payload { body[k] = v }
-            
-            var headers: [String: String] = [
+
+            print("⬆️ [\(collection)] uploading \(dayStr):", body)
+
+            // --- Common headers
+            let headers = [
                 "Authorization": "Bearer \(token)",
                 "Content-Type": "application/json"
             ]
-            
+
             if let id = recordId {
-                // PATCH
+                // PATCH existing record
                 let patchURL = URL(string: "\(baseURL)/api/collections/\(collection)/records/\(id)")!
                 var patchReq = URLRequest(url: patchURL)
                 patchReq.httpMethod = "PATCH"
                 patchReq.allHTTPHeaderFields = headers
                 patchReq.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
                 let (data, resp) = try await URLSession.shared.data(for: patchReq)
                 let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+
                 if (200..<300).contains(code) {
-                    print("♻️ [\(collection)] PATCH \(dateStr) ✓")
+                    print("♻️ [\(collection)] PATCH \(dayStr) ✓")
                 } else {
                     print("❌ [\(collection)] PATCH HTTP \(code): \(String(data: data, encoding: .utf8) ?? "")")
                 }
+
             } else {
-                // POST
+                // POST new record
                 let postURL = URL(string: "\(baseURL)/api/collections/\(collection)/records")!
                 var postReq = URLRequest(url: postURL)
                 postReq.httpMethod = "POST"
                 postReq.allHTTPHeaderFields = headers
                 postReq.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
                 let (data, resp) = try await URLSession.shared.data(for: postReq)
                 let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+
                 if (200..<300).contains(code) {
-                    print("✅ [\(collection)] POST \(dateStr) ✓")
+                    print("✅ [\(collection)] POST \(dayStr) ✓")
                 } else {
                     print("❌ [\(collection)] POST HTTP \(code): \(String(data: data, encoding: .utf8) ?? "")")
                 }
             }
+
         } catch {
             print("🌐 [\(collection)] network error:", error.localizedDescription)
         }
     }
+
+
     
         func fetchExistingStepDates() async -> [Date] {
             guard let token = token, let userId = userId else { return [] }
@@ -1213,7 +1236,7 @@ extension SyncManager {
                 let (data, resp) = try await URLSession.shared.data(from: filterURL)
                 let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
                 guard (200..<300).contains(code) else {
-                    print("❌ [uploadStep] lookup HTTP \(code)")
+                    //print("❌ [uploadStep] lookup HTTP \(code)")
                     return
                 }
 

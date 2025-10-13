@@ -14,6 +14,7 @@ enum SyncState: Equatable {
     case error(String)
 }
 
+
 @MainActor
 final class HealthSyncManager: ObservableObject {
     static let shared = HealthSyncManager()
@@ -64,7 +65,7 @@ final class HealthSyncManager: ObservableObject {
     func syncRecentDay() async {
         print("⚡️ Running 24h auto-sync for all major metrics…")
         let now = Date()
-        let start = cal.date(byAdding: .day, value: -1, to: now)!
+        let start = cal.date(byAdding: .day, value: -7, to: now)!
         let end = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
 
         await withTaskGroup(of: Void.self) { group in
@@ -240,27 +241,44 @@ final class HealthSyncManager: ObservableObject {
 
             let (r, h, v) = await (rhr, hrv, vo2)
             let existingDays = await sync.fetchExistingHeartDays()
-            let existingSet = Set(existingDays.map { cal.startOfDay(for: $0) })
 
-            let allDays = Set(r.map { cal.startOfDay(for: $0.date) })
-                .union(h.map { cal.startOfDay(for: $0.date) })
-                .union(v.map { cal.startOfDay(for: $0.date) })
+            // --- define UTC calendar
+            var utcCal = Calendar(identifier: .gregorian)
+            utcCal.timeZone = TimeZone(secondsFromGMT: 0)!
+
+            // --- build UTC sets
+            let existingSet = Set(existingDays.map { utcCal.startOfDay(for: $0) })
+            let allDays = Set(
+                r.map { utcCal.startOfDay(for: $0.date) } +
+                h.map { utcCal.startOfDay(for: $0.date) } +
+                v.map { utcCal.startOfDay(for: $0.date) }
+            )
+
+            print("❤️ RHR days:", r.count, "HRV days:", h.count, "VO₂Max days:", v.count)
+            hk.debugListRestingHR(start: start, end: end)
 
             var uploaded = 0
-            for day in allDays.sorted() {
-                guard !existingSet.contains(day) else { continue }
-                let rhrBpm = r.first(where: { cal.startOfDay(for: $0.date) == day })?.value
-                let hrvMs  = h.first(where: { cal.startOfDay(for: $0.date) == day })?.value
-                let vo2mx  = v.first(where: { cal.startOfDay(for: $0.date) == day })?.value
-                await sync.uploadHeartDaily(date: day, restingHR: rhrBpm, hrvSDNNms: hrvMs, vo2max: vo2mx)
-                uploaded += 1
+            for dayUTC in allDays.sorted() {
+                let rhrBpm = r.first(where: { utcCal.isDate($0.date, inSameDayAs: dayUTC) })?.value
+                let hrvMs  = h.first(where: { utcCal.isDate($0.date, inSameDayAs: dayUTC) })?.value
+                let vo2mx  = v.first(where: { utcCal.isDate($0.date, inSameDayAs: dayUTC) })?.value
+
+                await self.sync.uploadHeartDaily(
+                    date: dayUTC,
+                    restingHR: rhrBpm,
+                    hrvSDNNms: hrvMs,
+                    vo2max: vo2mx
+                )
+
+                if rhrBpm != nil || hrvMs != nil || vo2mx != nil {
+                    uploaded += 1
+                }
             }
 
             set(lastHeartKey, end)
             heartState = .upToDate(Date())
             print("✅ [syncHeart] uploaded \(uploaded) new")
-        } catch {
-            heartState = .error(error.localizedDescription)
+
         }
     }
 
