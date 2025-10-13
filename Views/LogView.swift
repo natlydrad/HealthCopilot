@@ -3,6 +3,7 @@ import SwiftUI
 import PhotosUI
 import ImageIO
 
+// MARK: - EXIF Date Helper
 private func exifCaptureDate(from data: Data) -> Date? {
     guard let src = CGImageSourceCreateWithData(data as CFData, nil),
           let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any] else { return nil }
@@ -27,6 +28,79 @@ private func exifCaptureDate(from data: Data) -> Date? {
     return nil
 }
 
+// MARK: - Return-Key Text Box (UITextView Wrapper)
+struct ReturnKeyTextEditor: UIViewRepresentable {
+    @Binding var text: String
+    var placeholder: String
+    var onReturn: () -> Void
+
+    func makeUIView(context: Context) -> UITextView {
+        let tv = UITextView()
+        tv.font = .systemFont(ofSize: 17)
+        tv.backgroundColor = UIColor.systemGray6
+        tv.layer.cornerRadius = 12
+        tv.textContainerInset = UIEdgeInsets(top: 10, left: 12, bottom: 10, right: 12)
+        tv.delegate = context.coordinator
+        tv.returnKeyType = .done
+        tv.isScrollEnabled = true
+        tv.text = placeholder
+        tv.textColor = .placeholderText
+        return tv
+    }
+
+    func updateUIView(_ uiView: UITextView, context: Context) {
+        if text.isEmpty && !uiView.isFirstResponder {
+            uiView.text = placeholder
+            uiView.textColor = .placeholderText
+        } else if uiView.textColor == .placeholderText && uiView.isFirstResponder {
+            uiView.text = ""
+            uiView.textColor = .label
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject, UITextViewDelegate {
+        var parent: ReturnKeyTextEditor
+
+        init(_ parent: ReturnKeyTextEditor) {
+            self.parent = parent
+        }
+
+        func textViewDidBeginEditing(_ textView: UITextView) {
+            if textView.textColor == .placeholderText {
+                textView.text = ""
+                textView.textColor = .label
+            }
+        }
+
+        func textViewDidEndEditing(_ textView: UITextView) {
+            if textView.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                textView.text = parent.placeholder
+                textView.textColor = .placeholderText
+            }
+        }
+
+        func textViewDidChange(_ textView: UITextView) {
+            parent.text = textView.text
+        }
+
+        func textView(_ textView: UITextView,
+                      shouldChangeTextIn range: NSRange,
+                      replacementText text: String) -> Bool {
+            if text == "\n" {
+                textView.resignFirstResponder()
+                parent.onReturn()
+                return false
+            }
+            return true
+        }
+    }
+}
+
+// MARK: - LogView
 struct LogView: View {
     @ObservedObject var store: MealStore
     @ObservedObject var healthSync = HealthSyncManager.shared
@@ -38,29 +112,18 @@ struct LogView: View {
     @State private var lastAutoSync: Date? = nil
 
     var body: some View {
-        VStack {
-            // --- Meal input ---
-            ZStack(alignment: .topLeading) {
-                TextEditor(text: $input)
-                    .scrollContentBackground(.hidden)
-                    .frame(height: 200)
-                    .padding(10)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
-                    .padding(.horizontal)
+        VStack(spacing: 12) {
 
-                if input.isEmpty {
-                    Text("Describe meal…")
-                        .foregroundColor(.gray)
-                        .padding(.horizontal, 33)
-                        .padding(.vertical, 14)
-                }
-            }
+            // --- Text box that adds meal when pressing Return
+            ReturnKeyTextEditor(
+                text: $input,
+                placeholder: "Describe meal…",
+                onReturn: addMeal
+            )
+            .frame(height: 180)
+            .padding(.horizontal)
 
-
-
-
-            // Photo picker row
+            // --- Photo picker row
             HStack {
                 Button {
                     showCamera = true
@@ -87,58 +150,51 @@ struct LogView: View {
                         .scaledToFill()
                         .frame(width: 44, height: 44)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .overlay(RoundedRectangle(cornerRadius: 6)
-                            .stroke(.secondary, lineWidth: 0.5))
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(.secondary, lineWidth: 0.5))
                 }
 
                 Spacer()
             }
             .padding(.horizontal)
 
-            // --- Add Meal Button ---
+            // --- Add Meal button (still optional)
             Button(action: addMeal) {
                 Text("Add Meal")
                     .frame(maxWidth: .infinity)
             }
-            .padding(.top, 4)
-
-            .sheet(isPresented: $showCamera) {
-                CameraCaptureSheet { data in
-                    let takenAt = exifCaptureDate(from: data)
-                    store.addMealWithImage(
-                        text: input.trimmingCharacters(in: .whitespacesAndNewlines),
-                        imageData: data,
-                        takenAt: takenAt
-                    )
-                    input = ""
-                    pickedItem = nil
-                    pickedImageData = nil
-                }
-            }
+            .padding(.horizontal)
 
             Spacer()
         }
         .navigationTitle("Log Meal")
+        .sheet(isPresented: $showCamera) {
+            CameraCaptureSheet { data in
+                let takenAt = exifCaptureDate(from: data)
+                store.addMealWithImage(
+                    text: input.trimmingCharacters(in: .whitespacesAndNewlines),
+                    imageData: data,
+                    takenAt: takenAt
+                )
+                input = ""
+                pickedItem = nil
+                pickedImageData = nil
+            }
+        }
         .toolbar {
             NavigationLink(destination: SyncView()) {
                 Image(systemName: "arrow.triangle.2.circlepath.circle")
                     .imageScale(.large)
             }
         }
-        .onAppear {
-            //Task {
-                //await autoSyncIfNeeded()
-            //}
-        }
     }
 
-    // MARK: - Add Meal
+    // MARK: - Add Meal Logic
     private func addMeal() {
         let typed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasPhoto = (pickedImageData != nil)
 
         guard hasPhoto || !typed.isEmpty else {
-            print("⛔️ No text and no photo — ignoring tap")
+            print("⛔️ No text and no photo — ignoring")
             return
         }
 
@@ -152,15 +208,5 @@ struct LogView: View {
         input = ""
         pickedItem = nil
         pickedImageData = nil
-    }
-
-    // MARK: - Auto Sync (background)
-    private func autoSyncIfNeeded() async {
-        if let last = lastAutoSync, Date().timeIntervalSince(last) < 300 {
-            print("🕒 Skipping auto-sync (<5 min since last)")
-            return
-        }
-        lastAutoSync = Date()
-        await healthSync.syncRecentDay()
     }
 }
