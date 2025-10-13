@@ -30,6 +30,10 @@ final class HealthSyncManager: ObservableObject {
     @Published var energyState: SyncState = .idle
     @Published var heartState: SyncState = .idle
     @Published var bodyState: SyncState = .idle
+    
+    @Published var lastSyncTime: Date? = nil
+    @Published var lastSyncRange: String = ""
+
 
     // UserDefaults keys
     private let lastStepsKey   = "lastStepsUploadedAt"
@@ -44,6 +48,7 @@ final class HealthSyncManager: ObservableObject {
 
     // MARK: - Entrypoints
 
+    @MainActor
     func bigSync(monthsBack: Int = 12) async {
         let now = Date()
         let start = cal.date(byAdding: .month, value: -monthsBack, to: now)!
@@ -60,8 +65,14 @@ final class HealthSyncManager: ObservableObject {
         }
 
         print("✅ Big Sync complete")
+
+        // 🆕 Record sync metadata
+        lastSyncTime = now
+        lastSyncRange = "Past \(monthsBack) months"
+        persistSyncMeta()
     }
 
+    @MainActor
     func syncRecentDay() async {
         print("⚡️ Running 24h auto-sync for all major metrics…")
         let now = Date()
@@ -76,6 +87,26 @@ final class HealthSyncManager: ObservableObject {
             group.addTask { await self.syncHeart(start: start, end: end) }
             group.addTask { await self.syncBody(start: start, end: end) }
         }
+
+        // 🆕 Record sync metadata
+        lastSyncTime = now
+        lastSyncRange = "Past 24 hours"
+        persistSyncMeta()
+    }
+
+    // Optional: persist between launches
+    func persistSyncMeta() {
+        UserDefaults.standard.set(lastSyncTime, forKey: "lastSyncTime")
+        UserDefaults.standard.set(lastSyncRange, forKey: "lastSyncRange")
+    }
+
+    // Load persisted data at startup
+    init() {
+        // ... existing init ...
+        if let savedDate = UserDefaults.standard.object(forKey: "lastSyncTime") as? Date {
+            self.lastSyncTime = savedDate
+        }
+        self.lastSyncRange = UserDefaults.standard.string(forKey: "lastSyncRange") ?? ""
     }
 
     // MARK: - Steps
@@ -316,7 +347,10 @@ final class HealthSyncManager: ObservableObject {
         } catch {
             bodyState = .error(error.localizedDescription)
         }
+        
     }
+    
+    
 }
 
 // MARK: - Helpers

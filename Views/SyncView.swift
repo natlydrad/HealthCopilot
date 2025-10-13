@@ -24,10 +24,8 @@ struct SyncView: View {
                         Task {
                             guard !isBigSyncing else { return }
                             isBigSyncing = true
-                            print("🕓 Running Big Sync (multi-year backfill)…")
-                            await healthSync.bigSync(monthsBack: 36)
+                            await healthSync.bigSync(monthsBack: 9)
                             isBigSyncing = false
-                            print("✅ Big Sync complete")
                         }
                     } label: {
                         if isBigSyncing {
@@ -43,6 +41,24 @@ struct SyncView: View {
 
                 Divider().padding(.vertical, 8)
 
+                // --- Sync summary (reads from shared HealthSyncManager) ---
+                if let lastSync = healthSync.lastSyncTime {
+                    VStack(spacing: 4) {
+                        Text("Last Sync: \(formatTime(lastSync))")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Text("Range: \(healthSync.lastSyncRange)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.bottom, 4)
+                    .transition(.opacity)
+                } else {
+                    Text("No sync data yet")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
                 // --- Sync Status ---
                 SyncStatusBar()
 
@@ -52,5 +68,16 @@ struct SyncView: View {
         }
         .navigationTitle("Sync Health Data")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            print("🟢 SyncView appeared | lastSyncTime:",
+                  healthSync.lastSyncTime as Any,
+                  "| range:", healthSync.lastSyncRange)
+        }
+    }
+
+    private func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
 }
