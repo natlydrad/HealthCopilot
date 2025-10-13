@@ -40,9 +40,28 @@ struct LogView: View {
     var body: some View {
         VStack {
             // --- Meal input ---
-            TextField("Describe meal…", text: $input)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding(.horizontal)
+            ZStack(alignment: .topLeading) {
+                // Big multiline text box
+                TextEditor(text: $input)
+                    .frame(height: 200) // ~10x taller than before
+                    .padding(8)
+                    .background(Color(UIColor.secondarySystemBackground))
+                    .cornerRadius(10)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.gray.opacity(0.3))
+                    )
+                    .padding(.horizontal)
+
+                // Placeholder text
+                if input.isEmpty {
+                    Text("Describe meal…")
+                        .foregroundColor(.gray)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                }
+            }
+
 
             // Photo picker row
             HStack {
