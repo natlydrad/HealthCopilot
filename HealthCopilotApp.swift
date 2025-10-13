@@ -32,7 +32,7 @@ struct HealthCopilotApp: App {
     var body: some Scene {
         WindowGroup {
             TabView {
-                NavigationView { LogView(store: mealStore) }
+                NavigationView { LogView(store: mealStore).navigationBarTitleDisplayMode(.inline) }
                     .tabItem { Label("Log Meal", systemImage: "plus.circle") }
 
                 NavigationView { VerifyView(store: mealStore) }

@@ -38,6 +38,7 @@
 		586DBADC2E9C4344006C3DCA /* SyncStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBABC2E9C4344006C3DCA /* SyncStatusView.swift */; };
 		586DBADD2E9C4344006C3DCA /* GPTService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAB12E9C4344006C3DCA /* GPTService.swift */; };
 		586DBADE2E9C4344006C3DCA /* MealStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAA72E9C4344006C3DCA /* MealStore.swift */; };
+		587C91352E9DA72F009CED55 /* SyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 587C91342E9DA72D009CED55 /* SyncView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -93,6 +94,7 @@
 		586DBABC2E9C4344006C3DCA /* SyncStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncStatusView.swift; sourceTree = "<group>"; };
 		586DBABD2E9C4344006C3DCA /* VerifySubviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerifySubviews.swift; sourceTree = "<group>"; };
 		586DBABE2E9C4344006C3DCA /* VerifyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerifyView.swift; sourceTree = "<group>"; };
+		587C91342E9DA72D009CED55 /* SyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -199,6 +201,7 @@
 		586DBABF2E9C4344006C3DCA /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				587C91342E9DA72D009CED55 /* SyncView.swift */,
 				586DBABA2E9C4344006C3DCA /* CameraView.swift */,
 				586DBABB2E9C4344006C3DCA /* LogView.swift */,
 				586DBABC2E9C4344006C3DCA /* SyncStatusView.swift */,
@@ -350,6 +353,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				586DBAC02E9C4344006C3DCA /* DashboardView.swift in Sources */,
+				587C91352E9DA72F009CED55 /* SyncView.swift in Sources */,
 				586DBAC12E9C4344006C3DCA /* GlucoseScreen.swift in Sources */,
 				586DBAC22E9C4344006C3DCA /* MealHistoryView.swift in Sources */,
 				586DBAC32E9C4344006C3DCA /* ChatView.swift in Sources */,

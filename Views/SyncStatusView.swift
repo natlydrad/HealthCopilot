@@ -48,13 +48,6 @@ struct SyncStatusBar: View {
             SyncBadge(title: "Energy", state: sync.energyState)
             SyncBadge(title: "Heart", state: sync.heartState)
 
-            // 🔹 sync button
-            Button("Sync Health Data") {
-                Task {
-                    await HealthSyncManager.shared.bigSync(monthsBack: 6)
-                }
-            }
-
             .buttonStyle(.borderedProminent)
             .padding(.top, 4)
 

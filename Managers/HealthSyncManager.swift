@@ -65,7 +65,7 @@ final class HealthSyncManager: ObservableObject {
     func syncRecentDay() async {
         print("⚡️ Running 24h auto-sync for all major metrics…")
         let now = Date()
-        let start = cal.date(byAdding: .day, value: -7, to: now)!
+        let start = cal.date(byAdding: .day, value: -1, to: now)!
         let end = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
 
         await withTaskGroup(of: Void.self) { group in
