@@ -41,26 +41,23 @@ struct LogView: View {
         VStack {
             // --- Meal input ---
             ZStack(alignment: .topLeading) {
-                // Big multiline text box
                 TextEditor(text: $input)
-                    .frame(height: 200) // ~10x taller than before
-                    .padding(8)
-                    .background(Color(UIColor.secondarySystemBackground))
-                    .cornerRadius(10)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.gray.opacity(0.3))
-                    )
+                    .scrollContentBackground(.hidden)
+                    .frame(height: 200)
+                    .padding(10)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
                     .padding(.horizontal)
 
-                // Placeholder text
                 if input.isEmpty {
                     Text("Describe meal…")
                         .foregroundColor(.gray)
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, 33)
                         .padding(.vertical, 14)
                 }
             }
+
+
 
 
             // Photo picker row
@@ -129,9 +126,9 @@ struct LogView: View {
             }
         }
         .onAppear {
-            Task {
-                await autoSyncIfNeeded()
-            }
+            //Task {
+                //await autoSyncIfNeeded()
+            //}
         }
     }
 
