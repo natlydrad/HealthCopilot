@@ -34,26 +34,26 @@ struct LogView: View {
     @State private var showCamera = false
     @State private var lastAutoSync: Date? = nil
     @FocusState private var isInputFocused: Bool
+    @State private var didAutoFocus = false
 
     var body: some View {
         ZStack {
-            // --- Transparent background that catches drags and taps
             Color.clear
                 .contentShape(Rectangle())
                 .gesture(
                     DragGesture().onChanged { value in
+                        // swipe down → dismiss keyboard
                         if value.translation.height > 20 {
-                            isInputFocused = false   // 👈 hides keyboard
+                            isInputFocused = false
                         }
                     }
                 )
                 .onTapGesture {
-                    isInputFocused = false        // 👈 tap outside to dismiss too
+                    isInputFocused = false
                 }
 
-            // --- Foreground UI ---
-            VStack(spacing: 16) {
-                // --- Text input ---
+            VStack(spacing: 14) {
+                // --- Text field ---
                 TextField("Describe meal…", text: $input)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding(.horizontal)
@@ -61,7 +61,7 @@ struct LogView: View {
                     .submitLabel(.done)
                     .onSubmit { addMeal() }
 
-                // --- Photo picker row ---
+                // --- Photo row ---
                 HStack {
                     Button {
                         showCamera = true
@@ -75,7 +75,10 @@ struct LogView: View {
                     }
                     .onChange(of: pickedItem) { newItem in
                         Task {
-                            guard let item = newItem else { pickedImageData = nil; return }
+                            guard let item = newItem else {
+                                pickedImageData = nil
+                                return
+                            }
                             if let data = try? await item.loadTransferable(type: Data.self) {
                                 pickedImageData = data
                             }
@@ -88,8 +91,10 @@ struct LogView: View {
                             .scaledToFill()
                             .frame(width: 44, height: 44)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
-                            .overlay(RoundedRectangle(cornerRadius: 6)
-                                .stroke(.secondary, lineWidth: 0.5))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(.secondary, lineWidth: 0.5)
+                            )
                     }
 
                     Spacer()
@@ -99,17 +104,13 @@ struct LogView: View {
                 Spacer()
             }
         }
-        .navigationTitle("Log Meal")
-        .toolbar {
-            NavigationLink(destination: SyncView()) {
-                Image(systemName: "arrow.triangle.2.circlepath.circle")
-                    .imageScale(.large)
-            }
-        }
         .onAppear {
-            // focus fast when view appears
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                isInputFocused = true
+            // 👇 only focus once on first appearance
+            if !didAutoFocus {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    isInputFocused = true
+                    didAutoFocus = true
+                }
             }
         }
         .sheet(isPresented: $showCamera) {
@@ -120,12 +121,11 @@ struct LogView: View {
                     imageData: data,
                     takenAt: takenAt
                 )
+                // clear inputs + keep keyboard down
                 input = ""
                 pickedItem = nil
                 pickedImageData = nil
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    isInputFocused = true
-                }
+                isInputFocused = false
             }
         }
     }
@@ -135,7 +135,7 @@ struct LogView: View {
         let typed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasPhoto = (pickedImageData != nil)
         guard hasPhoto || !typed.isEmpty else {
-            print("⛔️ No text and no photo — ignoring tap")
+            print("⛔️ No text and no photo — ignoring")
             return
         }
 
@@ -146,22 +146,10 @@ struct LogView: View {
             store.addMeal(text: typed)
         }
 
+        // reset + keep keyboard hidden
         input = ""
         pickedItem = nil
         pickedImageData = nil
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            isInputFocused = true
-        }
-    }
-
-    // MARK: - Auto Sync
-    private func autoSyncIfNeeded() async {
-        if let last = lastAutoSync, Date().timeIntervalSince(last) < 300 {
-            print("🕒 Skipping auto-sync (<5 min since last)")
-            return
-        }
-        lastAutoSync = Date()
-        await healthSync.syncRecentDay()
+        isInputFocused = false
     }
 }
