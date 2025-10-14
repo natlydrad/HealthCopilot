@@ -1,4 +1,3 @@
-// LogView.swift
 import SwiftUI
 import PhotosUI
 import ImageIO
@@ -36,6 +35,7 @@ struct LogView: View {
     @State private var pickedImageData: Data? = nil
     @State private var showCamera = false
     @State private var lastAutoSync: Date? = nil
+    @FocusState private var isInputFocused: Bool   // 👈 focus binding
 
     var body: some View {
         VStack {
@@ -43,6 +43,7 @@ struct LogView: View {
             TextField("Describe meal…", text: $input)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .padding(.horizontal)
+                .focused($isInputFocused) // 👈 link to focus state
 
             // Photo picker row
             HStack {
@@ -109,11 +110,12 @@ struct LogView: View {
                     .imageScale(.large)
             }
         }
-        //.onAppear {
-            //Task {
-              //  await autoSyncIfNeeded()
-            //}
-       // }
+        .onAppear {
+            // 👇 Automatically focus after a short delay to trigger keyboard
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                self.isInputFocused = true
+            }
+        }
     }
 
     // MARK: - Add Meal
@@ -138,7 +140,7 @@ struct LogView: View {
         pickedImageData = nil
     }
 
-    // MARK: - Auto Sync (background)
+    // MARK: - Auto Sync
     private func autoSyncIfNeeded() async {
         if let last = lastAutoSync, Date().timeIntervalSince(last) < 300 {
             print("🕒 Skipping auto-sync (<5 min since last)")
