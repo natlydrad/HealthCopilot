@@ -43,7 +43,11 @@ struct LogView: View {
             TextField("Describe meal…", text: $input)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .padding(.horizontal)
-                .focused($isInputFocused) // 👈 link to focus state
+                .focused($isInputFocused)
+                .submitLabel(.done) // 👈 shows blue “Submit” / “Done” on keyboard
+                .onSubmit {
+                    addMeal()        // 👈 triggers same action as your Add Meal button
+                }
 
             // Photo picker row
             HStack {
