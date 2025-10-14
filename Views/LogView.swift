@@ -23,7 +23,34 @@ private func exifCaptureDate(from data: Data) -> Date? {
     return nil
 }
 
-// MARK: - View
+// MARK: - UIKit gesture bridge
+final class KeyboardDismissHelper {
+    static func install() {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first else { return }
+
+        let swipe = UISwipeGestureRecognizer(target: self, action: #selector(handleSwipe))
+        swipe.direction = .down
+        swipe.cancelsTouchesInView = false
+        window.addGestureRecognizer(swipe)
+
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+        tap.cancelsTouchesInView = false
+        window.addGestureRecognizer(tap)
+    }
+
+    @objc private static func handleSwipe() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                        to: nil, from: nil, for: nil)
+    }
+
+    @objc private static func handleTap() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                        to: nil, from: nil, for: nil)
+    }
+}
+
+// MARK: - LogView
 struct LogView: View {
     @ObservedObject var store: MealStore
     @ObservedObject var healthSync = HealthSyncManager.shared
@@ -32,80 +59,76 @@ struct LogView: View {
     @State private var pickedItem: PhotosPickerItem? = nil
     @State private var pickedImageData: Data? = nil
     @State private var showCamera = false
-    @State private var lastAutoSync: Date? = nil
     @FocusState private var isInputFocused: Bool
     @State private var didAutoFocus = false
 
     var body: some View {
-        ZStack {
-            Color.clear
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 30)
-                        .onChanged { value in
-                            if value.translation.height > 20 {
-                                isInputFocused = false
-                            }
-                        }
-                )
-                .allowsHitTesting(true) // ✅ allows taps to pass through LogView only where transparent
+        VStack(spacing: 14) {
+            Spacer()
 
+            // --- Text field ---
+            ZStack(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(UIColor.secondarySystemBackground))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.gray.opacity(0.3))
+                    )
+                    .frame(height: 150)
 
-            VStack(spacing: 14) {
-                Spacer()
-                // --- Text field ---
                 TextField("Describe meal…", text: $input)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding(.horizontal)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
                     .focused($isInputFocused)
                     .submitLabel(.done)
                     .onSubmit { addMeal() }
+            }
+            .padding(.horizontal)
 
-                // --- Photo row ---
-                HStack {
-                    Button {
-                        showCamera = true
-                    } label: {
-                        Label("Snap Photo", systemImage: "camera")
-                    }
+            // --- Photo row ---
+            HStack {
+                Button {
+                    showCamera = true
+                } label: {
+                    Label("Snap Photo", systemImage: "camera")
+                }
 
-                    PhotosPicker(selection: $pickedItem, matching: .images, photoLibrary: .shared()) {
-                        Label(pickedImageData == nil ? "Choose Photo" : "Change Photo",
-                              systemImage: "photo")
-                    }
-                    .onChange(of: pickedItem) { newItem in
-                        Task {
-                            guard let item = newItem else {
-                                pickedImageData = nil
-                                return
-                            }
-                            if let data = try? await item.loadTransferable(type: Data.self) {
-                                pickedImageData = data
-                            }
+                PhotosPicker(selection: $pickedItem, matching: .images, photoLibrary: .shared()) {
+                    Label(pickedImageData == nil ? "Choose Photo" : "Change Photo",
+                          systemImage: "photo")
+                }
+                .onChange(of: pickedItem) { newItem in
+                    Task {
+                        guard let item = newItem else {
+                            pickedImageData = nil
+                            return
+                        }
+                        if let data = try? await item.loadTransferable(type: Data.self) {
+                            pickedImageData = data
                         }
                     }
-
-                    if let data = pickedImageData, let ui = UIImage(data: data) {
-                        Image(uiImage: ui)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 44, height: 44)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(.secondary, lineWidth: 0.5)
-                            )
-                    }
-
-                    Spacer()
                 }
-                .padding(.horizontal)
+
+                if let data = pickedImageData, let ui = UIImage(data: data) {
+                    Image(uiImage: ui)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 44, height: 44)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(.secondary, lineWidth: 0.5)
+                        )
+                }
 
                 Spacer()
             }
+            .padding(.horizontal)
+
+            Spacer()
         }
         .onAppear {
-            // 👇 only focus once on first appearance
+            KeyboardDismissHelper.install()
             if !didAutoFocus {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     isInputFocused = true
@@ -121,11 +144,11 @@ struct LogView: View {
                     imageData: data,
                     takenAt: takenAt
                 )
-                // clear inputs + keep keyboard down
                 input = ""
                 pickedItem = nil
                 pickedImageData = nil
-                isInputFocused = false
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                                to: nil, from: nil, for: nil)
             }
         }
     }
@@ -146,10 +169,10 @@ struct LogView: View {
             store.addMeal(text: typed)
         }
 
-        // reset + keep keyboard hidden
         input = ""
         pickedItem = nil
         pickedImageData = nil
-        isInputFocused = false
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                        to: nil, from: nil, for: nil)
     }
 }
