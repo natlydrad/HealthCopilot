@@ -41,16 +41,15 @@ struct LogView: View {
             Color.clear
                 .contentShape(Rectangle())
                 .gesture(
-                    DragGesture().onChanged { value in
-                        // swipe down → dismiss keyboard
-                        if value.translation.height > 20 {
-                            isInputFocused = false
+                    DragGesture(minimumDistance: 30)
+                        .onChanged { value in
+                            if value.translation.height > 20 {
+                                isInputFocused = false
+                            }
                         }
-                    }
                 )
-                .onTapGesture {
-                    isInputFocused = false
-                }
+                .allowsHitTesting(true) // ✅ allows taps to pass through LogView only where transparent
+
 
             VStack(spacing: 14) {
                 // --- Text field ---

@@ -72,15 +72,6 @@ struct RootView: View {
             .ignoresSafeArea(edges: .bottom)
         }
 
-        // 👇 tap or drag anywhere to hide keyboard
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 20)
-                .onChanged { _ in
-                    hideKeyboard()
-                }
-        )
-        .onTapGesture { hideKeyboard() }
 
         // 👇 only auto-focus once on first appearance
         .onAppear {
