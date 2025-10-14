@@ -109,11 +109,11 @@ struct LogView: View {
                     .imageScale(.large)
             }
         }
-        .onAppear {
-            Task {
-                await autoSyncIfNeeded()
-            }
-        }
+        //.onAppear {
+            //Task {
+              //  await autoSyncIfNeeded()
+            //}
+       // }
     }
 
     // MARK: - Add Meal
