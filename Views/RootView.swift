@@ -52,7 +52,6 @@ struct RootView: View {
                     }
                 }
                 .frame(height: 44)
-                .background(.ultraThinMaterial)
                 .zIndex(2)
                 .sheet(isPresented: $showingSyncSheet) {
                     SyncView()
@@ -60,7 +59,7 @@ struct RootView: View {
 
                 // Log input area
                 LogView(store: store)
-                    .frame(height: 200)
+                    .frame(height: 225)
                     .background(Color(.systemBackground))
                     .clipped()
                     .shadow(radius: 3)
