@@ -39,6 +39,7 @@
 		586DBADD2E9C4344006C3DCA /* GPTService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAB12E9C4344006C3DCA /* GPTService.swift */; };
 		586DBADE2E9C4344006C3DCA /* MealStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586DBAA72E9C4344006C3DCA /* MealStore.swift */; };
 		587C91352E9DA72F009CED55 /* SyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 587C91342E9DA72D009CED55 /* SyncView.swift */; };
+		58E516542E9E9802001E073C /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58E516532E9E97FF001E073C /* RootView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -95,6 +96,7 @@
 		586DBABD2E9C4344006C3DCA /* VerifySubviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerifySubviews.swift; sourceTree = "<group>"; };
 		586DBABE2E9C4344006C3DCA /* VerifyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerifyView.swift; sourceTree = "<group>"; };
 		587C91342E9DA72D009CED55 /* SyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncView.swift; sourceTree = "<group>"; };
+		58E516532E9E97FF001E073C /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -138,7 +140,6 @@
 		581C37762E17599C002D6789 = {
 			isa = PBXGroup;
 			children = (
-				586DBA9D2E9C4344006C3DCA /* HealthCopilotApp.swift */,
 				586DBA9E2E9C4344006C3DCA /* Info.plist */,
 				586DBAA52E9C4344006C3DCA /* Managers */,
 				586DBAA62E9C4344006C3DCA /* Meal.swift */,
@@ -201,12 +202,14 @@
 		586DBABF2E9C4344006C3DCA /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				58E516532E9E97FF001E073C /* RootView.swift */,
 				587C91342E9DA72D009CED55 /* SyncView.swift */,
 				586DBABA2E9C4344006C3DCA /* CameraView.swift */,
 				586DBABB2E9C4344006C3DCA /* LogView.swift */,
 				586DBABC2E9C4344006C3DCA /* SyncStatusView.swift */,
 				586DBABD2E9C4344006C3DCA /* VerifySubviews.swift */,
 				586DBABE2E9C4344006C3DCA /* VerifyView.swift */,
+				586DBA9D2E9C4344006C3DCA /* HealthCopilotApp.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -384,6 +387,7 @@
 				586DBADC2E9C4344006C3DCA /* SyncStatusView.swift in Sources */,
 				586DBADD2E9C4344006C3DCA /* GPTService.swift in Sources */,
 				586DBADE2E9C4344006C3DCA /* MealStore.swift in Sources */,
+				58E516542E9E9802001E073C /* RootView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
