@@ -66,7 +66,7 @@ struct LogView: View {
         VStack(spacing: 14) {
             Spacer()
 
-            // --- Text field ---
+            // --- Full-box tappable text area ---
             ZStack(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: 10)
                     .fill(Color(UIColor.secondarySystemBackground))
@@ -75,13 +75,28 @@ struct LogView: View {
                             .stroke(Color.gray.opacity(0.3))
                     )
                     .frame(height: 150)
+                    // 👉 tap anywhere in the box to focus
+                    .onTapGesture {
+                        isInputFocused = true
+                    }
 
-                TextField("Describe meal…", text: $input)
+                // invisible background TextField that expands fully
+                TextField("", text: $input, axis: .vertical)
+                    .focused($isInputFocused)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
-                    .focused($isInputFocused)
+                    .frame(height: 150, alignment: .topLeading)
+                    .background(Color.clear)
                     .submitLabel(.done)
                     .onSubmit { addMeal() }
+
+                // Placeholder text
+                if input.isEmpty {
+                    Text("Describe meal…")
+                        .foregroundColor(.gray)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 14)
+                }
             }
             .padding(.horizontal)
 
