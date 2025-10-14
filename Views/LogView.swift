@@ -52,6 +52,7 @@ struct LogView: View {
 
 
             VStack(spacing: 14) {
+                Spacer()
                 // --- Text field ---
                 TextField("Describe meal…", text: $input)
                     .textFieldStyle(RoundedBorderTextFieldStyle())

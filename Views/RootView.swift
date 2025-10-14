@@ -42,9 +42,6 @@ struct RootView: View {
             VStack(spacing: 0) {
                 // Header
                 HStack {
-                    Text("Log Meal")
-                        .font(.headline)
-                        .padding(.leading)
                     Spacer()
                     Button {
                         showingSyncSheet = true
