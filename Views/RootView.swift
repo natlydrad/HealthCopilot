@@ -24,49 +24,76 @@ struct RootView: View {
     @StateObject private var kb = KeyboardMonitor()
     @ObservedObject var store: MealStore
     @State private var showingSyncSheet = false
+    @State private var didAutoFocus = false   // 👈 prevents re-auto-focus loop
 
     var body: some View {
-        GeometryReader { geo in
-            VStack(spacing: 0) {
+        ZStack(alignment: .top) {
+            // --- Background: VerifyView ---
+            VStack {
+                Spacer(minLength: 240) // header + logview space
+                VerifyView(store: store)
+                    .padding(.bottom, 16)
+            }
+            .ignoresSafeArea(edges: .bottom)
+            .opacity(kb.isVisible ? 0 : 1)
+            .animation(.easeInOut(duration: 0.25), value: kb.isVisible)
 
-                // --- Header ---
+            // --- Foreground: header + logview ---
+            VStack(spacing: 0) {
+                // Header
                 HStack {
                     Text("Log Meal")
                         .font(.headline)
                         .padding(.leading)
-
                     Spacer()
-
                     Button {
-                        showingSyncSheet = true      // 👈 opens SyncView
+                        showingSyncSheet = true
                     } label: {
                         Image(systemName: "arrow.triangle.2.circlepath.circle")
                             .imageScale(.large)
                             .padding(.trailing)
                     }
                 }
-                .padding(.vertical, 8)
+                .frame(height: 44)
                 .background(.ultraThinMaterial)
-                .zIndex(3)
+                .zIndex(2)
                 .sheet(isPresented: $showingSyncSheet) {
                     SyncView()
                 }
 
-                // --- LogView (top half) ---
+                // Log input area
                 LogView(store: store)
-                    .frame(height: geo.size.height * 0.40)
+                    .frame(height: 200)
+                    .background(Color(.systemBackground))
                     .clipped()
-                    .zIndex(2)
-
-                // --- VerifyView (bottom half) ---
-                VerifyView(store: store)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipShape(RoundedRectangle(cornerRadius: 24))
-                    .shadow(radius: 5)
-                    .offset(y: kb.isVisible ? geo.size.height : 0) // hide when keyboard up
-                    .animation(.easeInOut(duration: 0.3), value: kb.isVisible)
+                    .shadow(radius: 3)
             }
+            .frame(maxWidth: .infinity, alignment: .top)
             .ignoresSafeArea(edges: .bottom)
         }
+
+        // 👇 tap or drag anywhere to hide keyboard
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 20)
+                .onChanged { _ in
+                    hideKeyboard()
+                }
+        )
+        .onTapGesture { hideKeyboard() }
+
+        // 👇 only auto-focus once on first appearance
+        .onAppear {
+            if !didAutoFocus {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    UIApplication.shared.sendAction(#selector(UIResponder.becomeFirstResponder), to: nil, from: nil, for: nil)
+                    didAutoFocus = true
+                }
+            }
+        }
+    }
+
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
