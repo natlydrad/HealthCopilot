@@ -84,11 +84,6 @@ struct LogView: View {
             }
             .padding(.horizontal)
 
-            // --- Add Meal Button ---
-            Button(action: addMeal) {
-                Text("Add Meal")
-                    .frame(maxWidth: .infinity)
-            }
             .padding(.top, 4)
 
             .sheet(isPresented: $showCamera) {
