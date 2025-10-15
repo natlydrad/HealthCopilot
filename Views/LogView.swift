@@ -1,32 +1,56 @@
-// LogView.swift
 import SwiftUI
 import PhotosUI
 import ImageIO
 
+// MARK: - EXIF helper
 private func exifCaptureDate(from data: Data) -> Date? {
     guard let src = CGImageSourceCreateWithData(data as CFData, nil),
           let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any] else { return nil }
 
+    let df = DateFormatter()
+    df.locale = Locale(identifier: "en_US_POSIX")
+    df.timeZone = TimeZone(secondsFromGMT: 0)
+    df.dateFormat = "yyyy:MM:dd HH:mm:ss"
+
     if let exif = props[kCGImagePropertyExifDictionary] as? [CFString: Any],
-       let s = exif[kCGImagePropertyExifDateTimeOriginal] as? String {
-        let df = DateFormatter()
-        df.locale = Locale(identifier: "en_US_POSIX")
-        df.timeZone = TimeZone(secondsFromGMT: 0)
-        df.dateFormat = "yyyy:MM:dd HH:mm:ss"
-        if let d = df.date(from: s) { return d }
-    }
+       let s = exif[kCGImagePropertyExifDateTimeOriginal] as? String,
+       let d = df.date(from: s) { return d }
 
     if let tiff = props[kCGImagePropertyTIFFDictionary] as? [CFString: Any],
-       let s = tiff[kCGImagePropertyTIFFDateTime] as? String {
-        let df = DateFormatter()
-        df.locale = Locale(identifier: "en_US_POSIX")
-        df.timeZone = TimeZone(secondsFromGMT: 0)
-        df.dateFormat = "yyyy:MM:dd HH:mm:ss"
-        if let d = df.date(from: s) { return d }
-    }
+       let s = tiff[kCGImagePropertyTIFFDateTime] as? String,
+       let d = df.date(from: s) { return d }
+
     return nil
 }
 
+// MARK: - UIKit gesture bridge
+final class KeyboardDismissHelper {
+    static func install() {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first else { return }
+
+        let swipe = UISwipeGestureRecognizer(target: self, action: #selector(handleSwipe))
+        swipe.direction = .down
+        swipe.cancelsTouchesInView = false
+        window.addGestureRecognizer(swipe)
+
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+        tap.cancelsTouchesInView = false
+        window.addGestureRecognizer(tap)
+    }
+
+    @objc private static func handleSwipe() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                        to: nil, from: nil, for: nil)
+    }
+
+    @objc private static func handleTap() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                        to: nil, from: nil, for: nil)
+    }
+}
+
+// MARK: - LogView
 struct LogView: View {
     @ObservedObject var store: MealStore
     @ObservedObject var healthSync = HealthSyncManager.shared
@@ -35,16 +59,58 @@ struct LogView: View {
     @State private var pickedItem: PhotosPickerItem? = nil
     @State private var pickedImageData: Data? = nil
     @State private var showCamera = false
-    @State private var lastAutoSync: Date? = nil
+    @FocusState private var isInputFocused: Bool
+    @State private var didAutoFocus = false
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        VStack {
-            // --- Meal input ---
-            TextField("Describe meal…", text: $input)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding(.horizontal)
+        VStack(spacing: 14) {
+            Spacer()
 
-            // Photo picker row
+            // --- Text box with gray rounded background ---
+            ZStack(alignment: .topLeading) {
+                // Background container
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(UIColor.secondarySystemBackground))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.gray.opacity(0.3))
+                    )
+
+                // Text editor
+                TextEditor(text: $input)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 10)
+                    .frame(height: 150)
+                    .scrollContentBackground(.hidden)
+                    .background(Color.clear)
+                    .focused($isInputFocused)
+                    .toolbar {
+                        ToolbarItemGroup(placement: .keyboard) {
+                            Spacer()
+                            Button("Done") {
+                                addMeal()
+                                UIApplication.shared.sendAction(
+                                    #selector(UIResponder.resignFirstResponder),
+                                    to: nil, from: nil, for: nil
+                                )
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.blue)
+                        }
+                    }
+
+                // Placeholder
+                if input.isEmpty {
+                    Text("Describe meal…")
+                        .foregroundColor(.gray)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                }
+            }
+            .padding(.horizontal)
+
+            // --- Photo row ---
             HStack {
                 Button {
                     showCamera = true
@@ -58,12 +124,35 @@ struct LogView: View {
                 }
                 .onChange(of: pickedItem) { newItem in
                     Task {
-                        guard let item = newItem else { pickedImageData = nil; return }
+                        guard let item = newItem else {
+                            pickedImageData = nil
+                            return
+                        }
                         if let data = try? await item.loadTransferable(type: Data.self) {
                             pickedImageData = data
+
+                            // 🧠 Get EXIF timestamp if available
+                            let takenAt = exifCaptureDate(from: data)
+
+                            // 🧩 Immediately add the meal
+                            store.addMealWithImage(
+                                text: input.trimmingCharacters(in: .whitespacesAndNewlines),
+                                imageData: data,
+                                takenAt: takenAt
+                            )
+
+                            // 🔄 Reset input + picker
+                            input = ""
+                            pickedItem = nil
+                            pickedImageData = nil
+
+                            // 👇 Dismiss keyboard (if open)
+                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                                            to: nil, from: nil, for: nil)
                         }
                     }
                 }
+
 
                 if let data = pickedImageData, let ui = UIImage(data: data) {
                     Image(uiImage: ui)
@@ -71,47 +160,49 @@ struct LogView: View {
                         .scaledToFill()
                         .frame(width: 44, height: 44)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .overlay(RoundedRectangle(cornerRadius: 6)
-                            .stroke(.secondary, lineWidth: 0.5))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(.secondary, lineWidth: 0.5)
+                        )
                 }
 
                 Spacer()
             }
             .padding(.horizontal)
 
-            // --- Add Meal Button ---
-            Button(action: addMeal) {
-                Text("Add Meal")
-                    .frame(maxWidth: .infinity)
-            }
-            .padding(.top, 4)
-
-            .sheet(isPresented: $showCamera) {
-                CameraCaptureSheet { data in
-                    let takenAt = exifCaptureDate(from: data)
-                    store.addMealWithImage(
-                        text: input.trimmingCharacters(in: .whitespacesAndNewlines),
-                        imageData: data,
-                        takenAt: takenAt
-                    )
-                    input = ""
-                    pickedItem = nil
-                    pickedImageData = nil
-                }
-            }
-
             Spacer()
         }
-        .navigationTitle("Log Meal")
-        .toolbar {
-            NavigationLink(destination: SyncView()) {
-                Image(systemName: "arrow.triangle.2.circlepath.circle")
-                    .imageScale(.large)
+        .onAppear {
+            KeyboardDismissHelper.install()
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                isInputFocused = true
             }
         }
-        .onAppear {
-            Task {
-                await autoSyncIfNeeded()
+        .onChange(of: scenePhase) { newPhase in
+            if newPhase == .active {
+                // App came back to foreground → re-focus TextEditor
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    isInputFocused = true
+                }
+            }
+        }
+
+
+
+        .sheet(isPresented: $showCamera) {
+            CameraCaptureSheet { data in
+                let takenAt = exifCaptureDate(from: data)
+                store.addMealWithImage(
+                    text: input.trimmingCharacters(in: .whitespacesAndNewlines),
+                    imageData: data,
+                    takenAt: takenAt
+                )
+                input = ""
+                pickedItem = nil
+                pickedImageData = nil
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                                to: nil, from: nil, for: nil)
             }
         }
     }
@@ -120,9 +211,8 @@ struct LogView: View {
     private func addMeal() {
         let typed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasPhoto = (pickedImageData != nil)
-
         guard hasPhoto || !typed.isEmpty else {
-            print("⛔️ No text and no photo — ignoring tap")
+            print("⛔️ No text and no photo — ignoring")
             return
         }
 
@@ -136,15 +226,8 @@ struct LogView: View {
         input = ""
         pickedItem = nil
         pickedImageData = nil
-    }
-
-    // MARK: - Auto Sync (background)
-    private func autoSyncIfNeeded() async {
-        if let last = lastAutoSync, Date().timeIntervalSince(last) < 300 {
-            print("🕒 Skipping auto-sync (<5 min since last)")
-            return
-        }
-        lastAutoSync = Date()
-        await healthSync.syncRecentDay()
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                        to: nil, from: nil, for: nil)
     }
 }
+

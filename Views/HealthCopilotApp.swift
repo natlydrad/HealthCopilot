@@ -31,29 +31,22 @@ struct HealthCopilotApp: App {
 
     var body: some Scene {
         WindowGroup {
-            TabView {
-                NavigationView { LogView(store: mealStore).navigationBarTitleDisplayMode(.inline) }
-                    .tabItem { Label("Log Meal", systemImage: "plus.circle") }
-
-                NavigationView { VerifyView(store: mealStore) }
-                    .tabItem { Label("Verify", systemImage: "checkmark.circle") }
-            }
-            
-            .onAppear {
-                            HealthKitManager.shared.requestPermissions { granted in
-                                print("🔐 HealthKit permission granted:", granted)
-                          }
-                HealthKitManager.shared.debugListAllTypes()
-                        }
-            
-            .onChange(of: scenePhase) { phase in
-                print("🟦 scenePhase:", phase)
-                if phase == .active {
-                    print("🟩 Foreground → fetchMeals()")
-                    SyncManager.shared.pushDirty()
-                    SyncManager.shared.fetchMeals()
+            RootView(store: mealStore)
+                .onAppear {
+                    HealthKitManager.shared.requestPermissions { granted in
+                        print("🔐 HealthKit permission granted:", granted)
+                    }
+                    HealthKitManager.shared.debugListAllTypes()
                 }
-            }
+                .onChange(of: scenePhase) { phase in
+                    print("🟦 scenePhase:", phase)
+                    if phase == .active {
+                        print("🟩 Foreground → fetchMeals()")
+                        SyncManager.shared.pushDirty()
+                        SyncManager.shared.fetchMeals()
+                    }
+                }
         }
     }
+
 }
