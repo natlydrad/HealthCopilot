@@ -75,28 +75,19 @@ struct LogView: View {
                             .stroke(Color.gray.opacity(0.3))
                     )
                     .frame(height: 150)
-                    // 👉 tap anywhere in the box to focus
+                    .contentShape(Rectangle())
                     .onTapGesture {
                         isInputFocused = true
                     }
 
-                // invisible background TextField that expands fully
-                TextField("", text: $input, axis: .vertical)
-                    .focused($isInputFocused)
+                // single-line field with .done
+                TextField("Describe meal…", text: $input)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
                     .frame(height: 150, alignment: .topLeading)
-                    .background(Color.clear)
+                    .focused($isInputFocused)
                     .submitLabel(.done)
                     .onSubmit { addMeal() }
-
-                // Placeholder text
-                if input.isEmpty {
-                    Text("Describe meal…")
-                        .foregroundColor(.gray)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 14)
-                }
             }
             .padding(.horizontal)
 
