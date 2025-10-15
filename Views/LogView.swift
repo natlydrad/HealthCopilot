@@ -66,8 +66,17 @@ struct LogView: View {
         VStack(spacing: 14) {
             Spacer()
 
-            // --- Full-box tappable text area ---
+            // --- Text box with gray rounded background ---
             ZStack(alignment: .topLeading) {
+                // Background container
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(UIColor.secondarySystemBackground))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.gray.opacity(0.3))
+                    )
+
+                // Text editor
                 TextEditor(text: $input)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 10)
@@ -85,22 +94,20 @@ struct LogView: View {
                                     to: nil, from: nil, for: nil
                                 )
                             }
-                            .buttonStyle(.borderedProminent) // ✅ uses system blue tint
-                            .tint(.blue)                     // ✅ system-consistent color
+                            .buttonStyle(.borderedProminent)
+                            .tint(.blue)
                         }
                     }
 
-                // Placeholder text
+                // Placeholder
                 if input.isEmpty {
                     Text("Describe meal…")
                         .foregroundColor(.gray)
-                        .padding(.horizontal, 14)
+                        .padding(.horizontal, 16)
                         .padding(.vertical, 14)
                 }
-
             }
             .padding(.horizontal)
-
 
             // --- Photo row ---
             HStack {
@@ -193,3 +200,4 @@ struct LogView: View {
                                         to: nil, from: nil, for: nil)
     }
 }
+
