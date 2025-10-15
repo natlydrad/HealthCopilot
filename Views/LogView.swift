@@ -61,6 +61,7 @@ struct LogView: View {
     @State private var showCamera = false
     @FocusState private var isInputFocused: Bool
     @State private var didAutoFocus = false
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         VStack(spacing: 14) {
@@ -153,13 +154,22 @@ struct LogView: View {
         }
         .onAppear {
             KeyboardDismissHelper.install()
-            if !didAutoFocus {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                isInputFocused = true
+            }
+        }
+        .onChange(of: scenePhase) { newPhase in
+            if newPhase == .active {
+                // App came back to foreground → re-focus TextEditor
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                     isInputFocused = true
-                    didAutoFocus = true
                 }
             }
         }
+
+
+
         .sheet(isPresented: $showCamera) {
             CameraCaptureSheet { data in
                 let takenAt = exifCaptureDate(from: data)
