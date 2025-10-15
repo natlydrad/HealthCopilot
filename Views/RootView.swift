@@ -30,7 +30,7 @@ struct RootView: View {
         ZStack(alignment: .top) {
             // --- Background: VerifyView ---
             VStack {
-                Spacer(minLength: 240) // header + logview space
+                Spacer(minLength: 260) // header + logview space
                 VerifyView(store: store)
                     .padding(.bottom, 16)
             }
