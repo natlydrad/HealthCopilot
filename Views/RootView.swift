@@ -62,7 +62,7 @@ struct RootView: View {
                     .frame(height: 225)
                     .background(Color(.systemBackground))
                     .clipped()
-                    .shadow(radius: 3)
+                    //.shadow(radius: 3)
             }
             .frame(maxWidth: .infinity, alignment: .top)
             .ignoresSafeArea(edges: .bottom)
