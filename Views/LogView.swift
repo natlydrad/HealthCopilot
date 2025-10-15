@@ -80,16 +80,37 @@ struct LogView: View {
                         isInputFocused = true
                     }
 
-                // single-line field with .done
-                TextField("Describe meal…", text: $input)
-                    .padding(.horizontal, 12)
+                // Multiline input with wrapping
+                TextEditor(text: $input)
+                    .padding(.horizontal, 8)
                     .padding(.vertical, 10)
-                    .frame(height: 150, alignment: .topLeading)
+                    .frame(height: 150)
+                    .scrollContentBackground(.hidden)
+                    .background(Color.clear)
                     .focused($isInputFocused)
-                    .submitLabel(.done)
-                    .onSubmit { addMeal() }
+                    .toolbar {
+                        ToolbarItemGroup(placement: .keyboard) {
+                            Spacer()
+                            Button("Done") {
+                                addMeal()
+                                UIApplication.shared.sendAction(
+                                    #selector(UIResponder.resignFirstResponder),
+                                    to: nil, from: nil, for: nil
+                                )
+                            }
+                        }
+                    }
+
+                // Placeholder text
+                if input.isEmpty {
+                    Text("Describe meal…")
+                        .foregroundColor(.gray)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 14)
+                }
             }
             .padding(.horizontal)
+
 
             // --- Photo row ---
             HStack {
