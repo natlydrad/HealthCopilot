@@ -130,9 +130,29 @@ struct LogView: View {
                         }
                         if let data = try? await item.loadTransferable(type: Data.self) {
                             pickedImageData = data
+
+                            // 🧠 Get EXIF timestamp if available
+                            let takenAt = exifCaptureDate(from: data)
+
+                            // 🧩 Immediately add the meal
+                            store.addMealWithImage(
+                                text: input.trimmingCharacters(in: .whitespacesAndNewlines),
+                                imageData: data,
+                                takenAt: takenAt
+                            )
+
+                            // 🔄 Reset input + picker
+                            input = ""
+                            pickedItem = nil
+                            pickedImageData = nil
+
+                            // 👇 Dismiss keyboard (if open)
+                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                                            to: nil, from: nil, for: nil)
                         }
                     }
                 }
+
 
                 if let data = pickedImageData, let ui = UIImage(data: data) {
                     Image(uiImage: ui)
