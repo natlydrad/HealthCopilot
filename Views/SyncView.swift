@@ -44,7 +44,7 @@ struct SyncView: View {
                 // --- Sync summary (reads from shared HealthSyncManager) ---
                 if let lastSync = healthSync.lastSyncTime {
                     VStack(spacing: 4) {
-                        Text("Last Sync: \(formatTime(lastSync))")
+                        Text("Last Sync:\n\(formatTime(lastSync))")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                         Text("Range: \(healthSync.lastSyncRange)")
@@ -53,6 +53,7 @@ struct SyncView: View {
                     }
                     .padding(.bottom, 4)
                     .transition(.opacity)
+
                 } else {
                     Text("No sync data yet")
                         .font(.caption)
@@ -76,8 +77,23 @@ struct SyncView: View {
     }
 
     private func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "h:mma"   // e.g. "1:14PM"
+        timeFormatter.amSymbol = "am"
+        timeFormatter.pmSymbol = "pm"
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "MMM d, yyyy" // e.g. "Oct 15, 2025"
+
+        let relativeFormatter = RelativeDateTimeFormatter()
+        relativeFormatter.unitsStyle = .full     // "2 days ago"
+
+        let timeString = timeFormatter.string(from: date)
+        let relativeString = relativeFormatter.localizedString(for: date, relativeTo: Date())
+        let dateString = dateFormatter.string(from: date)
+
+        return "\(timeString), \(relativeString), \(dateString)"
     }
+
+
 }
