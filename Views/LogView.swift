@@ -68,19 +68,6 @@ struct LogView: View {
 
             // --- Full-box tappable text area ---
             ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(UIColor.secondarySystemBackground))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.gray.opacity(0.3))
-                    )
-                    .frame(height: 150)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        isInputFocused = true
-                    }
-
-                // Multiline input with wrapping
                 TextEditor(text: $input)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 10)
@@ -98,6 +85,8 @@ struct LogView: View {
                                     to: nil, from: nil, for: nil
                                 )
                             }
+                            .buttonStyle(.borderedProminent) // ✅ uses system blue tint
+                            .tint(.blue)                     // ✅ system-consistent color
                         }
                     }
 
@@ -108,6 +97,7 @@ struct LogView: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 14)
                 }
+
             }
             .padding(.horizontal)
 
