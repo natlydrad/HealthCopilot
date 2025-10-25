@@ -1,16 +1,57 @@
-# macOS
+# ───────────────
+# macOS & Xcode
+# ───────────────
 .DS_Store
-
-# Xcode user-specific data
+xcuserdata/
 *.xcuserdatad/
+*.xcuserstate
 *.xcscheme
 *.xcworkspace/
 DerivedData/
+build/
 
 # Swift Package Manager
 .build/
 
-# PocketBase / app secrets
+# ───────────────
+# PocketBase
+# ───────────────
 .env
-*.json
 pb_data/
+pb_data_backup/
+pb_backup_*/
+pb_backups/
+pb_*backup*
+*.db
+*.sqlite
+pb_backup_*
+pb_data*.zip
+
+# Ignore local binary builds except the one you deploy
+# (keep only the main ./pocketbase binary)
+pocketbase_exec
+pocketbase_*
+
+# ───────────────
+# Python / scripts
+# ───────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env/
+
+# ───────────────
+# Node / dashboard
+# ───────────────
+hc-dashboard/node_modules/
+hc-dashboard/.next/
+hc-dashboard/.vercel/
+hc-dashboard/dist/
+
+# ───────────────
+# Misc
+# ───────────────
+*.log
+*.bak
+*.tmp
