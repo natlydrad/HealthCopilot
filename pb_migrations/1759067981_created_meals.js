@@ -3,7 +3,14 @@
 migrate((db) => {
   const dao = new Dao(db);
   const collection = new Collection({
+    "id": "pbc_695162881",
+    "name": "meals",
+    "type": "base",
+    "system": false,
+    "listRule": "@request.auth.id != \"\"",
+    "viewRule": "@request.auth.id != \"\"",
     "createRule": "@request.auth.id != \"\"",
+    "updateRule": "@request.auth.id != \"\"",
     "deleteRule": "@request.auth.id != \"\"",
     "fields": [
       {
@@ -92,18 +99,13 @@ migrate((db) => {
         "system": false,
         "type": "autodate"
       }
-    ],
-    "id": "pbc_695162881",
-    "indexes": [
-      "CREATE UNIQUE INDEX `idx_iqmleCA91v` ON `meals` (`localId`)"
-    ],
-    "listRule": "@request.auth.id != \"\"",
-    "name": "meals",
-    "system": false,
-    "type": "base",
-    "updateRule": "@request.auth.id != \"\"",
-    "viewRule": "@request.auth.id != \"\""
+    ]
   });
+
+  // 🟢 move the index creation AFTER fields are defined
+  collection.indexes = [
+    "CREATE UNIQUE INDEX `idx_iqmleCA91v` ON `meals` (`localId`)"
+  ];
 
   return dao.saveCollection(collection);
 }, (db) => {
