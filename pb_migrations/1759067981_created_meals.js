@@ -103,9 +103,10 @@ migrate((app) => {
     "viewRule": "@request.auth.id != \"\""
   });
 
-  return app.save(collection);
-}, (app) => {
-  const collection = app.findCollectionByNameOrId("pbc_695162881");
+  return new Dao(db).saveCollection(collection);
+}, (db) => {
+  const dao = new Dao(db);
+  const collection = dao.findCollectionByNameOrId("pbc_695162881");
 
-  return app.delete(collection);
+  return dao.deleteCollection(collection);
 })
