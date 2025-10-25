@@ -1,5 +1,7 @@
 /// <reference path="../pb_data/types.d.ts" />
-migrate((app) => {
+
+migrate((db) => {
+  const dao = new Dao(db);
   const collection = new Collection({
     "createRule": "@request.auth.id != \"\"",
     "deleteRule": "@request.auth.id != \"\"",
@@ -103,10 +105,10 @@ migrate((app) => {
     "viewRule": "@request.auth.id != \"\""
   });
 
-  return new Dao(db).saveCollection(collection);
+  return dao.saveCollection(collection);
 }, (db) => {
   const dao = new Dao(db);
   const collection = dao.findCollectionByNameOrId("pbc_695162881");
 
   return dao.deleteCollection(collection);
-})
+});
