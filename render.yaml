@@ -2,7 +2,6 @@ services:
   - type: web
     name: pocketbase
     env: static
-    plan: free
     buildCommand: ""
     startCommand: ./pocketbase serve --http 0.0.0.0:$PORT
     envVars:
