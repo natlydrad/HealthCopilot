@@ -1,14 +1,10 @@
 services:
   - type: web
     name: pocketbase
-    env: docker
+    env: static
     plan: free
     buildCommand: ""
     startCommand: ./pocketbase serve --http 0.0.0.0:$PORT
     envVars:
       - key: PB_URL
-        value: "https://your-pocketbase.onrender.com"
-    disk:
-      name: pb_data
-      mountPath: /opt/render/project/src/pb_data
-      sizeGB: 1
+        value: "https://healthcopilot-pocketbase.onrender.com"
