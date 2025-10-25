@@ -1,7 +1,7 @@
 services:
   - type: web
     name: pocketbase
-    env: static
+    env: native
     buildCommand: ""
     startCommand: ./pocketbase serve --http 0.0.0.0:$PORT
     envVars:
