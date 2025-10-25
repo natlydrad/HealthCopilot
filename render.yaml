@@ -1,6 +1,6 @@
 services:
   - type: web
     name: pocketbase
-    env: go
-    buildCommand: ""
-    startCommand: ./pocketbase serve --dir ./pb_data_clean --http 0.0.0.0:$PORT
+    env: docker
+    plan: free
+    autoDeploy: true
