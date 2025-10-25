@@ -3,7 +3,4 @@ services:
     name: pocketbase
     env: go
     buildCommand: ""
-    startCommand: ./pocketbase serve --http 0.0.0.0:$PORT
-    envVars:
-      - key: PB_URL
-        value: "https://healthcopilot-pocketbase.onrender.com"
+    startCommand: ./pocketbase serve --dir ./pb_data_clean --http 0.0.0.0:$PORT
