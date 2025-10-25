@@ -1,7 +1,7 @@
 services:
   - type: web
     name: pocketbase
-    env: native
+    env: go
     buildCommand: ""
     startCommand: ./pocketbase serve --http 0.0.0.0:$PORT
     envVars:
