@@ -1,0 +1,15 @@
+{
+  "n_days": 184,
+  "n_features": 363,
+  "n_targets": 11,
+  "total_significant_correlations": 5430,
+  "mean_r2": 0.03445292872074419,
+  "median_r2": 0.01526387536790752,
+  "top_targets": [
+    "glucose_mean",
+    "hrv_sdnn_ms",
+    "basal_kcal_lag1",
+    "hrv_sdnn_ms_lag1",
+    "vo2max_ml_kg_min_lag1"
+  ]
+}
