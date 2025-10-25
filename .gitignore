@@ -30,7 +30,8 @@ pb_data*.zip
 # Ignore local binary builds except the one you deploy
 # (keep only the main ./pocketbase binary)
 pocketbase_exec
-pocketbase_*
+# pocketbase_*  <-- comment this out so Git can see your Linux binary
+
 
 # ───────────────
 # Python / scripts
