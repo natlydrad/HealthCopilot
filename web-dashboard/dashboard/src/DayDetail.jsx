@@ -1,6 +1,15 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { fetchMeals, fetchIngredients } from "./api";
+import { fetchMeals, fetchIngredients, correctIngredient, updateIngredient } from "./api";
+
+// Determine if an ingredient is low confidence (needs review)
+function isLowConfidence(ing) {
+  // No USDA match = GPT guessed it
+  if (!ing.usdaCode) return true;
+  // Source is explicitly GPT without USDA validation
+  if (ing.source === "gpt" && !ing.nutrition?.length) return true;
+  return false;
+}
 
 export default function DayDetail() {
   const { date } = useParams();
@@ -69,6 +78,7 @@ export default function DayDetail() {
 
 function MealCard({ meal }) {
   const [ingredients, setIngredients] = useState([]);
+  const [correcting, setCorrecting] = useState(null); // ingredient being corrected
 
   useEffect(() => {
     async function loadIngredients() {
@@ -88,34 +98,270 @@ function MealCard({ meal }) {
       {ingredients.length === 0 ? (
         <p className="text-gray-400 italic">No ingredients found</p>
       ) : (
-        <ul className="text-sm text-gray-700 list-disc ml-5">
-            {ingredients.map((ing) => {
-                const nutrients = Array.isArray(ing.nutrition) ? ing.nutrition : [];
-                const energy = nutrients.find((n) => n.nutrientName === "Energy");
-                const protein = nutrients.find((n) => n.nutrientName === "Protein");
-                const carbs = nutrients.find((n) => n.nutrientName.includes("Carbohydrate"));
-                const fat = nutrients.find((n) => n.nutrientName.includes("Total lipid"));
+        <ul className="text-sm text-gray-700 space-y-1">
+          {ingredients.map((ing) => {
+            const nutrients = Array.isArray(ing.nutrition) ? ing.nutrition : [];
+            const energy = nutrients.find((n) => n.nutrientName === "Energy");
+            const protein = nutrients.find((n) => n.nutrientName === "Protein");
+            const carbs = nutrients.find((n) => n.nutrientName.includes("Carbohydrate"));
+            const fat = nutrients.find((n) => n.nutrientName.includes("Total lipid"));
+            const lowConf = isLowConfidence(ing);
 
-    return (
-      <li key={ing.id}>
-        <span className="font-medium">{ing.name}</span>
-        {energy || protein || carbs || fat ? (
-          <>
-            {" — "}
-            {energy ? `${energy.value} kcal` : ""}
-            {protein ? ` | ${protein.value}g protein` : ""}
-            {carbs ? ` | ${carbs.value}g carbs` : ""}
-            {fat ? ` | ${fat.value}g fat` : ""}
-          </>
-        ) : (
-          " — no nutrition data"
-        )}
-      </li>
-    );
-  })}
-</ul>
-
+            return (
+              <li 
+                key={ing.id}
+                onClick={() => setCorrecting(ing)}
+                className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors
+                  ${lowConf ? 'bg-amber-50 hover:bg-amber-100' : 'hover:bg-gray-50'}`}
+              >
+                {/* Low confidence indicator */}
+                {lowConf && (
+                  <span className="text-amber-500 text-xs" title="Tap to correct">?</span>
+                )}
+                
+                <span className="font-medium">{ing.name}</span>
+                
+                {ing.quantity && ing.unit && (
+                  <span className="text-gray-400 text-xs">
+                    ({ing.quantity} {ing.unit})
+                  </span>
+                )}
+                
+                {energy || protein || carbs || fat ? (
+                  <span className="text-gray-500 text-xs ml-auto">
+                    {energy ? `${Math.round(energy.value)} cal` : ""}
+                    {protein ? ` · ${Math.round(protein.value)}g P` : ""}
+                  </span>
+                ) : (
+                  <span className="text-gray-400 text-xs ml-auto italic">no data</span>
+                )}
+                
+                {/* Edit hint */}
+                <span className="text-gray-300 text-xs">tap to edit</span>
+              </li>
+            );
+          })}
+        </ul>
       )}
+
+      {/* Correction Chat Modal */}
+      {correcting && (
+        <CorrectionChat 
+          ingredient={correcting} 
+          meal={meal}
+          onClose={() => setCorrecting(null)}
+          onSave={(correction) => {
+            // Update local state optimistically
+            setIngredients(prev => prev.map(i => 
+              i.id === correcting.id ? { ...i, ...correction } : i
+            ));
+            setCorrecting(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Chat-style correction component
+function CorrectionChat({ ingredient, meal, onClose, onSave }) {
+  const [messages, setMessages] = useState([
+    { 
+      from: "bot", 
+      text: `I logged "${ingredient.name}" (${ingredient.quantity || '?'} ${ingredient.unit || 'serving'}). What would you like to change?`
+    }
+  ]);
+  const [step, setStep] = useState("initial"); // initial, name, quantity, brand, confirm
+  const [correction, setCorrection] = useState({
+    name: ingredient.name,
+    quantity: ingredient.quantity,
+    unit: ingredient.unit,
+  });
+  const [inputValue, setInputValue] = useState("");
+
+  const addBotMessage = (text) => {
+    setMessages(prev => [...prev, { from: "bot", text }]);
+  };
+
+  const addUserMessage = (text) => {
+    setMessages(prev => [...prev, { from: "user", text }]);
+  };
+
+  const handleOption = (option, value) => {
+    addUserMessage(option);
+    
+    if (step === "initial") {
+      if (value === "name") {
+        setStep("name");
+        addBotMessage("What should it be called?");
+      } else if (value === "quantity") {
+        setStep("quantity");
+        addBotMessage("What's the right amount?");
+      } else if (value === "wrong") {
+        setStep("name");
+        addBotMessage("Oops! What was it actually?");
+      } else if (value === "correct") {
+        addBotMessage("Great! No changes needed.");
+        setTimeout(onClose, 1000);
+      }
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!inputValue.trim()) return;
+
+    addUserMessage(inputValue);
+
+    if (step === "name") {
+      setCorrection(prev => ({ ...prev, name: inputValue }));
+      setStep("quantity");
+      addBotMessage(`Got it, "${inputValue}". How much? (e.g., "1 cup", "8 oz", "2 pieces")`);
+    } else if (step === "quantity") {
+      // Parse quantity and unit from input
+      const match = inputValue.match(/^([\d.]+)\s*(.+)?$/);
+      if (match) {
+        setCorrection(prev => ({ 
+          ...prev, 
+          quantity: parseFloat(match[1]), 
+          unit: match[2]?.trim() || prev.unit 
+        }));
+      }
+      setStep("confirm");
+      addBotMessage(`Perfect! I'll remember: ${correction.name} - ${inputValue}. Save this?`);
+    }
+
+    setInputValue("");
+  };
+
+  const handleSave = async () => {
+    addUserMessage("Yes, save it!");
+    
+    try {
+      // Save the correction record (for learning)
+      const originalParse = {
+        name: ingredient.name,
+        quantity: ingredient.quantity,
+        unit: ingredient.unit,
+        source: ingredient.source,
+      };
+      
+      await correctIngredient(ingredient.id, originalParse, correction);
+      
+      // Update the actual ingredient
+      await updateIngredient(ingredient.id, {
+        name: correction.name,
+        quantity: correction.quantity,
+        unit: correction.unit,
+      });
+      
+      addBotMessage("Saved! I'll remember this for next time.");
+      setTimeout(() => onSave(correction), 1000);
+    } catch (err) {
+      console.error("Failed to save correction:", err);
+      addBotMessage("Oops, something went wrong. Try again?");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50">
+      <div className="bg-white w-full max-w-lg rounded-t-2xl max-h-[80vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b">
+          <h3 className="font-semibold">Correct Ingredient</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            ✕
+          </button>
+        </div>
+
+        {/* Chat Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {messages.map((msg, i) => (
+            <div 
+              key={i} 
+              className={`flex ${msg.from === "user" ? "justify-end" : "justify-start"}`}
+            >
+              <div 
+                className={`max-w-[80%] px-4 py-2 rounded-2xl ${
+                  msg.from === "user" 
+                    ? "bg-blue-500 text-white rounded-br-md" 
+                    : "bg-gray-100 text-gray-800 rounded-bl-md"
+                }`}
+              >
+                {msg.text}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Quick Options or Input */}
+        <div className="p-4 border-t bg-gray-50">
+          {step === "initial" && (
+            <div className="flex flex-wrap gap-2">
+              <button 
+                onClick={() => handleOption("Change the name", "name")}
+                className="px-4 py-2 bg-white border rounded-full text-sm hover:bg-gray-50"
+              >
+                Wrong name
+              </button>
+              <button 
+                onClick={() => handleOption("Change the amount", "quantity")}
+                className="px-4 py-2 bg-white border rounded-full text-sm hover:bg-gray-50"
+              >
+                Wrong amount
+              </button>
+              <button 
+                onClick={() => handleOption("This is completely wrong", "wrong")}
+                className="px-4 py-2 bg-white border rounded-full text-sm hover:bg-gray-50"
+              >
+                Totally wrong
+              </button>
+              <button 
+                onClick={() => handleOption("Looks good!", "correct")}
+                className="px-4 py-2 bg-green-50 border-green-200 border rounded-full text-sm text-green-700 hover:bg-green-100"
+              >
+                Looks correct
+              </button>
+            </div>
+          )}
+
+          {step === "confirm" && (
+            <div className="flex gap-2">
+              <button 
+                onClick={handleSave}
+                className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-full text-sm hover:bg-blue-600"
+              >
+                Save
+              </button>
+              <button 
+                onClick={onClose}
+                className="px-4 py-2 bg-gray-200 rounded-full text-sm hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {(step === "name" || step === "quantity") && (
+            <form onSubmit={handleSubmit} className="flex gap-2">
+              <input
+                type="text"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                placeholder={step === "name" ? "Enter correct name..." : "e.g., 1 cup, 8 oz"}
+                className="flex-1 px-4 py-2 border rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                autoFocus
+              />
+              <button 
+                type="submit"
+                className="px-4 py-2 bg-blue-500 text-white rounded-full text-sm hover:bg-blue-600"
+              >
+                Send
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
