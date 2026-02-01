@@ -203,16 +203,37 @@ export default function Dashboard() {
   );
 }
 
+const PB_URL = "https://pocketbase-1j2x.onrender.com";
+
 function MealCard({ meal, ingredients, formatTime }) {
   const hasImage = !!meal.image;
   const hasText = !!(meal.text && meal.text.trim());
-  const text = hasText ? meal.text : (hasImage ? "📷" : "—");
-  const truncated = text.length > 60 ? text.slice(0, 60) + "..." : text;
+  const text = hasText ? meal.text : "";
+  const truncated = text.length > 50 ? text.slice(0, 50) + "..." : text;
+  
+  // PocketBase file URL: /api/files/{collectionId}/{recordId}/{filename}
+  const imageUrl = hasImage 
+    ? `${PB_URL}/api/files/${meal.collectionId}/${meal.id}/${meal.image}?thumb=200x200`
+    : null;
   
   return (
     <div className="bg-slate-50 rounded-lg p-2 text-xs border border-slate-100">
       <div className="text-slate-400 text-[10px] mb-1">{formatTime(meal.timestamp)}</div>
-      <div className="text-slate-700 font-medium leading-tight">{truncated}</div>
+      
+      {/* Photo thumbnail */}
+      {imageUrl && (
+        <div className="mb-2">
+          <img 
+            src={imageUrl} 
+            alt="meal" 
+            className="w-full h-24 object-cover rounded"
+            loading="lazy"
+          />
+        </div>
+      )}
+      
+      {/* Text description */}
+      {truncated && <div className="text-slate-700 font-medium leading-tight">{truncated}</div>}
       
       {ingredients.length > 0 && (
         <div className="mt-2 pt-2 border-t border-slate-200">
