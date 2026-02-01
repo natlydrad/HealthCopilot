@@ -3,5 +3,5 @@ services:
     name: pocketbase
     env: docker
     autoDeploy: false
-    dockerfilePath: ./Dockerfile
+    dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
