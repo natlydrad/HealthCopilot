@@ -1,39 +1,123 @@
 import { useEffect, useState } from "react";
-import { fetchMeals } from "./api";
-import { groupMealsByDay } from "./utils/groupMealsByDay";
-import { useNavigate } from "react-router-dom";
+import { fetchMeals, fetchIngredients } from "./api";
 
 export default function Dashboard() {
   const [meals, setMeals] = useState([]);
-  const navigate = useNavigate();
+  const [ingredients, setIngredients] = useState({});
 
   useEffect(() => {
-  async function load() {
-    const items = await fetchMeals();
-    setMeals(items);
+    async function load() {
+      const items = await fetchMeals();
+      setMeals(items);
+      
+      // Load ingredients for all meals
+      const ingMap = {};
+      for (const meal of items) {
+        try {
+          const ings = await fetchIngredients(meal.id);
+          if (ings.length > 0) {
+            ingMap[meal.id] = ings;
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+      setIngredients(ingMap);
+    }
+    load();
+  }, []);
+
+  // Get last 7 days
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(d.toISOString().split("T")[0]);
   }
-  load();
-}, []); // ← this runs once per page refresh (which is enough)
 
+  // Group meals by day
+  const mealsByDay = {};
+  for (const day of days) {
+    mealsByDay[day] = meals.filter(
+      (m) => m.timestamp && m.timestamp.split("T")[0] === day
+    );
+  }
 
-  const grouped = groupMealsByDay(meals);
+  const formatDay = (dateStr) => {
+    const d = new Date(dateStr + "T12:00:00");
+    const today = new Date().toISOString().split("T")[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+    
+    if (dateStr === today) return "Today";
+    if (dateStr === yesterday) return "Yesterday";
+    return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  };
+
+  const formatTime = (timestamp) => {
+    if (!timestamp) return "";
+    const d = new Date(timestamp);
+    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  };
 
   return (
-    <div className="p-8 bg-gray-100 min-h-screen">
-      <h1 className="text-3xl font-bold mb-6">🍽 HealthCopilot Dashboard</h1>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {Object.entries(grouped).map(([date, dayMeals]) => (
-          <div
-            key={date}
-            className="bg-white p-6 rounded-xl shadow hover:shadow-md transition cursor-pointer"
-            onClick={() => navigate(`/day/${date}`)}
-          >
-            <h2 className="text-xl font-semibold mb-1">{date}</h2>
-            <p className="text-gray-600">{dayMeals.length} meals</p>
+    <div className="min-h-screen bg-slate-50 p-4">
+      <h1 className="text-2xl font-bold text-slate-800 mb-4">This Week</h1>
+      
+      <div className="grid grid-cols-7 gap-2">
+        {days.map((day) => (
+          <div key={day} className="flex flex-col">
+            {/* Day header */}
+            <div className="bg-slate-800 text-white px-3 py-2 rounded-t-lg text-center">
+              <div className="font-semibold text-sm">{formatDay(day)}</div>
+              <div className="text-xs text-slate-300">{day.slice(5)}</div>
+            </div>
+            
+            {/* Meals for this day */}
+            <div className="bg-white rounded-b-lg shadow-sm flex-1 min-h-[400px] p-2 space-y-2">
+              {mealsByDay[day].length === 0 ? (
+                <p className="text-slate-300 text-xs text-center py-4">No meals</p>
+              ) : (
+                mealsByDay[day].map((meal) => (
+                  <MealCard 
+                    key={meal.id} 
+                    meal={meal} 
+                    ingredients={ingredients[meal.id] || []}
+                    formatTime={formatTime}
+                  />
+                ))
+              )}
+            </div>
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function MealCard({ meal, ingredients, formatTime }) {
+  const text = meal.text || "(no description)";
+  const truncated = text.length > 60 ? text.slice(0, 60) + "..." : text;
+  
+  return (
+    <div className="bg-slate-50 rounded-lg p-2 text-xs border border-slate-100">
+      <div className="text-slate-400 text-[10px] mb-1">{formatTime(meal.timestamp)}</div>
+      <div className="text-slate-700 font-medium leading-tight">{truncated}</div>
+      
+      {ingredients.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-slate-200">
+          <div className="text-slate-500 space-y-0.5">
+            {ingredients.slice(0, 4).map((ing) => (
+              <div key={ing.id} className="flex items-center gap-1">
+                <span className="text-green-500">•</span>
+                <span>{ing.name}</span>
+              </div>
+            ))}
+            {ingredients.length > 4 && (
+              <div className="text-slate-400">+{ingredients.length - 4} more</div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
