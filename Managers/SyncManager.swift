@@ -428,6 +428,8 @@ class SyncManager {
 
             // Walk local meals
             var changed = false
+            var linked = 0, markedPending = 0, cleared = 0
+            
             for i in 0..<MealStore.shared.meals.count {
                 var m = MealStore.shared.meals[i]
 
@@ -439,37 +441,35 @@ class SyncManager {
                         if let su = srv.updated, su > (m.updatedAt ?? .distantPast) {
                             m.updatedAt = su
                         }
-                        // If content differs and local is newer, leave pending to PATCH
-                        // Else mark clean
-                        // (We don't compare text here to keep it simple—Stage 2 will handle conflicts.)
                         m.pendingSync = false
                         MealStore.shared.meals[i] = m
                         changed = true
-                        print("🔗 reconcile linked:", m.localId, "→", srv.id)
+                        linked += 1
                     } else {
                         // Not on server → mark pending so queue will POST it
                         if m.pendingSync == false {
                             m.pendingSync = true
-                            // Keep or bump updatedAt so local is considered newer
                             if m.updatedAt == nil { m.updatedAt = Date() }
                             MealStore.shared.meals[i] = m
                             changed = true
-                            print("🟥 reconcile marked pending:", m.localId)
+                            markedPending += 1
                         }
                     }
                 } else {
                     // Case B: local has pbId — verify it still exists on server
-                    // If it doesn't, CLEAR pbId so we POST instead of PATCH
                     if serverByLocalId[m.localId] == nil {
-                        m.pbId = nil  // ← Clear so pushDirty will POST, not PATCH
+                        m.pbId = nil
                         m.pendingSync = true
                         MealStore.shared.meals[i] = m
                         changed = true
-                        print("🟧 reconcile: pbId cleared, will POST as new:", m.localId)
+                        cleared += 1
                     }
                 }
             }
 
+            // Summary log instead of per-meal
+            print("🧭 reconcile done: \(linked) linked, \(markedPending) marked pending, \(cleared) cleared")
+            
             if changed {
                 MealStore.shared.saveMeals()
             }

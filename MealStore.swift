@@ -152,21 +152,20 @@ class MealStore: ObservableObject {
     }
 
     /// Called by SyncManager after a successful POST/PATCH.
-    func markSynced(localId: String) {
+    func markSynced(localId: String, save: Bool = true) {
         if let idx = meals.firstIndex(where: { $0.localId == localId }) {
             meals[idx].pendingSync = false
             meals[idx].updatedAt = Date()
-            saveMeals()
+            if save { saveMeals() }
         }
     }
 
-
     
     // Link PB id into the existing local meal (called after POST succeeds)
-    func linkLocalToRemote(localId: String, pbId: String) {
+    func linkLocalToRemote(localId: String, pbId: String, save: Bool = true) {
         if let i = meals.firstIndex(where: { $0.localId == localId }) {
             meals[i].pbId = pbId
-            saveMeals()
+            if save { saveMeals() }
             objectWillChange.send()
         }
     }
@@ -279,12 +278,18 @@ class MealStore: ObservableObject {
         return docs.appendingPathComponent(fileName)
     }
     
+    private var lastSaveLog: Date = .distantPast
+    
     func saveMeals() {
         let url = getFileURL()
         do {
             let data = try JSONEncoder().encode(meals)
             try data.write(to: url)
-            print("💾 Saved \(meals.count) meals to:", url.path)
+            // Only log saves once per 5 seconds to reduce spam
+            if Date().timeIntervalSince(lastSaveLog) > 5 {
+                print("💾 Saved \(meals.count) meals")
+                lastSaveLog = Date()
+            }
         } catch {
             print("❌ saveMeals error:", error)
         }
