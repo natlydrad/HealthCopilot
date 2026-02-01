@@ -4,5 +4,5 @@ services:
     env: docker
     plan: free
     autoDeploy: false
-    dockerfilePath: ./backend/Dockerfile
+    dockerfilePath: ./Dockerfile
     dockerContext: ./backend
