@@ -2,6 +2,34 @@ import Foundation
 import UIKit
 import ImageIO
 
+// MARK: - Image Compression Helpers
+
+/// Resize image to max dimension while preserving aspect ratio
+/// 1024px + 0.65 quality = ~60-120KB per image (down from 2-3MB)
+func resizeAndCompressImage(_ image: UIImage, maxDimension: CGFloat = 1024, quality: CGFloat = 0.65) -> Data? {
+    // Calculate new size preserving aspect ratio
+    let size = image.size
+    let ratio = min(maxDimension / size.width, maxDimension / size.height)
+    
+    // Only resize if image is larger than max dimension
+    let newSize: CGSize
+    if ratio < 1 {
+        newSize = CGSize(width: size.width * ratio, height: size.height * ratio)
+    } else {
+        newSize = size
+    }
+    
+    // Render resized image
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1.0  // Don't multiply by screen scale
+    let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
+    let resized = renderer.image { _ in
+        image.draw(in: CGRect(origin: .zero, size: newSize))
+    }
+    
+    return resized.jpegData(compressionQuality: quality)
+}
+
 class MealStore: ObservableObject {
     static let shared = MealStore()
     
@@ -36,12 +64,13 @@ class MealStore: ObservableObject {
 
         // 2) If user picked a photo, upload/replace it on PocketBase
         if let data = newImageData {
-            // (optional) compress to ~85% JPEG as you already do elsewhere
+            // Resize to 1024px max + compress to 65% quality (~60-120KB)
             let compressed: Data = {
                 if let ui = UIImage(data: data),
-                   let jpeg = ui.jpegData(compressionQuality: 0.85) { return jpeg }
+                   let optimized = resizeAndCompressImage(ui) { return optimized }
                 return data
             }()
+            print("🗜️ [updateMeal] Compressed image:", data.count, "→", compressed.count, "bytes")
 
             Task {
                 do {
@@ -164,12 +193,12 @@ class MealStore: ObservableObject {
               "timestamp=\(pickedTimestamp)",
               "text.len=\(text.count)")
 
-        // Compress to ~85% JPEG
+        // Resize to 1024px max + compress to 65% quality (~60-120KB)
         let compressed: Data
         if let ui = UIImage(data: originalData),
-           let jpeg = ui.jpegData(compressionQuality: 0.85) {
-            compressed = jpeg
-            print("🗜️ Compressed image:", originalData.count, "→", compressed.count, "bytes")
+           let optimized = resizeAndCompressImage(ui) {
+            compressed = optimized
+            print("🗜️ Compressed image:", originalData.count, "→", compressed.count, "bytes (\(Int(Double(compressed.count) / Double(originalData.count) * 100))%)")
         } else {
             compressed = originalData
             print("⚠️ Using original image bytes:", originalData.count)

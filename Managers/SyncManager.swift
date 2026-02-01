@@ -66,7 +66,7 @@ class SyncManager {
     static let shared = SyncManager()
     private init() {}
     
-    let baseURL = "http://192.168.1.196:8090"
+    let baseURL = "https://pocketbase-1j2x.onrender.com"
     
     var token: String? {
         get { UserDefaults.standard.string(forKey: "PBToken") }
@@ -888,11 +888,12 @@ extension SyncManager {
     /// - If meal.pbId != nil → multipart PATCH the image field.
     /// - Else → multipart POST a full record with the image.
     func setMealPhoto(for meal: Meal, imageData rawData: Data) async throws {
-        // compress for network sanity (same approach as addMealWithImage)
+        // Resize to 1024px max + compress to 65% quality (~60-120KB)
         let compressed: Data = {
             if let ui = UIImage(data: rawData),
-               let jpeg = ui.jpegData(compressionQuality: 0.85) {
-                return jpeg
+               let optimized = resizeAndCompressImage(ui) {
+                print("🗜️ [setMealPhoto] Compressed:", rawData.count, "→", optimized.count, "bytes")
+                return optimized
             }
             return rawData
         }()
