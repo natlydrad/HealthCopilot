@@ -4,7 +4,15 @@ from lookup_usda import usda_lookup
 import os
 import argparse
 
-BANNED_INGREDIENTS = {"smoothie", "salad", "sandwich", "bowl", "dish"}
+# Items to skip - either too vague or non-food items from image parsing
+BANNED_INGREDIENTS = {
+    # Vague meal descriptors
+    "smoothie", "salad", "sandwich", "bowl", "dish", "meal", "food", "snack",
+    "breakfast", "lunch", "dinner", "unknown item", "unknown", "item",
+    # Kitchen items that slip through from images
+    "knife", "fork", "spoon", "plate", "napkin", "cup", "glass", "table",
+    "cutting board", "pan", "pot", "utensil", "container", "wrapper",
+}
 
 
 def normalize_quantity(ing):

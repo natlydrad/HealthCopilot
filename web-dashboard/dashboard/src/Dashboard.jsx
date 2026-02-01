@@ -126,12 +126,18 @@ function MealCard({ meal, ingredients, formatTime }) {
       {ingredients.length > 0 && (
         <div className="mt-2 pt-2 border-t border-slate-200">
           <div className="text-slate-500 space-y-0.5">
-            {ingredients.slice(0, 4).map((ing) => (
-              <div key={ing.id} className="flex items-center gap-1">
-                <span className="text-green-500">•</span>
-                <span>{ing.name}</span>
-              </div>
-            ))}
+            {ingredients.slice(0, 4).map((ing) => {
+              const qty = ing.quantity;
+              const unit = ing.unit && ing.unit !== "serving" ? ing.unit : "";
+              const qtyStr = qty && qty !== 1 ? `${qty}${unit ? " " + unit : ""}` : "";
+              return (
+                <div key={ing.id} className="flex items-center gap-1">
+                  <span className="text-green-500">•</span>
+                  <span>{ing.name}</span>
+                  {qtyStr && <span className="text-slate-400">({qtyStr})</span>}
+                </div>
+              );
+            })}
             {ingredients.length > 4 && (
               <div className="text-slate-400">+{ingredients.length - 4} more</div>
             )}
