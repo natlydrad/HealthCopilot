@@ -5,8 +5,8 @@ import ImageIO
 // MARK: - Image Compression Helpers
 
 /// Resize image to max dimension while preserving aspect ratio
-/// 1024px + 0.65 quality = ~60-120KB per image (down from 2-3MB)
-func resizeAndCompressImage(_ image: UIImage, maxDimension: CGFloat = 1024, quality: CGFloat = 0.65) -> Data? {
+/// Ensures result is under 4.5MB to stay within PocketBase's 5MB limit
+func resizeAndCompressImage(_ image: UIImage, maxDimension: CGFloat = 1024, quality: CGFloat = 0.60) -> Data? {
     // Calculate new size preserving aspect ratio
     let size = image.size
     let ratio = min(maxDimension / size.width, maxDimension / size.height)
@@ -27,7 +27,18 @@ func resizeAndCompressImage(_ image: UIImage, maxDimension: CGFloat = 1024, qual
         image.draw(in: CGRect(origin: .zero, size: newSize))
     }
     
-    return resized.jpegData(compressionQuality: quality)
+    // Try progressively lower quality until under 4.5MB
+    let maxBytes = 4_500_000
+    var currentQuality = quality
+    var data = resized.jpegData(compressionQuality: currentQuality)
+    
+    while let d = data, d.count > maxBytes && currentQuality > 0.1 {
+        currentQuality -= 0.1
+        data = resized.jpegData(compressionQuality: currentQuality)
+        print("🗜️ Recompressing at quality \(currentQuality): \(d.count) → \(data?.count ?? 0) bytes")
+    }
+    
+    return data
 }
 
 class MealStore: ObservableObject {

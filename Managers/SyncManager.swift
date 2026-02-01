@@ -348,6 +348,8 @@ class SyncManager {
         }
         // Then upserts
         for m in upserts {
+            print("🔄 pushDirty processing: localId=\(m.localId), pbId=\(m.pbId ?? "nil"), text=\(m.text.prefix(30))...")
+            
             // 🆕 If local cached image exists and not yet uploaded, handle that first
             let localImageURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
                 .first!.appendingPathComponent("meal-\(m.localId).jpg")
@@ -360,18 +362,21 @@ class SyncManager {
                         do {
                             try await self.uploadMealWithImage(meal: m, imageData: data)
                         } catch {
-                            print("⚠️ Retried image upload failed:", error)
+                            print("❌ Image upload failed for \(m.localId):", error)
                         }
                     }
                 }
                 continue
+            } else {
+                print("📝 No local image for \(m.localId), syncing text only")
             }
-
 
             // 🧠 Otherwise, just normal text-only sync
             if m.pbId == nil {
+                print("   → Will POST (no pbId)")
                 upsertMeal(m)
             } else {
+                print("   → Will PATCH (pbId=\(m.pbId!))")
                 updateMeal(m)
             }
         }
@@ -453,13 +458,14 @@ class SyncManager {
                         }
                     }
                 } else {
-                    // Case B: local has pbId — optionally verify it still exists on server
-                    // If it doesn't, flip to pending so we recreate (rare; e.g., server deletion).
+                    // Case B: local has pbId — verify it still exists on server
+                    // If it doesn't, CLEAR pbId so we POST instead of PATCH
                     if serverByLocalId[m.localId] == nil {
+                        m.pbId = nil  // ← Clear so pushDirty will POST, not PATCH
                         m.pendingSync = true
                         MealStore.shared.meals[i] = m
                         changed = true
-                        print("🟧 reconcile: pbId set but not on server, will re-push:", m.localId)
+                        print("🟧 reconcile: pbId cleared, will POST as new:", m.localId)
                     }
                 }
             }
@@ -581,15 +587,42 @@ class SyncManager {
                 )
             }
 
+        } catch let e as HTTPError {
+            // --- HANDLE "localId already exists" by finding and PATCHing ---
+            if e.status == 400 && e.bodyPrefix.contains("validation_not_unique") {
+                print("⚠️ Record already exists for \(meal.localId), finding and PATCHing image...")
+                if let existing = try? await findByLocalIdAsync(meal.localId, token: token) {
+                    // Link locally and PATCH the image
+                    await MainActor.run {
+                        MealStore.shared.linkLocalToRemote(localId: meal.localId, pbId: existing.id)
+                    }
+                    try await self.patchMealPhotoAsync(
+                        pbId: existing.id,
+                        imageData: imageData,
+                        field: PB_PHOTO_FIELD,
+                        localId: meal.localId
+                    )
+                    // Cleanup local file
+                    let localURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+                        .first!.appendingPathComponent("meal-\(meal.localId).jpg")
+                    try? FileManager.default.removeItem(at: localURL)
+                    await MainActor.run {
+                        MealStore.shared.markSynced(localId: meal.localId)
+                    }
+                    print("✅ PATCHed image to existing record:", existing.id)
+                    return
+                }
+            }
+            print("❌ uploadMealWithImage error:", e.bodyPrefix)
+            throw e
         } catch {
             // --- OFFLINE OR NETWORK FAILURE HANDLING ---
             if (error as? URLError)?.code == .notConnectedToInternet {
                 print("🌐 Offline: queued image upload for later:", meal.localId)
-                // leave local file for pushDirty retry
             } else {
                 print("❌ uploadMealWithImage error:", error.localizedDescription)
             }
-            throw error // propagate to caller for logging, but local data remains safe
+            throw error
         }
     }
 

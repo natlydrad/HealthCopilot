@@ -9,19 +9,16 @@ struct HealthCopilotApp: App {
 
 
     init() {
+        print("🚀🚀🚀 APP INIT STARTED 🚀🚀🚀")
         // Login to PocketBase on startup
         SyncManager.shared.login(email: "natradalie@gmail.com",
                                  password: "London303!") { success in
             if success {
                 print("✅ Logged in to PocketBase; initial fetch")
                 
-                let key = "didRunReconcileV1"
-                if !UserDefaults.standard.bool(forKey: key) {
-                    SyncManager.shared.reconcileLocalWithServer()
-                    UserDefaults.standard.set(true, forKey: key)
-                }
+                // Always reconcile on launch to catch stuck/orphaned meals
+                SyncManager.shared.reconcileLocalWithServer()
                 
-                SyncManager.shared.pushDirty()
                 SyncManager.shared.fetchMeals()   // pull from PB on launch
             } else {
                 print("❌ Login failed")
