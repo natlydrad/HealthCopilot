@@ -14,6 +14,9 @@ BANNED_INGREDIENTS = {
     "knife", "fork", "spoon", "plate", "napkin", "cup", "glass", "table",
     "cutting board", "pan", "pot", "utensil", "container", "wrapper",
     "plate with food", "bowl with food", "dish with food",
+    # Household items GPT sometimes sees (exact matches only)
+    "rug", "round rug", "grey round rug", "thermo mug", 
+    "counter", "countertop", "kitchen", "placemat", "towel",
 }
 
 
