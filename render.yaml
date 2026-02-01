@@ -2,7 +2,6 @@ services:
   - type: web
     name: pocketbase
     env: docker
-    plan: free
     autoDeploy: false
     dockerfilePath: ./Dockerfile
     dockerContext: ./backend
