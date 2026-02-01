@@ -211,6 +211,106 @@ export default function Dashboard() {
     return micros;
   };
 
+  // Calculate food group servings
+  const getDayFoodGroups = (day) => {
+    const dayMeals = mealsByDay[day] || [];
+    const groups = {
+      vegetables: 0,
+      fruits: 0,
+      protein: 0,
+      grains: 0,
+      dairy: 0,
+    };
+    
+    const UNIT_TO_GRAMS = {
+      oz: 28.35, g: 1, grams: 1, gram: 1,
+      cup: 150, cups: 150, tbsp: 15, tablespoon: 15, tsp: 5, teaspoon: 5,
+      piece: 50, pieces: 50, slice: 20, slices: 20,
+      serving: 100, eggs: 50, egg: 50,
+      pill: 0, pills: 0, capsule: 0, capsules: 0, l: 0,
+      liter: 1000, ml: 1,
+    };
+    
+    // Food group keywords
+    const VEGETABLES = ['lettuce', 'spinach', 'arugula', 'kale', 'cabbage', 'broccoli', 'carrot', 'tomato', 'cucumber', 'pepper', 'onion', 'garlic', 'celery', 'mushroom', 'zucchini', 'squash', 'eggplant', 'asparagus', 'green bean', 'bean sprout', 'cabbage', 'cauliflower', 'brussels', 'radish', 'turnip', 'beet', 'corn', 'pea', 'bean', 'salsa', 'vegetable'];
+    const FRUITS = ['apple', 'apples', 'banana', 'bananas', 'orange', 'oranges', 'berry', 'berries', 'strawberry', 'strawberries', 'blueberry', 'blueberries', 'raspberry', 'raspberries', 'blackberry', 'blackberries', 'grape', 'grapes', 'mango', 'mangoes', 'pineapple', 'pineapples', 'kiwi', 'kiwis', 'peach', 'peaches', 'pear', 'pears', 'plum', 'plums', 'cherry', 'cherries', 'melon', 'melons', 'watermelon', 'watermelons', 'cantaloupe', 'cantaloupes', 'avocado', 'avocados', 'lemon', 'lemons', 'lime', 'limes', 'coconut', 'coconuts'];
+    const PROTEIN = ['chicken', 'beef', 'pork', 'turkey', 'lamb', 'fish', 'salmon', 'tuna', 'sardine', 'shrimp', 'crab', 'lobster', 'egg', 'tofu', 'tempeh', 'bean', 'lentil', 'chickpea', 'protein', 'meat', 'sausage', 'bacon', 'ham', 'burger', 'patty', 'wing', 'breast', 'thigh', 'steak', 'rib'];
+    const GRAINS = ['bread', 'toast', 'bagel', 'rice', 'pasta', 'noodle', 'quinoa', 'oats', 'oatmeal', 'cereal', 'cracker', 'tortilla', 'wrap', 'pita', 'flour', 'wheat', 'barley', 'rye', 'millet', 'couscous'];
+    const DAIRY = ['milk', 'cheese', 'yogurt', 'butter', 'cream', 'sour cream', 'cottage cheese', 'greek yogurt', 'kefir'];
+    
+    for (const meal of dayMeals) {
+      const mealIngs = ingredients[meal.id] || [];
+      for (const ing of mealIngs) {
+        const name = ing.name.toLowerCase();
+        const category = ing.category || 'food';
+        
+        // Skip supplements and drinks for food groups
+        if (category === 'supplement' || category === 'drink') continue;
+        
+        const qty = ing.quantity || 1;
+        const unit = (ing.unit || '').toLowerCase();
+        
+        // Categorize and count servings
+        // Check fruits first (before vegetables, since some might overlap)
+        if (FRUITS.some(f => name.includes(f))) {
+          // Fruits: 1 cup or 1 medium piece = 1 serving
+          if (unit === 'cup' || unit === 'cups') {
+            groups.fruits += qty;
+          } else if (unit === 'piece' || unit === 'pieces') {
+            groups.fruits += qty;
+          } else {
+            const grams = qty * (UNIT_TO_GRAMS[unit] || 80);
+            groups.fruits += grams / 150;
+          }
+        } else if (VEGETABLES.some(v => name.includes(v))) {
+          // Vegetables: 1 cup = 1 serving
+          if (unit === 'cup' || unit === 'cups') {
+            groups.vegetables += qty;
+          } else if (unit === 'piece' || unit === 'pieces') {
+            groups.vegetables += qty * 0.5; // rough estimate
+          } else {
+            const grams = qty * (UNIT_TO_GRAMS[unit] || 80);
+            groups.vegetables += grams / 150; // 1 cup ≈ 150g
+          }
+        } else if (PROTEIN.some(p => name.includes(p))) {
+          // Protein: 3-4 oz meat, 1 egg, 0.5 cup beans = 1 serving
+          if (unit === 'oz') {
+            groups.protein += qty / 3.5; // ~3.5 oz per serving
+          } else if (unit === 'egg' || unit === 'eggs') {
+            groups.protein += qty;
+          } else if (unit === 'cup' || unit === 'cups') {
+            groups.protein += qty * 2; // 0.5 cup = 1 serving
+          } else {
+            const grams = qty * (UNIT_TO_GRAMS[unit] || 80);
+            groups.protein += grams / 100; // ~100g per serving
+          }
+        } else if (GRAINS.some(g => name.includes(g))) {
+          // Grains: 1 slice bread, 0.5 cup rice/pasta = 1 serving
+          if (unit === 'slice' || unit === 'slices') {
+            groups.grains += qty;
+          } else if (unit === 'cup' || unit === 'cups') {
+            groups.grains += qty * 2; // 0.5 cup = 1 serving
+          } else {
+            const grams = qty * (UNIT_TO_GRAMS[unit] || 80);
+            groups.grains += grams / 40; // ~40g per serving
+          }
+        } else if (DAIRY.some(d => name.includes(d))) {
+          // Dairy: 1 cup milk, 1 oz cheese = 1 serving
+          if (unit === 'cup' || unit === 'cups') {
+            groups.dairy += qty;
+          } else if (unit === 'oz') {
+            groups.dairy += qty;
+          } else {
+            const grams = qty * (UNIT_TO_GRAMS[unit] || 80);
+            groups.dairy += grams / 240; // 1 cup ≈ 240g
+          }
+        }
+      }
+    }
+    
+    return groups;
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 p-4">
       <h1 className="text-2xl font-bold text-slate-800 mb-4">This Week</h1>
@@ -219,8 +319,10 @@ export default function Dashboard() {
         {days.map((day) => {
           const macros = getDayMacros(day);
           const micros = getDayMicros(day);
+          const foodGroups = getDayFoodGroups(day);
           const hasMacros = macros.calories > 0;
           const hasMicros = Object.keys(micros).length > 0;
+          const hasFoodGroups = Object.values(foodGroups).some(v => v > 0);
           
           return (
             <div key={day} className="flex flex-col">
@@ -269,6 +371,42 @@ export default function Dashboard() {
                     <div className="flex justify-between">
                       <span>🧂 Na:</span>
                       <span>{Math.round(micros["Sodium, Na"].value)}mg</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Food group servings */}
+              {hasFoodGroups && (
+                <div className="bg-slate-500 text-white px-2 py-1 text-[9px]">
+                  {foodGroups.vegetables > 0 && (
+                    <div className="flex justify-between">
+                      <span>🥬 Veg:</span>
+                      <span>{foodGroups.vegetables.toFixed(1)}</span>
+                    </div>
+                  )}
+                  {foodGroups.fruits > 0 && (
+                    <div className="flex justify-between">
+                      <span>🍎 Fruit:</span>
+                      <span>{foodGroups.fruits.toFixed(1)}</span>
+                    </div>
+                  )}
+                  {foodGroups.protein > 0 && (
+                    <div className="flex justify-between">
+                      <span>🥩 Protein:</span>
+                      <span>{foodGroups.protein.toFixed(1)}</span>
+                    </div>
+                  )}
+                  {foodGroups.grains > 0 && (
+                    <div className="flex justify-between">
+                      <span>🌾 Grain:</span>
+                      <span>{foodGroups.grains.toFixed(1)}</span>
+                    </div>
+                  )}
+                  {foodGroups.dairy > 0 && (
+                    <div className="flex justify-between">
+                      <span>🥛 Dairy:</span>
+                      <span>{foodGroups.dairy.toFixed(1)}</span>
                     </div>
                   )}
                 </div>
