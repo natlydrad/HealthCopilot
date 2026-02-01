@@ -1,6 +1,6 @@
 /// <reference path="../pb_data/types.d.ts" />
-migrate((app) => {
-  const collection = app.findCollectionByNameOrId("pbc_3146854971")
+migrate((txApp) => {
+  const collection = txApp.findCollectionByNameOrId("pbc_3146854971")
 
   // Add parsingStrategy field - tracks which parsing method was used
   // Skip if field already exists
@@ -67,14 +67,14 @@ migrate((app) => {
   // Note: This migration assumes source field already exists
   // We'll keep source for backward compatibility, parsingStrategy is the new field
 
-  return app.save(collection)
-}, (app) => {
-  const collection = app.findCollectionByNameOrId("pbc_3146854971")
+  return txApp.save(collection)
+}, (txApp) => {
+  const collection = txApp.findCollectionByNameOrId("pbc_3146854971")
 
   // Rollback: remove new fields
   collection.fields.removeById("select_parsing_strategy")
   collection.fields.removeById("number_confidence")
   collection.fields.removeById("json_parsing_metadata")
 
-  return app.save(collection)
+  return txApp.save(collection)
 })
