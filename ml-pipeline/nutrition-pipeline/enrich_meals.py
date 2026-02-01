@@ -9,9 +9,11 @@ BANNED_INGREDIENTS = {
     # Vague meal descriptors
     "smoothie", "salad", "sandwich", "bowl", "dish", "meal", "food", "snack",
     "breakfast", "lunch", "dinner", "unknown item", "unknown", "item",
+    "serving", "1 serving", "portion",
     # Kitchen items that slip through from images
     "knife", "fork", "spoon", "plate", "napkin", "cup", "glass", "table",
     "cutting board", "pan", "pot", "utensil", "container", "wrapper",
+    "plate with food", "bowl with food", "dish with food",
 }
 
 
@@ -99,11 +101,15 @@ def enrich_meals(skip_usda=False, limit=None, since_date=None):
             
             meal_timestamp = meal.get("timestamp")
 
+            # Get category from GPT response (default to "food" for backward compatibility)
+            category = ing.get("category", "food")
+            
             ingredient = {
                 "mealId": meal["id"],
                 "name": ing["name"],
                 "quantity": ing.get("quantity"),
                 "unit": ing.get("unit"),
+                "category": category,
                 "source": "usda" if usda else "gpt",
                 "usdaCode": usda["usdaCode"] if usda else None,
                 "nutrition": usda["nutrition"] if usda else {},

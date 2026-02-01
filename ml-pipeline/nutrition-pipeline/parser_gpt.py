@@ -6,12 +6,16 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def parse_ingredients(text: str):
     prompt = f"""
-    Extract distinct foods from: "{text}".
+    Extract distinct foods, drinks, supplements, and vitamins from: "{text}".
     Return ONLY a JSON array (no markdown, no explanation).
     Each item must have:
-    - name (string)
-    - quantity (float or null)
-    - unit (string or null)
+    - name (string) - be specific (e.g. "vitamin D3" not just "vitamin")
+    - quantity (float or null) - estimate if not specified (e.g. "steak" → 6, "chicken breast" → 150)
+    - unit (string or null) - use "oz" for meats, "grams" for other proteins, "cup" for liquids when not specified
+    - category (string) - one of: "food", "drink", "supplement", "other"
+    
+    If the text contains no food/drinks/supplements (e.g. mood notes, random text), return an empty array [].
+    If someone says "second serving" or "same as before", include it as a single item with name "second serving" and quantity 1.
     """
 
     resp = client.chat.completions.create(
@@ -61,12 +65,17 @@ def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = No
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
         prompt = """
-        Look at this image of a meal and identify the distinct foods and approximate quantities.
+        Look at this image and identify any foods, drinks, or supplements visible.
         Return ONLY a JSON array (no markdown, no explanation).
         Each item must have:
-        - name (string)
-        - quantity (float or null)
-        - unit (string or null)
+        - name (string) - be specific (e.g. "grilled chicken breast" not just "chicken")
+        - quantity (float or null) - estimate portions (e.g. chicken breast → 150, steak → 6)
+        - unit (string or null) - use "grams" for proteins, "oz" for steaks, "cup" for sides/liquids
+        - category (string) - one of: "food", "drink", "supplement", "other"
+        
+        For supplements/vitamins, identify the specific type if visible on the label.
+        For non-food items (screenshots, receipts), use category "other" and describe briefly.
+        If no food is visible, return an empty array [].
         """
 
         resp = client.chat.completions.create(

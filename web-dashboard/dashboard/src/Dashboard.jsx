@@ -115,7 +115,9 @@ export default function Dashboard() {
 }
 
 function MealCard({ meal, ingredients, formatTime }) {
-  const text = meal.text || "(no description)";
+  const hasImage = !!meal.image;
+  const hasText = !!(meal.text && meal.text.trim());
+  const text = hasText ? meal.text : (hasImage ? "📷" : "—");
   const truncated = text.length > 60 ? text.slice(0, 60) + "..." : text;
   
   return (
@@ -127,13 +129,34 @@ function MealCard({ meal, ingredients, formatTime }) {
         <div className="mt-2 pt-2 border-t border-slate-200">
           <div className="text-slate-500 space-y-0.5">
             {ingredients.slice(0, 4).map((ing) => {
+              // Show quantity more clearly
               const qty = ing.quantity;
-              const unit = ing.unit && ing.unit !== "serving" ? ing.unit : "";
-              const qtyStr = qty && qty !== 1 ? `${qty}${unit ? " " + unit : ""}` : "";
+              const unit = ing.unit || "";
+              let qtyStr = "";
+              if (qty && unit && unit !== "serving") {
+                qtyStr = `${qty} ${unit}`;
+              } else if (qty && qty !== 1) {
+                qtyStr = `×${qty}`;
+              }
+              
+              // Infer category from name if not set
+              const nameLower = ing.name.toLowerCase();
+              const DRINKS = ['coffee', 'tea', 'water', 'milk', 'juice', 'soda', 'latte', 'espresso', 'coke', 'matcha', 'chai', 'smoothie'];
+              const SUPPS = ['vitamin', 'supplement', 'd3', 'b12', 'k2', 'flonase', 'elderberry', 'probiotic', 'omega', 'magnesium', 'zinc', 'melatonin', 'threonate', 'ashwagandha', 'creatine', 'collagen', 'fish oil', 'iron', 'calcium', 'biotin'];
+              
+              let category = ing.category;
+              if (!category) {
+                if (DRINKS.some(d => nameLower.includes(d))) category = 'drink';
+                else if (SUPPS.some(s => nameLower.includes(s))) category = 'supplement';
+                else category = 'food';
+              }
+              
+              const emoji = { food: "🟢", drink: "🔵", supplement: "💊", other: "⚪" }[category] || "🟢";
+              
               return (
                 <div key={ing.id} className="flex items-center gap-1">
-                  <span className="text-green-500">•</span>
-                  <span>{ing.name}</span>
+                  <span className="text-xs">{emoji}</span>
+                  <span className={category === "other" ? "text-slate-400 italic" : ""}>{ing.name}</span>
                   {qtyStr && <span className="text-slate-400">({qtyStr})</span>}
                 </div>
               );
