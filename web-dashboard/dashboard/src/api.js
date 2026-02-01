@@ -42,7 +42,9 @@ export async function fetchIngredients(mealId) {
   const url = `${PB_BASE}/api/collections/ingredients/records?filter=${filter}`;
 
   console.log("🛰 Fetching:", url);
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+  });
 
   if (!res.ok) {
     console.error("❌ fetchIngredients failed", res.status, res.statusText);
@@ -52,4 +54,21 @@ export async function fetchIngredients(mealId) {
   const data = await res.json();
   console.log("📦 fetchIngredients got", data.items.length, "ingredients");
   return data.items;
+}
+
+// Fetch all ingredients at once (more efficient than per-meal)
+export async function fetchAllIngredients() {
+  const url = `${PB_BASE}/api/collections/ingredients/records?perPage=500&sort=-created`;
+  
+  const res = await fetch(url, {
+    headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+  });
+
+  if (!res.ok) {
+    console.error("❌ fetchAllIngredients failed", res.status, res.statusText);
+    return [];
+  }
+
+  const data = await res.json();
+  return data.items || [];
 }

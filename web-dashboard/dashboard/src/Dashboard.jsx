@@ -1,28 +1,37 @@
 import { useEffect, useState } from "react";
-import { fetchMeals, fetchIngredients } from "./api";
+import { fetchMeals, fetchAllIngredients } from "./api";
 
 export default function Dashboard() {
   const [meals, setMeals] = useState([]);
   const [ingredients, setIngredients] = useState({});
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
-      const items = await fetchMeals();
-      setMeals(items);
-      
-      // Load ingredients for all meals
-      const ingMap = {};
-      for (const meal of items) {
-        try {
-          const ings = await fetchIngredients(meal.id);
-          if (ings.length > 0) {
-            ingMap[meal.id] = ings;
-          }
-        } catch (e) {
-          // ignore
+      try {
+        // Fetch meals and ingredients in parallel
+        const [mealItems, allIngredients] = await Promise.all([
+          fetchMeals(),
+          fetchAllIngredients()
+        ]);
+        
+        setMeals(mealItems);
+        
+        // Group ingredients by mealId
+        const ingMap = {};
+        for (const ing of allIngredients) {
+          const mealId = ing.mealId;
+          if (!mealId) continue;
+          if (!ingMap[mealId]) ingMap[mealId] = [];
+          ingMap[mealId].push(ing);
         }
+        setIngredients(ingMap);
+        console.log("Loaded", mealItems.length, "meals and", allIngredients.length, "ingredients");
+      } catch (e) {
+        console.error("Failed to load:", e);
+      } finally {
+        setLoading(false);
       }
-      setIngredients(ingMap);
     }
     load();
   }, []);
@@ -35,12 +44,15 @@ export default function Dashboard() {
     days.push(d.toISOString().split("T")[0]);
   }
 
-  // Group meals by day
+  // Group meals by day (handle both "T" and space separator in timestamps)
   const mealsByDay = {};
   for (const day of days) {
-    mealsByDay[day] = meals.filter(
-      (m) => m.timestamp && m.timestamp.split("T")[0] === day
-    );
+    mealsByDay[day] = meals.filter((m) => {
+      if (!m.timestamp) return false;
+      // Handle both ISO format (T separator) and space separator
+      const mealDay = m.timestamp.split(/[T ]/)[0];
+      return mealDay === day;
+    });
   }
 
   const formatDay = (dateStr) => {
@@ -58,6 +70,14 @@ export default function Dashboard() {
     const d = new Date(timestamp);
     return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 p-4 flex items-center justify-center">
+        <p className="text-slate-500">Loading meals...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 p-4">

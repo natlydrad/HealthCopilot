@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Dashboard from "./Dashboard";
 import DayDetail from "./DayDetail";
@@ -12,6 +12,18 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [isSignup, setIsSignup] = useState(false);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  // Restore session from localStorage on mount
+  useEffect(() => {
+    const savedToken = localStorage.getItem("pb_token");
+    const savedUser = localStorage.getItem("pb_user");
+    if (savedToken && savedUser) {
+      setAuthToken(savedToken);
+      setUser(JSON.parse(savedUser));
+    }
+    setLoading(false);
+  }, []);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -22,9 +34,16 @@ export default function App() {
         : await login(email, password);
       setAuthToken(data.token);
       setUser(data.record);
+      // Save to localStorage
+      localStorage.setItem("pb_token", data.token);
+      localStorage.setItem("pb_user", JSON.stringify(data.record));
     } catch (err) {
       setError(err.message || (isSignup ? "Signup failed" : "Login failed"));
     }
+  }
+
+  if (loading) {
+    return <div className="p-8 text-center text-gray-500">Loading...</div>;
   }
 
   if (!user) {
