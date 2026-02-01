@@ -357,9 +357,14 @@ export async function getLearnedPatterns() {
           learned: corr,
           count: 0,
           lastCorrected: c.created,
+          firstCorrected: c.created,
         };
       }
       patterns[key].count++;
+      // Track first correction
+      if (c.created < patterns[key].firstCorrected) {
+        patterns[key].firstCorrected = c.created;
+      }
     }
   }
   
@@ -367,11 +372,78 @@ export async function getLearnedPatterns() {
   const result = Object.values(patterns).map(p => ({
     ...p,
     confidence: Math.min(0.5 + (p.count * 0.15), 0.99),
-    status: p.count >= 1 ? "learned" : "learning",
+    status: p.count >= 3 ? "confident" : p.count >= 1 ? "learning" : "new",
   }));
   
   result.sort((a, b) => b.count - a.count);
   return result;
+}
+
+// Get learning stats over time (for tracking adaptation)
+export async function getLearningStats() {
+  const corrections = await getCorrections(500);
+  if (corrections.length === 0) return { timeline: [], summary: {} };
+  
+  // Sort by created date (oldest first)
+  const sorted = [...corrections].sort((a, b) => new Date(a.created) - new Date(b.created));
+  
+  // Build timeline with cumulative stats
+  const timeline = [];
+  const seenPatterns = new Set();
+  let totalCorrections = 0;
+  let uniquePatterns = 0;
+  let confidentPatterns = 0; // patterns corrected 3+ times
+  
+  // Pattern counts for confidence tracking
+  const patternCounts = {};
+  
+  for (const c of sorted) {
+    totalCorrections++;
+    const orig = c.originalParse?.name?.toLowerCase();
+    const corr = c.userCorrection?.name;
+    
+    if (orig && corr) {
+      const key = `${orig}→${corr}`;
+      
+      // Track unique patterns
+      if (!seenPatterns.has(key)) {
+        seenPatterns.add(key);
+        uniquePatterns++;
+      }
+      
+      // Track pattern counts for confidence
+      patternCounts[key] = (patternCounts[key] || 0) + 1;
+      
+      // Recalculate confident patterns
+      confidentPatterns = Object.values(patternCounts).filter(cnt => cnt >= 3).length;
+    }
+    
+    // Add milestone markers (every 5 corrections)
+    if (totalCorrections % 5 === 0 || totalCorrections === sorted.length) {
+      timeline.push({
+        correctionNum: totalCorrections,
+        date: c.created,
+        uniquePatterns,
+        confidentPatterns,
+        latestCorrection: {
+          from: orig,
+          to: corr,
+        },
+      });
+    }
+  }
+  
+  // Summary stats
+  const summary = {
+    totalCorrections,
+    uniquePatterns,
+    confidentPatterns,
+    learningRate: uniquePatterns > 0 ? (confidentPatterns / uniquePatterns * 100).toFixed(0) : 0,
+    firstCorrection: sorted[0]?.created,
+    lastCorrection: sorted[sorted.length - 1]?.created,
+  };
+  
+  return { timeline, summary };
 }
 
 // Update ingredient with new name AND re-fetch nutrition

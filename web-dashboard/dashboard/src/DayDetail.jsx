@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { fetchMeals, fetchIngredients, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getCorrections, parseAndSaveMeal } from "./api";
+import { fetchMeals, fetchIngredients, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getCorrections, getLearningStats, parseAndSaveMeal } from "./api";
 
 // Determine if an ingredient is low confidence (needs review)
 function isLowConfidence(ing) {
@@ -444,17 +444,21 @@ function CorrectionChat({ ingredient, meal, onClose, onSave }) {
 function LearningPanel({ onClose }) {
   const [patterns, setPatterns] = useState([]);
   const [recentCorrections, setRecentCorrections] = useState([]);
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('patterns'); // patterns | timeline | history
 
   useEffect(() => {
     async function load() {
       try {
-        const [p, c] = await Promise.all([
+        const [p, c, s] = await Promise.all([
           getLearnedPatterns(),
-          getCorrections(20)
+          getCorrections(50),
+          getLearningStats()
         ]);
         setPatterns(p);
         setRecentCorrections(c);
+        setStats(s);
       } catch (err) {
         console.error("Failed to load learning data:", err);
       } finally {
@@ -475,76 +479,173 @@ function LearningPanel({ onClose }) {
           </button>
         </div>
 
+        {/* Stats Summary */}
+        {stats?.summary && (
+          <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-4 border-b">
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <div className="text-2xl font-bold text-purple-600">{stats.summary.totalCorrections}</div>
+                <div className="text-xs text-gray-500">Corrections</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-blue-600">{stats.summary.uniquePatterns}</div>
+                <div className="text-xs text-gray-500">Patterns</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-green-600">{stats.summary.confidentPatterns}</div>
+                <div className="text-xs text-gray-500">Confident</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tabs */}
+        <div className="flex border-b">
+          {[
+            { id: 'patterns', label: 'Patterns' },
+            { id: 'timeline', label: 'Timeline' },
+            { id: 'history', label: 'History' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                activeTab === tab.id 
+                  ? 'text-purple-600 border-b-2 border-purple-600' 
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4">
           {loading ? (
             <p className="text-gray-400 text-center py-8">Loading...</p>
           ) : (
             <>
-              {/* Learned Patterns */}
-              <div className="mb-6">
-                <h4 className="font-medium text-gray-700 mb-3">Patterns Learned</h4>
-                {patterns.length === 0 ? (
-                  <p className="text-gray-400 text-sm">No patterns yet. Correct some ingredients and I'll learn!</p>
-                ) : (
-                  <div className="space-y-2">
-                    {patterns.map((p, i) => (
-                      <div key={i} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
-                        <div>
-                          <span className="text-gray-500">"{p.original}"</span>
-                          <span className="mx-2">→</span>
-                          <span className="font-medium">{p.learned}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-400">{p.count}x</span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            p.count >= 3 ? 'bg-green-100 text-green-700' : 
-                            p.count >= 1 ? 'bg-yellow-100 text-yellow-700' : 
-                            'bg-gray-100 text-gray-500'
-                          }`}>
-                            {p.count >= 3 ? '✓ Confident' : p.count >= 1 ? 'Learning' : 'New'}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Recent Corrections */}
-              <div>
-                <h4 className="font-medium text-gray-700 mb-3">Recent Corrections</h4>
-                {recentCorrections.length === 0 ? (
-                  <p className="text-gray-400 text-sm">No corrections yet.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {recentCorrections.slice(0, 10).map((c, i) => (
-                      <div key={i} className="text-sm bg-gray-50 p-2 rounded-lg">
-                        <div className="flex justify-between">
-                          <span>
-                            <span className="text-gray-500">{c.originalParse?.name}</span>
+              {/* Patterns Tab */}
+              {activeTab === 'patterns' && (
+                <div>
+                  {patterns.length === 0 ? (
+                    <p className="text-gray-400 text-sm text-center py-8">No patterns yet. Correct some ingredients!</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {patterns.map((p, i) => (
+                        <div key={i} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                          <div>
+                            <span className="text-gray-500">"{p.original}"</span>
                             <span className="mx-2">→</span>
-                            <span className="font-medium">{c.userCorrection?.name}</span>
-                          </span>
-                          <span className="text-xs text-gray-400">
-                            {new Date(c.created).toLocaleDateString()}
-                          </span>
+                            <span className="font-medium">{p.learned}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-400">{p.count}x</span>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                              p.status === 'confident' ? 'bg-green-100 text-green-700' : 
+                              'bg-yellow-100 text-yellow-700'
+                            }`}>
+                              {p.status === 'confident' ? '✓ Confident' : 'Learning'}
+                            </span>
+                          </div>
                         </div>
-                        {c.correctionType && (
-                          <span className="text-xs text-gray-400">{c.correctionType}</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Timeline Tab */}
+              {activeTab === 'timeline' && (
+                <div>
+                  {!stats?.timeline?.length ? (
+                    <p className="text-gray-400 text-sm text-center py-8">No timeline data yet.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-sm text-gray-500 mb-4">
+                        See how the system adapts as you make corrections (batches of 5)
+                      </p>
+                      {stats.timeline.map((point, i) => (
+                        <div key={i} className="relative pl-6 pb-4 border-l-2 border-purple-200 last:border-l-0">
+                          {/* Milestone dot */}
+                          <div className={`absolute -left-2 w-4 h-4 rounded-full ${
+                            point.confidentPatterns > 0 ? 'bg-green-500' : 'bg-purple-400'
+                          }`} />
+                          
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="font-medium text-purple-700">
+                                Correction #{point.correctionNum}
+                              </span>
+                              <span className="text-xs text-gray-400">
+                                {new Date(point.date).toLocaleDateString()}
+                              </span>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                              <div className="bg-white p-2 rounded">
+                                <span className="text-blue-600 font-medium">{point.uniquePatterns}</span>
+                                <span className="text-gray-500 text-xs ml-1">unique patterns</span>
+                              </div>
+                              <div className="bg-white p-2 rounded">
+                                <span className="text-green-600 font-medium">{point.confidentPatterns}</span>
+                                <span className="text-gray-500 text-xs ml-1">confident</span>
+                              </div>
+                            </div>
+                            
+                            {point.latestCorrection?.from && (
+                              <div className="mt-2 text-xs text-gray-500">
+                                Latest: "{point.latestCorrection.from}" → "{point.latestCorrection.to}"
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* History Tab */}
+              {activeTab === 'history' && (
+                <div>
+                  {recentCorrections.length === 0 ? (
+                    <p className="text-gray-400 text-sm text-center py-8">No corrections yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {recentCorrections.map((c, i) => (
+                        <div key={i} className="text-sm bg-gray-50 p-3 rounded-lg">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <span className="text-gray-500">{c.originalParse?.name}</span>
+                              <span className="mx-2">→</span>
+                              <span className="font-medium">{c.userCorrection?.name}</span>
+                            </div>
+                            <span className="text-xs text-gray-400 whitespace-nowrap ml-2">
+                              {new Date(c.created).toLocaleString()}
+                            </span>
+                          </div>
+                          {c.correctionType && (
+                            <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded mt-1 inline-block">
+                              {c.correctionType}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
 
         {/* Footer */}
         <div className="p-4 border-t bg-gray-50 text-center text-xs text-gray-500">
-          I learn from your corrections instantly. The more you correct, the smarter I get!
+          {stats?.summary?.learningRate > 0 
+            ? `${stats.summary.learningRate}% of patterns are confident (3+ corrections)`
+            : "I learn from your corrections instantly!"}
         </div>
       </div>
     </div>
