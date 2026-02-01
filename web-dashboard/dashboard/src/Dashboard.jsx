@@ -27,6 +27,11 @@ export default function Dashboard() {
         }
         setIngredients(ingMap);
         console.log("Loaded", mealItems.length, "meals and", allIngredients.length, "ingredients");
+        console.log("Ingredient map keys:", Object.keys(ingMap));
+        console.log("Sample meal IDs:", mealItems.slice(0, 3).map(m => m.id));
+        if (allIngredients.length > 0) {
+          console.log("Sample ingredient:", allIngredients[0]);
+        }
       } catch (e) {
         console.error("Failed to load:", e);
       } finally {
