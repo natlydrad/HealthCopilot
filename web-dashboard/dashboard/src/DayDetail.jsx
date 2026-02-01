@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { fetchMeals, fetchIngredients, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getCorrections } from "./api";
+import { fetchMeals, fetchIngredients, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getCorrections, parseAndSaveMeal } from "./api";
 
 // Determine if an ingredient is low confidence (needs review)
 function isLowConfidence(ing) {
@@ -91,7 +91,9 @@ export default function DayDetail() {
 
 function MealCard({ meal }) {
   const [ingredients, setIngredients] = useState([]);
-  const [correcting, setCorrecting] = useState(null); // ingredient being corrected
+  const [correcting, setCorrecting] = useState(null);
+  const [parsing, setParsing] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     async function loadIngredients() {
@@ -99,18 +101,62 @@ function MealCard({ meal }) {
       const ings = await fetchIngredients(meal.id);
       console.log("✅ Ingredients response:", ings);
       setIngredients(ings);
+      setLoaded(true);
     }
     loadIngredients();
   }, [meal.id]);
 
+  // Parse meal on demand
+  const handleParse = async () => {
+    if (!meal.text?.trim()) return;
+    setParsing(true);
+    try {
+      const saved = await parseAndSaveMeal(meal);
+      setIngredients(saved);
+    } catch (err) {
+      console.error("Parse failed:", err);
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  // Check if this meal needs parsing
+  const needsParsing = loaded && ingredients.length === 0 && meal.text?.trim();
+
   return (
     <div className="bg-white p-4 rounded-xl shadow mb-4">
       <h2 className="font-semibold mb-1">{meal.text || "(no text)"}</h2>
-      <p className="text-gray-500 text-sm mb-2">{meal.timestamp}</p>
+      <p className="text-gray-500 text-sm mb-2">
+        {meal.timestamp ? new Date(meal.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}
+      </p>
 
-      {ingredients.length === 0 ? (
-        <p className="text-gray-400 italic">No ingredients found</p>
-      ) : (
+      {/* Needs parsing state */}
+      {needsParsing && !parsing && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+          <p className="text-blue-700 text-sm mb-2">Not parsed yet</p>
+          <button
+            onClick={handleParse}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm"
+          >
+            🧠 Parse Now
+          </button>
+        </div>
+      )}
+
+      {/* Parsing state */}
+      {parsing && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+          <p className="text-blue-700 text-sm">🧠 Parsing...</p>
+        </div>
+      )}
+
+      {/* No text state */}
+      {loaded && !meal.text?.trim() && ingredients.length === 0 && (
+        <p className="text-gray-400 italic">Image only - view in app to parse</p>
+      )}
+
+      {/* Ingredients list */}
+      {ingredients.length > 0 && (
         <ul className="text-sm text-gray-700 space-y-1">
           {ingredients.map((ing) => {
             const nutrients = Array.isArray(ing.nutrition) ? ing.nutrition : [];

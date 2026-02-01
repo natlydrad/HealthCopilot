@@ -7,6 +7,8 @@ export default function Dashboard() {
   const [meals, setMeals] = useState([]);
   const [ingredients, setIngredients] = useState({});
   const [loading, setLoading] = useState(true);
+  const [weekOffset, setWeekOffset] = useState(0); // 0 = current week, -1 = last week, etc.
+  const [showCalendar, setShowCalendar] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -29,11 +31,6 @@ export default function Dashboard() {
         }
         setIngredients(ingMap);
         console.log("Loaded", mealItems.length, "meals and", allIngredients.length, "ingredients");
-        console.log("Ingredient map keys:", Object.keys(ingMap));
-        console.log("Sample meal IDs:", mealItems.slice(0, 3).map(m => m.id));
-        if (allIngredients.length > 0) {
-          console.log("Sample ingredient:", allIngredients[0]);
-        }
       } catch (e) {
         console.error("Failed to load:", e);
       } finally {
@@ -43,17 +40,37 @@ export default function Dashboard() {
     load();
   }, []);
 
-  // Get last 7 days (in local timezone)
+  // Get 7 days based on weekOffset
   const days = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date();
-    d.setDate(d.getDate() - i);
-    // Get local date in YYYY-MM-DD format
+    d.setDate(d.getDate() - i + (weekOffset * 7));
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const date = String(d.getDate()).padStart(2, '0');
     days.push(`${year}-${month}-${date}`);
   }
+
+  // Get week label
+  const getWeekLabel = () => {
+    if (weekOffset === 0) return "This Week";
+    if (weekOffset === -1) return "Last Week";
+    if (weekOffset === 1) return "Next Week";
+    const startDate = new Date(days[0]);
+    const endDate = new Date(days[6]);
+    return `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+  };
+
+  // Jump to a specific date
+  const jumpToDate = (dateStr) => {
+    const targetDate = new Date(dateStr);
+    const today = new Date();
+    const diffTime = today - targetDate;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const newOffset = -Math.floor(diffDays / 7);
+    setWeekOffset(newOffset);
+    setShowCalendar(false);
+  };
 
   // Group meals by day (convert to local date for proper grouping)
   const mealsByDay = {};
@@ -320,7 +337,75 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-4">
-      <h1 className="text-2xl font-bold text-slate-800 mb-4">This Week</h1>
+      {/* Week Navigation Header */}
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={() => setWeekOffset(w => w - 1)}
+          className="px-3 py-2 bg-slate-200 rounded-lg hover:bg-slate-300 transition-colors"
+        >
+          ← Prev
+        </button>
+        
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-slate-800">{getWeekLabel()}</h1>
+          <button
+            onClick={() => setShowCalendar(!showCalendar)}
+            className="text-xl hover:scale-110 transition-transform"
+            title="Jump to date"
+          >
+            📅
+          </button>
+          {weekOffset !== 0 && (
+            <button
+              onClick={() => setWeekOffset(0)}
+              className="text-sm text-blue-500 hover:underline"
+            >
+              Today
+            </button>
+          )}
+        </div>
+        
+        <button
+          onClick={() => setWeekOffset(w => w + 1)}
+          className="px-3 py-2 bg-slate-200 rounded-lg hover:bg-slate-300 transition-colors"
+          disabled={weekOffset >= 0}
+        >
+          Next →
+        </button>
+      </div>
+
+      {/* Calendar Picker */}
+      {showCalendar && (
+        <div className="mb-4 p-4 bg-white rounded-xl shadow-lg">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-medium">Jump to date:</span>
+            <button onClick={() => setShowCalendar(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+          </div>
+          <input
+            type="date"
+            className="w-full p-2 border rounded-lg"
+            onChange={(e) => jumpToDate(e.target.value)}
+            max={new Date().toISOString().split('T')[0]}
+          />
+          {/* Quick jump buttons */}
+          <div className="flex gap-2 mt-2 flex-wrap">
+            {[
+              { label: "Oct 2025", date: "2025-10-01" },
+              { label: "Nov 2025", date: "2025-11-01" },
+              { label: "Dec 2025", date: "2025-12-01" },
+              { label: "Jan 2026", date: "2026-01-01" },
+            ].map(({ label, date }) => (
+              <button
+                key={date}
+                onClick={() => jumpToDate(date)}
+                className="px-3 py-1 text-sm bg-slate-100 rounded-full hover:bg-slate-200"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       
       <div className="grid grid-cols-7 gap-2">
         {days.map((day) => {

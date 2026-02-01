@@ -186,6 +186,115 @@ export async function updateIngredient(ingredientId, updates) {
   return res.json();
 }
 
+// Simple rule-based parsing (no API key needed)
+// For complex meals, use the backend script
+export async function parseMealSimple(mealText) {
+  if (!mealText?.trim()) return [];
+  
+  // Simple parsing: split by common separators
+  const text = mealText.toLowerCase();
+  const separators = /[,\n]|(?:\band\b)|(?:\bwith\b)|(?:\bw\/\b)/;
+  const parts = text.split(separators).map(p => p.trim()).filter(p => p.length > 1);
+  
+  const ingredients = [];
+  for (const part of parts) {
+    // Try to extract quantity and unit
+    const match = part.match(/^(\d+\.?\d*)\s*(oz|g|cup|cups|tbsp|tsp|pieces?|slices?|eggs?)?\s*(.+)$/);
+    if (match) {
+      ingredients.push({
+        name: match[3].trim(),
+        quantity: parseFloat(match[1]),
+        unit: match[2] || "serving",
+        category: "food"
+      });
+    } else {
+      // No quantity found, default to 1 serving
+      ingredients.push({
+        name: part,
+        quantity: 1,
+        unit: "serving",
+        category: guessCategory(part)
+      });
+    }
+  }
+  
+  return ingredients;
+}
+
+// Guess category based on keywords
+function guessCategory(name) {
+  const drinks = ['coffee', 'tea', 'water', 'milk', 'juice', 'smoothie', 'latte'];
+  const supplements = ['vitamin', 'supplement', 'pill', 'capsule', 'probiotic'];
+  
+  const lower = name.toLowerCase();
+  if (drinks.some(d => lower.includes(d))) return "drink";
+  if (supplements.some(s => lower.includes(s))) return "supplement";
+  return "food";
+}
+
+// Create an ingredient record
+export async function createIngredient(ingredient) {
+  if (!authToken) throw new Error("Not logged in");
+  
+  const url = `${PB_BASE}/api/collections/ingredients/records`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${authToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(ingredient),
+  });
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(`Failed to create ingredient: ${error}`);
+  }
+
+  return res.json();
+}
+
+// Parse and save ingredients for a meal (parse-on-view)
+export async function parseAndSaveMeal(meal) {
+  if (!meal.text?.trim()) return [];
+  
+  console.log("🧠 Parsing meal:", meal.text);
+  
+  // Simple rule-based parsing (no API key needed)
+  const parsed = await parseMealSimple(meal.text);
+  console.log("📝 Parsed:", parsed);
+  
+  if (parsed.length === 0) return [];
+  
+  // Save each ingredient
+  const saved = [];
+  for (const ing of parsed) {
+    try {
+      // Look up nutrition from USDA
+      const usda = await lookupUSDANutrition(ing.name);
+      
+      const ingredient = {
+        mealId: meal.id,
+        name: ing.name,
+        quantity: ing.quantity || 1,
+        unit: ing.unit || "serving",
+        category: ing.category || "food",
+        source: usda ? "usda" : "simple",
+        usdaCode: usda?.usdaCode || null,
+        nutrition: usda?.nutrition || [],
+      };
+      
+      const result = await createIngredient(ingredient);
+      saved.push(result);
+      console.log("✅ Saved:", ing.name);
+    } catch (err) {
+      console.error("Failed to save ingredient:", ing.name, err);
+    }
+  }
+  
+  return saved;
+}
+
 // USDA FoodData Central API lookup
 const USDA_API_KEY = "W26xpKvwmvxKKmff5ymcSwIfOVtVW1dR6gmC3BId";
 
