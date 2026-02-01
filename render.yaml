@@ -6,23 +6,3 @@ services:
     autoDeploy: false
     dockerfilePath: ./Dockerfile
     dockerContext: ./backend
-
-  # Daily nutrition enrichment job (disabled for now - cron requires paid plan)
-  # - type: cron
-  #   name: enrich-meals
-  #   env: python
-  #   plan: free
-  #   schedule: "0 6 * * *"  # Run daily at 6am UTC
-  #   buildCommand: pip install -r ml-pipeline/nutrition-pipeline/requirements.txt
-  #   startCommand: python ml-pipeline/nutrition-pipeline/enrich_meals.py --last-week
-  #   envVars:
-  #     - key: PB_URL
-  #       sync: false
-  #     - key: PB_EMAIL
-  #       sync: false
-  #     - key: PB_PASSWORD
-  #       sync: false
-  #     - key: OPENAI_API_KEY
-  #       sync: false
-  #     - key: USDA_KEY
-  #       sync: false
