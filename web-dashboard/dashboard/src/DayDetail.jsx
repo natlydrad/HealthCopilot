@@ -264,8 +264,8 @@ function CorrectionChat({ ingredient, meal, onClose, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50">
-      <div className="bg-white w-full max-w-lg rounded-t-2xl max-h-[80vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white w-full max-w-lg rounded-2xl max-h-[90vh] flex flex-col shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
           <h3 className="font-semibold">Correct Ingredient</h3>
