@@ -114,8 +114,8 @@ export function getCurrentUserId() {
   }
 }
 
-// Create ingredient correction
-export async function correctIngredient(ingredientId, originalParse, userCorrection) {
+// Create ingredient correction with context
+export async function correctIngredient(ingredientId, originalParse, userCorrection, context = {}) {
   if (!authToken) throw new Error("Not logged in");
   
   const userId = getCurrentUserId();
@@ -144,6 +144,7 @@ export async function correctIngredient(ingredientId, originalParse, userCorrect
     userCorrection,
     multiplier,
     correctionType,
+    context, // { mealTime, mealType, mealText }
   };
 
   const url = `${PB_BASE}/api/collections/ingredient_corrections/records`;
@@ -162,6 +163,26 @@ export async function correctIngredient(ingredientId, originalParse, userCorrect
   }
 
   return res.json();
+}
+
+// Delete a correction (to "unlearn" a mistake)
+export async function deleteCorrection(correctionId) {
+  if (!authToken) throw new Error("Not logged in");
+
+  const url = `${PB_BASE}/api/collections/ingredient_corrections/records/${correctionId}`;
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${authToken}`,
+    },
+  });
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(`Failed to delete correction: ${error}`);
+  }
+
+  return true;
 }
 
 // Update ingredient with corrected values

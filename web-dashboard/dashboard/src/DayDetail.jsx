@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { fetchMeals, fetchIngredients, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getCorrections, getLearningStats, parseAndSaveMeal } from "./api";
+import { fetchMeals, fetchIngredients, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getCorrections, getLearningStats, parseAndSaveMeal, deleteCorrection } from "./api";
 
 // Determine if an ingredient is low confidence (needs review)
 function isLowConfidence(ing) {
@@ -166,6 +166,16 @@ function MealCard({ meal }) {
             const fat = nutrients.find((n) => n.nutrientName.includes("Total lipid"));
             const lowConf = isLowConfidence(ing);
 
+            // Source label helper
+            const getSourceLabel = () => {
+              if (ing.source === 'usda') return { label: 'USDA', color: 'bg-green-100 text-green-700' };
+              if (ing.source === 'brand') return { label: 'Brand', color: 'bg-blue-100 text-blue-700' };
+              if (ing.source === 'learned') return { label: 'Learned', color: 'bg-purple-100 text-purple-700' };
+              if (ing.source === 'simple') return { label: 'Parsed', color: 'bg-gray-100 text-gray-500' };
+              return { label: 'GPT', color: 'bg-amber-100 text-amber-700' };
+            };
+            const sourceInfo = getSourceLabel();
+
             return (
               <li 
                 key={ing.id}
@@ -179,6 +189,11 @@ function MealCard({ meal }) {
                 )}
                 
                 <span className="font-medium">{ing.name}</span>
+                
+                {/* Source badge */}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded ${sourceInfo.color}`}>
+                  {sourceInfo.label}
+                </span>
                 
                 {ing.quantity && ing.unit && (
                   <span className="text-gray-400 text-xs">
@@ -305,7 +320,22 @@ function CorrectionChat({ ingredient, meal, onClose, onSave }) {
         source: ingredient.source,
       };
       
-      await correctIngredient(ingredient.id, originalParse, correction);
+      // Build context for smarter learning
+      const mealTime = meal?.timestamp ? new Date(meal.timestamp) : new Date();
+      const hour = mealTime.getHours();
+      let mealType = "snack";
+      if (hour >= 5 && hour < 11) mealType = "breakfast";
+      else if (hour >= 11 && hour < 15) mealType = "lunch";
+      else if (hour >= 17 && hour < 21) mealType = "dinner";
+      
+      const context = {
+        mealTime: mealTime.toISOString(),
+        mealType,
+        mealText: meal?.text || "",
+        hourOfDay: hour,
+      };
+      
+      await correctIngredient(ingredient.id, originalParse, correction, context);
       
       // Check if name changed
       const nameChanged = correction.name !== ingredient.name;
@@ -615,21 +645,65 @@ function LearningPanel({ onClose }) {
                   ) : (
                     <div className="space-y-2">
                       {recentCorrections.map((c, i) => (
-                        <div key={i} className="text-sm bg-gray-50 p-3 rounded-lg">
+                        <div key={c.id || i} className="text-sm bg-gray-50 p-3 rounded-lg">
                           <div className="flex justify-between items-start">
-                            <div>
+                            <div className="flex-1">
                               <span className="text-gray-500">{c.originalParse?.name}</span>
                               <span className="mx-2">→</span>
                               <span className="font-medium">{c.userCorrection?.name}</span>
                             </div>
-                            <span className="text-xs text-gray-400 whitespace-nowrap ml-2">
-                              {new Date(c.created).toLocaleString()}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-400 whitespace-nowrap">
+                                {new Date(c.created).toLocaleString()}
+                              </span>
+                              {/* Delete button */}
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (confirm("Delete this correction? The system will 'unlearn' this.")) {
+                                    try {
+                                      await deleteCorrection(c.id);
+                                      setRecentCorrections(prev => prev.filter(x => x.id !== c.id));
+                                      // Refresh stats
+                                      const [p, s] = await Promise.all([getLearnedPatterns(), getLearningStats()]);
+                                      setPatterns(p);
+                                      setStats(s);
+                                    } catch (err) {
+                                      console.error("Failed to delete:", err);
+                                    }
+                                  }
+                                }}
+                                className="text-red-400 hover:text-red-600 text-xs"
+                                title="Delete correction"
+                              >
+                                ✕
+                              </button>
+                            </div>
                           </div>
-                          {c.correctionType && (
-                            <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded mt-1 inline-block">
-                              {c.correctionType}
-                            </span>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {/* Correction type badge */}
+                            {c.correctionType && (
+                              <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">
+                                {c.correctionType.replace('_', ' ')}
+                              </span>
+                            )}
+                            {/* Context badges */}
+                            {c.context?.mealType && (
+                              <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded">
+                                {c.context.mealType}
+                              </span>
+                            )}
+                            {c.context?.hourOfDay !== undefined && (
+                              <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded">
+                                {c.context.hourOfDay}:00
+                              </span>
+                            )}
+                          </div>
+                          {/* Meal text preview */}
+                          {c.context?.mealText && (
+                            <p className="text-xs text-gray-400 mt-1 truncate" title={c.context.mealText}>
+                              from: "{c.context.mealText}"
+                            </p>
                           )}
                         </div>
                       ))}
