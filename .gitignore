@@ -14,7 +14,7 @@ build/
 .build/
 
 # ───────────────
-# PocketBase
+# PocketBase / Backend
 # ───────────────
 .env
 pb_data/
@@ -22,15 +22,17 @@ pb_data_backup/
 pb_backup_*/
 pb_backups/
 pb_*backup*
-*.db
 *.sqlite
 pb_backup_*
 pb_data*.zip
+pb_data_clean_old/
 
-# Ignore local binary builds except the one you deploy
-# (keep only the main ./pocketbase binary)
+# Keep tracked db files in backend/pb_data_clean but ignore temp files
+backend/pb_data_clean/*.db-shm
+backend/pb_data_clean/*.db-wal
+
+# Ignore local binary builds except the deployed ones
 pocketbase_exec
-# pocketbase_*  <-- comment this out so Git can see your Linux binary
 
 
 # ───────────────
@@ -41,14 +43,15 @@ __pycache__/
 *.pyo
 *.pyd
 .env/
+.venv/
 
 # ───────────────
 # Node / dashboard
 # ───────────────
-hc-dashboard/node_modules/
-hc-dashboard/.next/
-hc-dashboard/.vercel/
-hc-dashboard/dist/
+web-dashboard/node_modules/
+web-dashboard/.next/
+web-dashboard/.vercel/
+web-dashboard/dist/
 
 # ───────────────
 # Misc

@@ -3,4 +3,6 @@ services:
     name: pocketbase
     env: docker
     plan: free
-    autoDeploy: true
+    autoDeploy: false
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
