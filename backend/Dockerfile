@@ -32,11 +32,14 @@ EXPOSE 8080
 # ─────────────────────────────────────────────
 CMD ["/bin/sh", "-c", "\
   mkdir -p /data && \
-  if [ -z \"$(ls -A /data 2>/dev/null)\" ]; then \
-    echo '🪴 Seeding initial PocketBase data from pb_data_clean...'; \
+  # CRITICAL: Only seed on FIRST deployment (when data.db doesn't exist) \
+  # Never overwrite existing production data! \
+  if [ ! -f /data/data.db ]; then \
+    echo '🪴 First deployment detected - seeding initial PocketBase data from pb_data_clean...'; \
     cp -r /app/pb_data_clean/* /data/ || true; \
   else \
-    echo '💾 Existing PocketBase data found, skipping seed.'; \
+    echo '💾 Existing PocketBase database found - PRESERVING DATA and skipping seed.'; \
+    echo '⚠️  If you see this on a redeploy, your data should be safe.'; \
   fi && \
   echo '🔄 Running migrations...' && \
   /app/pocketbase migrate --dir /data --migrationsDir /app/pb_migrations && \
