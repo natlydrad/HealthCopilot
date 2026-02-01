@@ -6,20 +6,33 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def parse_ingredients(text: str):
     prompt = f"""
-    Extract distinct foods, drinks, supplements, and vitamins from: "{text}".
+    Extract foods, drinks, supplements from: "{text}".
+    
+    IMPORTANT: Decompose complex/composite foods into their base ingredients.
+    Examples:
+    - "burrito" → tortilla, rice, beans, cheese, salsa, sour cream
+    - "omelette" → eggs, butter, cheese, [any fillings mentioned]
+    - "sandwich" → bread, meat, cheese, lettuce, tomato, mayo
+    - "smoothie" → list the fruits/ingredients
+    - "salad" → greens, vegetables, dressing
+    - "pad thai" → rice noodles, egg, tofu/shrimp, peanuts, bean sprouts
+    
+    DO NOT return composite foods like "burrito" or "sandwich" - break them down!
+    Simple items stay as-is: "apple", "coffee", "eggs", "chicken breast"
+    
     Return ONLY a JSON array (no markdown, no explanation).
     Each item must have:
-    - name (string) - be specific
-    - quantity (float) - ALWAYS estimate if not specified
+    - name (string) - specific ingredient name
+    - quantity (float) - estimate realistic portions
     - unit (string) - use appropriate units:
-        * Eggs: count them (unit: "eggs")
-        * Bread/toast: slices (unit: "slice")
-        * Meats: oz (steak→6oz, chicken→6oz)
-        * Rice/pasta/grains: cups (unit: "cup")
-        * Vegetables: cups (unit: "cup")  
-        * Whole fruits: count (apple→1, unit: "piece")
-        * Berries/cut fruit: cups
-        * Drinks: oz (coffee→8, unit: "oz")
+        * Eggs: count (unit: "eggs")
+        * Bread/tortillas: count (unit: "slice" or "piece")
+        * Meats: oz (chicken→4oz, steak→6oz)
+        * Rice/beans/grains: cups (unit: "cup", typically 0.5-1)
+        * Vegetables: cups (unit: "cup", typically 0.25-0.5)
+        * Cheese: oz (typically 1-2oz)
+        * Sauces/dressings: tbsp
+        * Drinks: oz (coffee→8oz)
         * Supplements: count (unit: "pill" or "capsule")
     - category (string) - "food", "drink", "supplement", or "other"
     
@@ -73,18 +86,32 @@ def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = No
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
         prompt = """
-        Look at this image and identify ONLY edible items: foods, drinks, or supplement bottles/pills.
-        DO NOT include: furniture, rugs, appliances, plates, mugs, utensils, or other household items.
+        Look at this image and identify ONLY edible items: foods, drinks, or supplements.
+        DO NOT include: furniture, rugs, appliances, plates, mugs, utensils, household items.
+        
+        IMPORTANT: Decompose visible dishes into their component ingredients.
+        Examples:
+        - A burrito → tortilla, rice, beans, cheese, salsa, meat
+        - A salad → greens, tomatoes, cucumber, dressing, croutons
+        - A sandwich → bread slices, meat, cheese, lettuce, condiments
+        - Fried rice → rice, egg, vegetables, soy sauce
+        - Pizza slice → crust, cheese, sauce, toppings
+        
+        DO NOT return "burrito" or "salad" - list the actual ingredients you can see/infer!
+        Simple items stay as-is: apple, coffee, eggs, chicken breast
         
         Return ONLY a JSON array (no markdown, no explanation).
         Each item must have:
-        - name (string) - the specific food/drink/supplement name only
-        - quantity (float) - estimate portions:
-            * Meats: oz (chicken→6, steak→8)
-            * Sides: cups (rice→1, veggies→0.5)
-            * Drinks: oz (coffee→8, water→8)
-            * Supplements: count pills visible or 1 if bottle
-        - unit (string) - oz, cup, piece, pill, capsule, etc.
+        - name (string) - specific ingredient name
+        - quantity (float) - estimate realistic portions:
+            * Meats: oz (chicken→4, steak→6)
+            * Rice/grains: cups (0.5-1)
+            * Vegetables: cups (0.25-0.5)
+            * Cheese: oz (1-2)
+            * Sauces: tbsp (1-2)
+            * Drinks: oz (8-12)
+            * Supplements: count visible
+        - unit (string) - oz, cup, tbsp, piece, pill, etc.
         - category (string) - "food", "drink", or "supplement"
         
         If no edible items are visible, return an empty array [].
