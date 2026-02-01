@@ -1,9 +1,11 @@
-from pb_client import fetch_meals, insert_ingredient, get_token
+from pb_client import fetch_unparsed_meals, insert_ingredient, get_token
 from parser_gpt import parse_ingredients, parse_ingredients_from_image
 from lookup_usda import usda_lookup
 import os
+import argparse
 
 BANNED_INGREDIENTS = {"smoothie", "salad", "sandwich", "bowl", "dish"}
+
 
 def normalize_quantity(ing):
     if not ing.get("quantity") or ing["quantity"] == 0:
@@ -12,10 +14,30 @@ def normalize_quantity(ing):
     return ing
 
 
-def enrich_meals():
-    meals = fetch_meals()
+def enrich_meals(skip_usda=False, limit=None, since_date=None):
+    """
+    Parse meals and store ingredients.
+    
+    Args:
+        skip_usda: If True, skip USDA nutrition lookup (faster, Level 1 MVP)
+        limit: Max number of meals to process (useful for testing)
+        since_date: Only process meals after this date (ISO format, e.g. '2026-01-24')
+    """
+    meals = fetch_unparsed_meals(since_date=since_date)
+    
+    if limit:
+        meals = meals[:limit]
+        print(f"🔢 Limited to {limit} meals")
+    
+    if not meals:
+        print("✨ All meals already parsed!")
+        return
+    
     PB_URL = os.getenv("PB_URL", "http://127.0.0.1:8090")
     token = get_token()
+    
+    processed = 0
+    errors = 0
 
     for meal in meals:
         text = (meal.get("text") or "").strip()
@@ -25,31 +47,48 @@ def enrich_meals():
         if not text and not image_field:
             continue
 
-        print(f"\nMeal: {text or '[Image only]'}")
+        print(f"\n{'='*50}")
+        print(f"Meal: {text or '[Image only]'}")
+        print(f"ID: {meal['id']} | Time: {meal.get('timestamp', 'N/A')}")
 
-        # 🧠 Step 1: GPT parsing
-        if text and image_field:
-            print("🧠 Parsing both text + image...")
-            ingredients_text = parse_ingredients(text)
-            ingredients_image = parse_ingredients_from_image(meal, PB_URL, token)
-            parsed = ingredients_text + ingredients_image
-        elif text:
-            parsed = parse_ingredients(text)
-        elif image_field:
-            print("🧠 Parsing from image...")
-            parsed = parse_ingredients_from_image(meal, PB_URL, token)
-        else:
-            parsed = []
+        # Step 1: GPT parsing
+        try:
+            if text and image_field:
+                print("🧠 Parsing both text + image...")
+                ingredients_text = parse_ingredients(text)
+                ingredients_image = parse_ingredients_from_image(meal, PB_URL, token)
+                parsed = ingredients_text + ingredients_image
+            elif text:
+                print("🧠 Parsing text...")
+                parsed = parse_ingredients(text)
+            elif image_field:
+                print("🧠 Parsing image...")
+                parsed = parse_ingredients_from_image(meal, PB_URL, token)
+            else:
+                parsed = []
+        except Exception as e:
+            print(f"❌ GPT parsing failed: {e}")
+            errors += 1
+            continue
 
-        print(f"→ GPT Parsed: {parsed}")
+        print(f"→ Parsed {len(parsed)} ingredients: {[i['name'] for i in parsed]}")
 
-        # 🧠 Step 2: USDA + insert
+        # Step 2: Store ingredients
         for ing in parsed:
             if ing["name"].lower() in BANNED_INGREDIENTS:
+                print(f"⏭️  Skipped banned: {ing['name']}")
                 continue
 
             ing = normalize_quantity(ing)
-            usda = usda_lookup(ing["name"])
+            
+            # USDA lookup (optional for MVP)
+            usda = None
+            if not skip_usda:
+                try:
+                    usda = usda_lookup(ing["name"])
+                except Exception as e:
+                    print(f"⚠️  USDA lookup failed for {ing['name']}: {e}")
+            
             meal_timestamp = meal.get("timestamp")
 
             ingredient = {
@@ -65,9 +104,36 @@ def enrich_meals():
                 "timestamp": meal_timestamp,
             }
 
-            result = insert_ingredient(ingredient)
-            print("✅ Inserted:", result["id"], result["name"])
+            try:
+                result = insert_ingredient(ingredient)
+                print(f"✅ {result['name']} ({ing.get('quantity')} {ing.get('unit')})")
+            except Exception as e:
+                print(f"❌ Failed to insert {ing['name']}: {e}")
+                errors += 1
+        
+        processed += 1
+
+    print(f"\n{'='*50}")
+    print(f"🏁 Done! Processed {processed} meals, {errors} errors")
 
 
 if __name__ == "__main__":
-    enrich_meals()
+    parser = argparse.ArgumentParser(description="Parse meals into ingredients")
+    parser.add_argument("--skip-usda", action="store_true", 
+                        help="Skip USDA nutrition lookup (faster)")
+    parser.add_argument("--limit", type=int, 
+                        help="Max meals to process")
+    parser.add_argument("--since", type=str,
+                        help="Only process meals after this date (e.g. 2026-01-24)")
+    parser.add_argument("--last-week", action="store_true",
+                        help="Only process meals from the last 7 days")
+    args = parser.parse_args()
+    
+    # Calculate date for --last-week
+    since_date = args.since
+    if args.last_week:
+        from datetime import datetime, timedelta
+        since_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        print(f"📅 --last-week: processing since {since_date}")
+    
+    enrich_meals(skip_usda=args.skip_usda, limit=args.limit, since_date=since_date)

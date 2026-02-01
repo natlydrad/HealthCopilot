@@ -1,5 +1,5 @@
 let authToken = null;
-const PB_BASE = "http://127.0.0.1:8090";
+const PB_BASE = "https://pocketbase-1j2x.onrender.com";
 
 export function setAuthToken(token) {
   authToken = token;
@@ -8,7 +8,7 @@ export function setAuthToken(token) {
 export async function fetchMeals() {
   if (!authToken) throw new Error("Not logged in");
 
-  const url = "http://127.0.0.1:8090/api/collections/meals/records?perPage=200&sort=-created";
+  const url = `${PB_BASE}/api/collections/meals/records?perPage=200&sort=-created`;
   console.log("Fetching meals from:", url);
 
   const res = await fetch(url, {
