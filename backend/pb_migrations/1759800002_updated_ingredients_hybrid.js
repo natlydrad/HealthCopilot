@@ -4,8 +4,11 @@ migrate((app) => {
 
   // Add parsingStrategy field - tracks which parsing method was used
   // Skip if field already exists
-  if (!collection.fields.getById("select_parsing_strategy")) {
-    collection.fields.addAt(10, new Field({
+  const existingFields = collection.fields.getAll();
+  const hasParsingStrategy = existingFields.some(f => f.name === "parsingStrategy");
+  
+  if (!hasParsingStrategy) {
+    collection.fields.addAt(existingFields.length, new Field({
     "hidden": false,
     "id": "select_parsing_strategy",
     "maxSelect": 1,
@@ -26,8 +29,10 @@ migrate((app) => {
 
   // Add confidence score - 0.0 to 1.0 (Tier 4)
   // Skip if field already exists
-  if (!collection.fields.getById("number_confidence")) {
-    collection.fields.addAt(11, new Field({
+  const hasConfidence = existingFields.some(f => f.name === "confidence");
+  
+  if (!hasConfidence) {
+    collection.fields.addAt(existingFields.length, new Field({
     "hidden": false,
     "id": "number_confidence",
     "max": 1,
@@ -43,8 +48,10 @@ migrate((app) => {
 
   // Add parsingMetadata - flexible JSON for future parsing details
   // Skip if field already exists
-  if (!collection.fields.getById("json_parsing_metadata")) {
-    collection.fields.addAt(12, new Field({
+  const hasParsingMetadata = existingFields.some(f => f.name === "parsingMetadata");
+  
+  if (!hasParsingMetadata) {
+    collection.fields.addAt(existingFields.length, new Field({
     "hidden": false,
     "id": "json_parsing_metadata",
     "maxSize": 0,

@@ -58,6 +58,7 @@ export async function fetchIngredients(mealId) {
 
 // Fetch all ingredients at once (more efficient than per-meal)
 export async function fetchAllIngredients() {
+  // Don't expand mealId relation - we just need the ID string
   const url = `${PB_BASE}/api/collections/ingredients/records?perPage=500&sort=-created`;
   
   const res = await fetch(url, {
@@ -70,5 +71,117 @@ export async function fetchAllIngredients() {
   }
 
   const data = await res.json();
-  return data.items || [];
+  const items = data.items || [];
+  
+  // Debug: Log first ingredient's nutrition field
+  if (items.length > 0) {
+    const sample = items[0];
+    const mealIdValue = sample.mealId;
+    const mealIdType = typeof mealIdValue;
+    const mealIdResolved = mealIdValue && typeof mealIdValue === 'object' ? mealIdValue.id : mealIdValue;
+    
+    console.log("🔍 Sample ingredient from API:", {
+      id: sample.id,
+      name: sample.name,
+      mealId: mealIdValue,
+      mealIdType: mealIdType,
+      mealIdResolved: mealIdResolved,
+      mealIdIsObject: typeof mealIdValue === 'object',
+      hasNutrition: !!sample.nutrition,
+      nutritionType: typeof sample.nutrition,
+      nutritionIsArray: Array.isArray(sample.nutrition),
+      nutritionPreview: sample.nutrition 
+        ? (typeof sample.nutrition === 'string' 
+          ? sample.nutrition.substring(0, 200) 
+          : JSON.stringify(sample.nutrition).substring(0, 200))
+        : null,
+      allFields: Object.keys(sample)
+    });
+  }
+  
+  return items;
+}
+
+// Get current user ID
+export function getCurrentUserId() {
+  const userStr = localStorage.getItem("pb_user");
+  if (!userStr) return null;
+  try {
+    const user = JSON.parse(userStr);
+    return user.id;
+  } catch {
+    return null;
+  }
+}
+
+// Create ingredient correction
+export async function correctIngredient(ingredientId, originalParse, userCorrection) {
+  if (!authToken) throw new Error("Not logged in");
+  
+  const userId = getCurrentUserId();
+  if (!userId) throw new Error("User not found");
+
+  // Calculate multiplier
+  const originalQty = originalParse.quantity || 1;
+  const correctedQty = userCorrection.quantity || 1;
+  const multiplier = originalQty > 0 ? correctedQty / originalQty : 1.0;
+
+  // Determine correction type
+  let correctionType = "quantity_change";
+  if (originalParse.name !== userCorrection.name) {
+    correctionType = "name_change";
+  } else if (originalParse.unit !== userCorrection.unit) {
+    correctionType = "unit_change";
+  }
+  if (originalParse.name !== userCorrection.name && originalParse.quantity !== userCorrection.quantity) {
+    correctionType = "complete_replace";
+  }
+
+  const payload = {
+    ingredientId,
+    user: userId,
+    originalParse,
+    userCorrection,
+    multiplier,
+    correctionType,
+  };
+
+  const url = `${PB_BASE}/api/collections/ingredient_corrections/records`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${authToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(`Failed to create correction: ${error}`);
+  }
+
+  return res.json();
+}
+
+// Update ingredient with corrected values
+export async function updateIngredient(ingredientId, updates) {
+  if (!authToken) throw new Error("Not logged in");
+
+  const url = `${PB_BASE}/api/collections/ingredients/records/${ingredientId}`;
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${authToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(updates),
+  });
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(`Failed to update ingredient: ${error}`);
+  }
+
+  return res.json();
 }
