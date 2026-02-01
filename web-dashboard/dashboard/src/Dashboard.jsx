@@ -449,10 +449,10 @@ function MealCard({ meal, ingredients, formatTime }) {
     ? `${PB_URL}/api/files/${meal.collectionId}/${meal.id}/${meal.image}?thumb=200x200`
     : null;
   
-  // Extract micronutrients from ingredients
-  const extractMicronutrients = (ing) => {
+  // Extract macros and micronutrients from ingredients
+  const extractNutrients = (ing) => {
     const nutrition = ing.nutrition || [];
-    if (!Array.isArray(nutrition) || nutrition.length === 0) return {};
+    if (!Array.isArray(nutrition) || nutrition.length === 0) return { macros: {}, micros: {} };
     
     const UNIT_TO_GRAMS = {
       oz: 28.35, g: 1, grams: 1, gram: 1,
@@ -467,6 +467,7 @@ function MealCard({ meal, ingredients, formatTime }) {
     const grams = (ing.quantity || 1) * multiplier;
     const scale = grams / 100;
     
+    const macros = { calories: 0, protein: 0, carbs: 0, fat: 0 };
     const micros = {};
     const keyNutrients = [
       "Fiber, total dietary", "Calcium, Ca", "Iron, Fe", "Sodium, Na",
@@ -477,28 +478,49 @@ function MealCard({ meal, ingredients, formatTime }) {
     ];
     
     for (const n of nutrition) {
-      const name = n.nutrientName || "";
-      if (keyNutrients.some(key => name.includes(key))) {
-        const value = (n.value || 0) * scale;
-        const unit = n.unitName || "";
-        micros[name] = { value, unit };
+      const name = (n.nutrientName || "").toLowerCase();
+      const value = (n.value || 0) * scale;
+      const unit = n.unitName || "";
+      
+      // Extract macros
+      if (name.includes("energy") && unit === "KCAL") {
+        macros.calories = value;
+      } else if (name === "protein") {
+        macros.protein = value;
+      } else if (name.includes("carbohydrate")) {
+        macros.carbs = value;
+      } else if (name.includes("total lipid") || name === "fat") {
+        macros.fat = value;
+      }
+      
+      // Extract micronutrients
+      if (keyNutrients.some(key => n.nutrientName?.includes(key))) {
+        micros[n.nutrientName] = { value, unit };
       }
     }
     
-    return micros;
+    return { macros, micros };
   };
   
-  // Calculate total micronutrients for this meal
+  // Calculate total macros and micronutrients for this meal
+  const mealMacros = { calories: 0, protein: 0, carbs: 0, fat: 0 };
   const mealMicros = {};
   for (const ing of ingredients) {
-    const ingMicros = extractMicronutrients(ing);
-    for (const [name, data] of Object.entries(ingMicros)) {
+    const { macros, micros } = extractNutrients(ing);
+    mealMacros.calories += macros.calories || 0;
+    mealMacros.protein += macros.protein || 0;
+    mealMacros.carbs += macros.carbs || 0;
+    mealMacros.fat += macros.fat || 0;
+    
+    for (const [name, data] of Object.entries(micros)) {
       if (!mealMicros[name]) {
         mealMicros[name] = { value: 0, unit: data.unit };
       }
       mealMicros[name].value += data.value;
     }
   }
+  
+  const hasNutrients = mealMacros.calories > 0 || Object.keys(mealMicros).length > 0;
   
   return (
     <div className="bg-slate-50 rounded-lg p-2 text-xs border border-slate-100">
@@ -560,29 +582,60 @@ function MealCard({ meal, ingredients, formatTime }) {
             )}
           </div>
           
-          {/* Expandable micronutrients */}
-          {Object.keys(mealMicros).length > 0 && (
+          {/* Expandable nutrients (macros + micros) */}
+          {hasNutrients && (
             <div className="mt-2">
               <button
                 onClick={() => setExpanded(!expanded)}
                 className="text-[10px] text-slate-400 hover:text-slate-600 flex items-center gap-1"
               >
-                {expanded ? "▼" : "▶"} Micronutrients
+                {expanded ? "▼" : "▶"} Nutrients
               </button>
               {expanded && (
                 <div className="mt-1 pt-1 border-t border-slate-200 text-[10px] text-slate-500">
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
-                    {Object.entries(mealMicros).map(([name, data]) => {
-                      const shortName = name.replace(/Vitamin |, total|, Ca|, Fe|, Na|, K|, Mg|, Zn| \(alpha-tocopherol\)| \(phylloquinone\)/g, "");
-                      const displayValue = data.value < 1 ? data.value.toFixed(2) : Math.round(data.value);
-                      return (
-                        <div key={name} className="flex justify-between">
-                          <span>{shortName}:</span>
-                          <span className="text-slate-600">{displayValue} {data.unit}</span>
+                  {/* Macros */}
+                  {mealMacros.calories > 0 && (
+                    <div className="mb-2">
+                      <div className="font-semibold text-slate-600 mb-1">Macros:</div>
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                        <div className="flex justify-between">
+                          <span>🔥 Calories:</span>
+                          <span className="text-slate-600">{Math.round(mealMacros.calories)}</span>
                         </div>
-                      );
-                    })}
-                  </div>
+                        <div className="flex justify-between">
+                          <span>🥩 Protein:</span>
+                          <span className="text-slate-600">{Math.round(mealMacros.protein)}g</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>🍞 Carbs:</span>
+                          <span className="text-slate-600">{Math.round(mealMacros.carbs)}g</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>🧈 Fat:</span>
+                          <span className="text-slate-600">{Math.round(mealMacros.fat)}g</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Micronutrients */}
+                  {Object.keys(mealMicros).length > 0 && (
+                    <div>
+                      <div className="font-semibold text-slate-600 mb-1">Micronutrients:</div>
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                        {Object.entries(mealMicros).map(([name, data]) => {
+                          const shortName = name.replace(/Vitamin |, total|, Ca|, Fe|, Na|, K|, Mg|, Zn| \(alpha-tocopherol\)| \(phylloquinone\)/g, "");
+                          const displayValue = data.value < 1 ? data.value.toFixed(2) : Math.round(data.value);
+                          return (
+                            <div key={name} className="flex justify-between">
+                              <span>{shortName}:</span>
+                              <span className="text-slate-600">{displayValue} {data.unit}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
