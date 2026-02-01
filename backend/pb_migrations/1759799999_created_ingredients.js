@@ -1,5 +1,16 @@
 /// <reference path="../pb_data/types.d.ts" />
 migrate((txApp) => {
+  // Check if ingredients collection already exists
+  try {
+    const existing = txApp.findCollectionByNameOrId("ingredients");
+    // Collection exists, skip creation
+    console.log("✅ Ingredients collection already exists, skipping creation");
+    return;
+  } catch (e) {
+    // Collection doesn't exist, create it
+    console.log("📦 Creating ingredients collection...");
+  }
+
   const collection = new Collection({
     "createRule": null,
     "deleteRule": null,
@@ -51,7 +62,12 @@ migrate((txApp) => {
 
   return txApp.save(collection);
 }, (txApp) => {
-  const collection = txApp.findCollectionByNameOrId("pbc_3146854971");
-
-  return txApp.delete(collection);
+  // Only delete if it was created by this migration
+  try {
+    const collection = txApp.findCollectionByNameOrId("pbc_3146854971");
+    return txApp.delete(collection);
+  } catch (e) {
+    // Collection doesn't exist or wasn't created by this migration, skip
+    return;
+  }
 })
