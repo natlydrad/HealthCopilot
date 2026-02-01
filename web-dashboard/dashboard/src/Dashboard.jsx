@@ -1,40 +1,62 @@
 import { useEffect, useState } from "react";
 import { fetchMeals, fetchAllIngredients } from "./api";
+import CorrectionModal from "./CorrectionModal";
 
 export default function Dashboard() {
   const [meals, setMeals] = useState([]);
   const [ingredients, setIngredients] = useState({});
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const loadData = async () => {
+    try {
+      // Fetch meals and ingredients in parallel
+      const [mealItems, allIngredients] = await Promise.all([
+        fetchMeals(),
+        fetchAllIngredients()
+      ]);
+      
+      setMeals(mealItems);
+      
+      // Group ingredients by mealId
+      const ingMap = {};
+      for (const ing of allIngredients) {
+        const mealId = ing.mealId;
+        if (!mealId) continue;
+        if (!ingMap[mealId]) ingMap[mealId] = [];
+        ingMap[mealId].push(ing);
+      }
+      setIngredients(ingMap);
+      console.log("Loaded", mealItems.length, "meals and", allIngredients.length, "ingredients");
+      
+      // Debug: Check nutrition data format
+      if (allIngredients.length > 0) {
+        const sampleIng = allIngredients[0];
+        console.log("🔍 Dashboard: Sample ingredient after fetch:", {
+          id: sampleIng.id,
+          name: sampleIng.name,
+          hasNutrition: !!sampleIng.nutrition,
+          nutritionType: typeof sampleIng.nutrition,
+          nutritionIsArray: Array.isArray(sampleIng.nutrition),
+          nutritionValue: sampleIng.nutrition,
+          nutritionPreview: sampleIng.nutrition 
+            ? (typeof sampleIng.nutrition === 'string' 
+              ? sampleIng.nutrition.substring(0, 200) 
+              : JSON.stringify(sampleIng.nutrition).substring(0, 200))
+            : null,
+          allFields: Object.keys(sampleIng)
+        });
+      }
+    } catch (e) {
+      console.error("Failed to load:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function load() {
-      try {
-        // Fetch meals and ingredients in parallel
-        const [mealItems, allIngredients] = await Promise.all([
-          fetchMeals(),
-          fetchAllIngredients()
-        ]);
-        
-        setMeals(mealItems);
-        
-        // Group ingredients by mealId
-        const ingMap = {};
-        for (const ing of allIngredients) {
-          const mealId = ing.mealId;
-          if (!mealId) continue;
-          if (!ingMap[mealId]) ingMap[mealId] = [];
-          ingMap[mealId].push(ing);
-        }
-        setIngredients(ingMap);
-        console.log("Loaded", mealItems.length, "meals and", allIngredients.length, "ingredients");
-      } catch (e) {
-        console.error("Failed to load:", e);
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, []);
+    loadData();
+  }, [refreshKey]);
 
   // Get last 7 days (in local timezone)
   const days = [];
@@ -97,13 +119,23 @@ export default function Dashboard() {
 
   // Extract macros from USDA nutrition array
   const extractMacros = (nutrition, quantity, unit) => {
-    if (!Array.isArray(nutrition) || nutrition.length === 0) {
+    // Handle nutrition field - might be string or array
+    let nutritionArray = nutrition || [];
+    if (typeof nutritionArray === "string") {
+      try {
+        nutritionArray = JSON.parse(nutritionArray);
+      } catch (e) {
+        console.warn("Failed to parse nutrition as JSON:", e);
+        nutritionArray = [];
+      }
+    }
+    if (!Array.isArray(nutritionArray) || nutritionArray.length === 0) {
       return { calories: 0, protein: 0, carbs: 0, fat: 0 };
     }
     
     const macros = { calories: 0, protein: 0, carbs: 0, fat: 0 };
     
-    for (const n of nutrition) {
+    for (const n of nutritionArray) {
       const name = (n.nutrientName || "").toLowerCase();
       const value = n.value || 0;
       
@@ -189,7 +221,16 @@ export default function Dashboard() {
     for (const meal of dayMeals) {
       const mealIngs = ingredients[meal.id] || [];
       for (const ing of mealIngs) {
-        const nutrition = ing.nutrition || [];
+        // Handle nutrition field - might be string or array
+        let nutrition = ing.nutrition || [];
+        if (typeof nutrition === "string") {
+          try {
+            nutrition = JSON.parse(nutrition);
+          } catch (e) {
+            console.warn("Failed to parse nutrition as JSON:", e);
+            continue;
+          }
+        }
         if (!Array.isArray(nutrition)) continue;
         
         const multiplier = UNIT_TO_GRAMS[(ing.unit || "").toLowerCase()] ?? 80;
@@ -423,6 +464,7 @@ export default function Dashboard() {
                       meal={meal} 
                       ingredients={ingredients[meal.id] || []}
                       formatTime={formatTime}
+                      onIngredientUpdate={() => setRefreshKey(k => k + 1)}
                     />
                   ))
                 )}
@@ -437,12 +479,21 @@ export default function Dashboard() {
 
 const PB_URL = "https://pocketbase-1j2x.onrender.com";
 
-function MealCard({ meal, ingredients, formatTime }) {
+function MealCard({ meal, ingredients, formatTime, onIngredientUpdate }) {
   const [expanded, setExpanded] = useState(false);
+  const [editingIngredient, setEditingIngredient] = useState(null);
   const hasImage = !!meal.image;
   const hasText = !!(meal.text && meal.text.trim());
   const text = hasText ? meal.text : "";
   const truncated = text.length > 50 ? text.slice(0, 50) + "..." : text;
+  
+  // Debug: Log ingredients for this meal
+  console.log(`🔍 MealCard for meal ${meal.id}:`, {
+    mealText: meal.text,
+    ingredientsCount: ingredients?.length || 0,
+    ingredients: ingredients,
+    hasIngredients: ingredients && ingredients.length > 0
+  });
   
   // PocketBase file URL: /api/files/{collectionId}/{recordId}/{filename}
   const imageUrl = hasImage 
@@ -451,7 +502,16 @@ function MealCard({ meal, ingredients, formatTime }) {
   
   // Extract macros and micronutrients from ingredients
   const extractNutrients = (ing) => {
-    const nutrition = ing.nutrition || [];
+    // Handle nutrition field - might be string or array
+    let nutrition = ing.nutrition || [];
+    if (typeof nutrition === "string") {
+      try {
+        nutrition = JSON.parse(nutrition);
+      } catch (e) {
+        console.warn("Failed to parse nutrition as JSON:", e);
+        nutrition = [];
+      }
+    }
     if (!Array.isArray(nutrition) || nutrition.length === 0) return { macros: {}, micros: {} };
     
     const UNIT_TO_GRAMS = {
@@ -505,18 +565,20 @@ function MealCard({ meal, ingredients, formatTime }) {
   // Calculate total macros and micronutrients for this meal
   const mealMacros = { calories: 0, protein: 0, carbs: 0, fat: 0 };
   const mealMicros = {};
-  for (const ing of ingredients) {
-    const { macros, micros } = extractNutrients(ing);
-    mealMacros.calories += macros.calories || 0;
-    mealMacros.protein += macros.protein || 0;
-    mealMacros.carbs += macros.carbs || 0;
-    mealMacros.fat += macros.fat || 0;
-    
-    for (const [name, data] of Object.entries(micros)) {
-      if (!mealMicros[name]) {
-        mealMicros[name] = { value: 0, unit: data.unit };
+  if (ingredients && Array.isArray(ingredients)) {
+    for (const ing of ingredients) {
+      const { macros, micros } = extractNutrients(ing);
+      mealMacros.calories += macros.calories || 0;
+      mealMacros.protein += macros.protein || 0;
+      mealMacros.carbs += macros.carbs || 0;
+      mealMacros.fat += macros.fat || 0;
+      
+      for (const [name, data] of Object.entries(micros)) {
+        if (!mealMicros[name]) {
+          mealMicros[name] = { value: 0, unit: data.unit };
+        }
+        mealMicros[name].value += data.value;
       }
-      mealMicros[name].value += data.value;
     }
   }
   
@@ -541,7 +603,7 @@ function MealCard({ meal, ingredients, formatTime }) {
       {/* Text description */}
       {truncated && <div className="text-slate-700 font-medium leading-tight">{truncated}</div>}
       
-      {ingredients.length > 0 && (
+      {ingredients && ingredients.length > 0 && (
         <div className="mt-2 pt-2 border-t border-slate-200">
           <div className="text-slate-500 space-y-0.5">
             {ingredients.slice(0, 4).map((ing) => {
@@ -570,10 +632,17 @@ function MealCard({ meal, ingredients, formatTime }) {
               const emoji = { food: "🟢", drink: "🔵", supplement: "💊", other: "⚪" }[category] || "🟢";
               
               return (
-                <div key={ing.id} className="flex items-center gap-1">
+                <div key={ing.id} className="flex items-center gap-1 group">
                   <span className="text-xs">{emoji}</span>
                   <span className={category === "other" ? "text-slate-400 italic" : ""}>{ing.name}</span>
                   {qtyStr && <span className="text-slate-400">({qtyStr})</span>}
+                  <button
+                    onClick={() => setEditingIngredient(ing)}
+                    className="ml-auto opacity-0 group-hover:opacity-100 text-[10px] text-blue-600 hover:text-blue-800 px-1"
+                    title="Correct ingredient"
+                  >
+                    ✏️
+                  </button>
                 </div>
               );
             })}
