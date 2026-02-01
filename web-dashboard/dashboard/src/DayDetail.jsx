@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { fetchMeals, fetchIngredients, correctIngredient, updateIngredientWithNutrition } from "./api";
+import { fetchMeals, fetchIngredients, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getCorrections } from "./api";
 
 // Determine if an ingredient is low confidence (needs review)
 function isLowConfidence(ing) {
@@ -16,6 +16,7 @@ export default function DayDetail() {
   const navigate = useNavigate();
   const [meals, setMeals] = useState([]);
   const [totals, setTotals] = useState({ calories: 0 });
+  const [showLearning, setShowLearning] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -55,12 +56,21 @@ export default function DayDetail() {
 
   return (
     <div className="p-8 bg-gray-50 min-h-screen">
-      <button
-        onClick={() => navigate(-1)}
-        className="text-blue-500 underline mb-4"
-      >
-        ← Back
-      </button>
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={() => navigate(-1)}
+          className="text-blue-500 underline"
+        >
+          ← Back
+        </button>
+        <button
+          onClick={() => setShowLearning(true)}
+          className="text-sm bg-purple-100 text-purple-700 px-3 py-1 rounded-full hover:bg-purple-200"
+        >
+          🧠 What I've Learned
+        </button>
+      </div>
+      
       <h1 className="text-2xl font-bold mb-4">{date}</h1>
 
       <div className="bg-white p-4 rounded-xl shadow mb-6">
@@ -68,10 +78,13 @@ export default function DayDetail() {
       </div>
 
       {meals.map((meal) => (
-  <MealCard key={meal.id} meal={meal} />))}
+        <MealCard key={meal.id} meal={meal} />
+      ))}
 
-
-      
+      {/* Learning Panel */}
+      {showLearning && (
+        <LearningPanel onClose={() => setShowLearning(false)} />
+      )}
     </div>
   );
 }
@@ -375,6 +388,117 @@ function CorrectionChat({ ingredient, meal, onClose, onSave }) {
               </button>
             </form>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Learning Panel - shows what the app has learned
+function LearningPanel({ onClose }) {
+  const [patterns, setPatterns] = useState([]);
+  const [recentCorrections, setRecentCorrections] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const [p, c] = await Promise.all([
+          getLearnedPatterns(),
+          getCorrections(20)
+        ]);
+        setPatterns(p);
+        setRecentCorrections(c);
+      } catch (err) {
+        console.error("Failed to load learning data:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white w-full max-w-lg rounded-2xl max-h-[90vh] flex flex-col shadow-xl">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b">
+          <h3 className="font-semibold text-lg">🧠 What I've Learned</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">
+            ✕
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {loading ? (
+            <p className="text-gray-400 text-center py-8">Loading...</p>
+          ) : (
+            <>
+              {/* Learned Patterns */}
+              <div className="mb-6">
+                <h4 className="font-medium text-gray-700 mb-3">Patterns Learned</h4>
+                {patterns.length === 0 ? (
+                  <p className="text-gray-400 text-sm">No patterns yet. Correct some ingredients and I'll learn!</p>
+                ) : (
+                  <div className="space-y-2">
+                    {patterns.map((p, i) => (
+                      <div key={i} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                        <div>
+                          <span className="text-gray-500">"{p.original}"</span>
+                          <span className="mx-2">→</span>
+                          <span className="font-medium">{p.learned}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-400">{p.count}x</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            p.count >= 3 ? 'bg-green-100 text-green-700' : 
+                            p.count >= 1 ? 'bg-yellow-100 text-yellow-700' : 
+                            'bg-gray-100 text-gray-500'
+                          }`}>
+                            {p.count >= 3 ? '✓ Confident' : p.count >= 1 ? 'Learning' : 'New'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Recent Corrections */}
+              <div>
+                <h4 className="font-medium text-gray-700 mb-3">Recent Corrections</h4>
+                {recentCorrections.length === 0 ? (
+                  <p className="text-gray-400 text-sm">No corrections yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {recentCorrections.slice(0, 10).map((c, i) => (
+                      <div key={i} className="text-sm bg-gray-50 p-2 rounded-lg">
+                        <div className="flex justify-between">
+                          <span>
+                            <span className="text-gray-500">{c.originalParse?.name}</span>
+                            <span className="mx-2">→</span>
+                            <span className="font-medium">{c.userCorrection?.name}</span>
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {new Date(c.created).toLocaleDateString()}
+                          </span>
+                        </div>
+                        {c.correctionType && (
+                          <span className="text-xs text-gray-400">{c.correctionType}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t bg-gray-50 text-center text-xs text-gray-500">
+          I learn from your corrections instantly. The more you correct, the smarter I get!
         </div>
       </div>
     </div>

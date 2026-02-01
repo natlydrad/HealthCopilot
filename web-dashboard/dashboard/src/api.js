@@ -217,6 +217,54 @@ export async function lookupUSDANutrition(foodName) {
   }
 }
 
+// Get all corrections (for tracking view)
+export async function getCorrections(limit = 50) {
+  const url = `${PB_BASE}/api/collections/ingredient_corrections/records?sort=-created&perPage=${limit}`;
+  
+  const res = await fetch(url, {
+    headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+  });
+
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.items || [];
+}
+
+// Get learned patterns (aggregated from corrections)
+export async function getLearnedPatterns() {
+  const corrections = await getCorrections(200);
+  
+  // Group by original → corrected
+  const patterns = {};
+  for (const c of corrections) {
+    const orig = c.originalParse?.name?.toLowerCase();
+    const corr = c.userCorrection?.name;
+    
+    if (orig && corr && orig !== corr.toLowerCase()) {
+      const key = `${orig}→${corr}`;
+      if (!patterns[key]) {
+        patterns[key] = {
+          original: orig,
+          learned: corr,
+          count: 0,
+          lastCorrected: c.created,
+        };
+      }
+      patterns[key].count++;
+    }
+  }
+  
+  // Convert to array, add confidence, sort
+  const result = Object.values(patterns).map(p => ({
+    ...p,
+    confidence: Math.min(0.5 + (p.count * 0.15), 0.99),
+    status: p.count >= 1 ? "learned" : "learning",
+  }));
+  
+  result.sort((a, b) => b.count - a.count);
+  return result;
+}
+
 // Update ingredient with new name AND re-fetch nutrition
 export async function updateIngredientWithNutrition(ingredientId, updates, originalName) {
   // If name changed, re-lookup nutrition

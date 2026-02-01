@@ -334,6 +334,148 @@ def get_user_templates(user_id: str):
     return []
 
 
+# ============================================================
+# TIER 2: Learning from Corrections
+# ============================================================
+
+def get_user_corrections(user_id: str = None, original_name: str = None):
+    """
+    Get corrections from the database.
+    Can filter by user and/or original ingredient name.
+    
+    Returns list of correction records.
+    """
+    headers = {"Authorization": f"Bearer {get_token()}"}
+    
+    filters = []
+    if user_id:
+        filters.append(f"user='{user_id}'")
+    if original_name:
+        # Search for corrections where original name matches
+        filters.append(f"originalParse.name~'{original_name}'")
+    
+    filter_str = " && ".join(filters) if filters else ""
+    
+    import urllib.parse
+    url = f"{PB_URL}/api/collections/ingredient_corrections/records?sort=-created&perPage=100"
+    if filter_str:
+        url += f"&filter={urllib.parse.quote(filter_str)}"
+    
+    try:
+        r = requests.get(url, headers=headers)
+        if r.status_code == 200:
+            return r.json().get("items", [])
+    except Exception as e:
+        print(f"⚠️ Failed to get corrections: {e}")
+    
+    return []
+
+
+def check_learned_correction(ingredient_name: str, user_id: str = None):
+    """
+    Check if we've learned a correction for this ingredient.
+    
+    Returns:
+        {
+            "should_correct": True/False,
+            "corrected_name": "soy milk",
+            "corrected_quantity": 8,
+            "corrected_unit": "oz",
+            "confidence": 0.95,
+            "times_corrected": 3,
+            "reason": "You've corrected 'milk' to 'soy milk' 3 times"
+        }
+    """
+    # Get all corrections for this ingredient name
+    corrections = get_user_corrections(user_id=user_id, original_name=ingredient_name)
+    
+    if not corrections:
+        return {"should_correct": False}
+    
+    # Count corrections by target name
+    correction_counts = {}
+    for c in corrections:
+        original = c.get("originalParse", {})
+        corrected = c.get("userCorrection", {})
+        
+        # Only count name changes
+        if original.get("name", "").lower() == ingredient_name.lower():
+            target_name = corrected.get("name", "")
+            if target_name and target_name.lower() != ingredient_name.lower():
+                if target_name not in correction_counts:
+                    correction_counts[target_name] = {
+                        "count": 0,
+                        "latest": corrected
+                    }
+                correction_counts[target_name]["count"] += 1
+    
+    if not correction_counts:
+        return {"should_correct": False}
+    
+    # Find most common correction
+    most_common = max(correction_counts.items(), key=lambda x: x[1]["count"])
+    target_name = most_common[0]
+    count = most_common[1]["count"]
+    latest = most_common[1]["latest"]
+    
+    # Instant learning: even 1 correction counts
+    # Confidence increases with more corrections
+    confidence = min(0.5 + (count * 0.15), 0.99)  # 1 correction = 0.65, 3 = 0.95
+    
+    return {
+        "should_correct": True,
+        "corrected_name": target_name,
+        "corrected_quantity": latest.get("quantity"),
+        "corrected_unit": latest.get("unit"),
+        "confidence": confidence,
+        "times_corrected": count,
+        "reason": f"You've corrected '{ingredient_name}' to '{target_name}' {count} time(s)"
+    }
+
+
+def get_all_learned_patterns(user_id: str = None):
+    """
+    Get all learned patterns for a user (for the tracking view).
+    
+    Returns list of patterns like:
+    [
+        {"original": "milk", "learned": "soy milk", "count": 3, "confidence": 0.95},
+        {"original": "chicken", "learned": "chicken breast", "count": 2, "confidence": 0.80},
+    ]
+    """
+    corrections = get_user_corrections(user_id=user_id)
+    
+    # Group by original name
+    patterns = {}
+    for c in corrections:
+        original = c.get("originalParse", {})
+        corrected = c.get("userCorrection", {})
+        
+        orig_name = original.get("name", "").lower()
+        corr_name = corrected.get("name", "")
+        
+        if orig_name and corr_name and orig_name != corr_name.lower():
+            key = f"{orig_name}→{corr_name}"
+            if key not in patterns:
+                patterns[key] = {
+                    "original": orig_name,
+                    "learned": corr_name,
+                    "count": 0,
+                    "latest_correction": c
+                }
+            patterns[key]["count"] += 1
+    
+    # Convert to list and add confidence
+    result = []
+    for p in patterns.values():
+        p["confidence"] = min(0.5 + (p["count"] * 0.15), 0.99)
+        result.append(p)
+    
+    # Sort by count descending
+    result.sort(key=lambda x: x["count"], reverse=True)
+    return result
+
+
 def lookup_similar_meal_in_history(user_id: str, meal_text: str, limit: int = 5):
     """
     Find similar past meals from user's history.

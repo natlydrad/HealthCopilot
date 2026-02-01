@@ -3,7 +3,9 @@ from pb_client import (
     # Tier 4: Hybrid parsing helpers
     lookup_parsing_cache, save_to_parsing_cache,
     lookup_brand_food, search_brand_foods,
-    lookup_meal_template, lookup_similar_meal_in_history
+    lookup_meal_template, lookup_similar_meal_in_history,
+    # Tier 2: Learning from corrections
+    check_learned_correction, get_all_learned_patterns
 )
 from parser_gpt import parse_ingredients, parse_ingredients_from_image
 from lookup_usda import usda_lookup
@@ -232,7 +234,7 @@ def enrich_meals(skip_usda=False, limit=None, since_date=None):
     errors = 0
 
     # Track parsing stats for Tier 4 metrics
-    stats = {"cache_hits": 0, "template_hits": 0, "brand_hits": 0, "gpt_calls": 0}
+    stats = {"cache_hits": 0, "template_hits": 0, "brand_hits": 0, "gpt_calls": 0, "learned_corrections": 0}
     
     for meal in meals:
         text = (meal.get("text") or "").strip()
@@ -296,6 +298,24 @@ def enrich_meals(skip_usda=False, limit=None, since_date=None):
 
             ing = normalize_quantity(ing)
             
+            # Track original name for learning metadata
+            original_name = ing["name"]
+            learned_correction = None
+            
+            # TIER 2: Check if we've learned a correction for this ingredient
+            if user_id:
+                learned = check_learned_correction(ing["name"], user_id)
+                if learned.get("should_correct"):
+                    learned_correction = learned
+                    old_name = ing["name"]
+                    ing["name"] = learned["corrected_name"]
+                    if learned.get("corrected_quantity"):
+                        ing["quantity"] = learned["corrected_quantity"]
+                    if learned.get("corrected_unit"):
+                        ing["unit"] = learned["corrected_unit"]
+                    print(f"   🧠 LEARNED: '{old_name}' → '{ing['name']}' ({learned['reason']})")
+                    stats["learned_corrections"] += 1
+            
             # USDA lookup (optional for MVP)
             usda = None
             macros = {"calories": 0, "protein": 0, "carbs": 0, "fat": 0}
@@ -316,19 +336,33 @@ def enrich_meals(skip_usda=False, limit=None, since_date=None):
             # Get category from GPT response (default to "food" for backward compatibility)
             category = ing.get("category", "food")
             
+            # Build parsing metadata for transparency
+            parsing_metadata = {
+                "originalInput": original_name,
+                "resolvedTo": ing["name"],
+                "resolvedVia": "learned_correction" if learned_correction else ("usda" if usda else "gpt"),
+            }
+            if learned_correction:
+                parsing_metadata["learnedFrom"] = {
+                    "timesCorrected": learned_correction.get("times_corrected", 0),
+                    "confidence": learned_correction.get("confidence", 0),
+                    "reason": learned_correction.get("reason", "")
+                }
+            
             ingredient = {
                 "mealId": meal["id"],
                 "name": ing["name"],
                 "quantity": ing.get("quantity"),
                 "unit": ing.get("unit"),
                 "category": category,
-                "source": "usda" if usda else "gpt",
+                "source": "learned" if learned_correction else ("usda" if usda else "gpt"),
                 "usdaCode": usda["usdaCode"] if usda else None,
                 "nutrition": usda.get("nutrition", []) if usda else [],
                 "macros": macros,
                 "rawGPT": ing,
                 "rawUSDA": usda or {},
                 "timestamp": meal_timestamp,
+                "parsingMetadata": parsing_metadata,
             }
 
             try:
@@ -342,6 +376,11 @@ def enrich_meals(skip_usda=False, limit=None, since_date=None):
 
     print(f"\n{'='*50}")
     print(f"🏁 Done! Processed {processed} meals, {errors} errors")
+    
+    # Show learning stats (always)
+    if stats["learned_corrections"] > 0:
+        print(f"\n🧠 Learning Stats:")
+        print(f"   Learned corrections applied: {stats['learned_corrections']}")
     
     # Tier 4: Show hybrid parsing stats
     if HYBRID_PARSING_ENABLED:
