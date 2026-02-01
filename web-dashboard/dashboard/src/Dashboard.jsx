@@ -79,36 +79,125 @@ export default function Dashboard() {
     );
   }
 
+  // Extract macros from USDA nutrition array
+  const extractMacros = (nutrition, quantity, unit) => {
+    if (!Array.isArray(nutrition) || nutrition.length === 0) {
+      return { calories: 0, protein: 0, carbs: 0, fat: 0 };
+    }
+    
+    const macros = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+    
+    for (const n of nutrition) {
+      const name = (n.nutrientName || "").toLowerCase();
+      const value = n.value || 0;
+      
+      if (name.includes("energy") && n.unitName === "KCAL") {
+        macros.calories = value;
+      } else if (name === "protein") {
+        macros.protein = value;
+      } else if (name.includes("carbohydrate")) {
+        macros.carbs = value;
+      } else if (name.includes("total lipid") || name === "fat") {
+        macros.fat = value;
+      }
+    }
+    
+    // Scale by quantity (USDA values are per 100g, estimate grams from quantity/unit)
+    const UNIT_TO_GRAMS = {
+      // Weight
+      oz: 28.35, g: 1, grams: 1, gram: 1,
+      // Volume  
+      cup: 150, cups: 150, tbsp: 15, tablespoon: 15, tsp: 5, teaspoon: 5,
+      // Count - smaller portions
+      piece: 50, pieces: 50, slice: 20, slices: 20, 
+      serving: 100, 
+      // Eggs
+      eggs: 50, egg: 50,
+      // Supplements - essentially 0 macros
+      pill: 0, pills: 0, capsule: 0, capsules: 0, l: 0,
+      // Drinks
+      liter: 1000, ml: 1,
+    };
+    const multiplier = UNIT_TO_GRAMS[(unit || "").toLowerCase()] ?? 80; // default to smaller portion
+    const grams = (quantity || 1) * multiplier;
+    const scale = grams / 100;
+    
+    return {
+      calories: macros.calories * scale,
+      protein: macros.protein * scale,
+      carbs: macros.carbs * scale,
+      fat: macros.fat * scale,
+    };
+  };
+
+  // Calculate daily macro totals
+  const getDayMacros = (day) => {
+    const dayMeals = mealsByDay[day] || [];
+    const totals = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+    
+    for (const meal of dayMeals) {
+      const mealIngs = ingredients[meal.id] || [];
+      for (const ing of mealIngs) {
+        const macros = extractMacros(ing.nutrition, ing.quantity, ing.unit);
+        totals.calories += macros.calories || 0;
+        totals.protein += macros.protein || 0;
+        totals.carbs += macros.carbs || 0;
+        totals.fat += macros.fat || 0;
+      }
+    }
+    
+    return totals;
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 p-4">
       <h1 className="text-2xl font-bold text-slate-800 mb-4">This Week</h1>
       
       <div className="grid grid-cols-7 gap-2">
-        {days.map((day) => (
-          <div key={day} className="flex flex-col">
-            {/* Day header */}
-            <div className="bg-slate-800 text-white px-3 py-2 rounded-t-lg text-center">
-              <div className="font-semibold text-sm">{formatDay(day)}</div>
-              <div className="text-xs text-slate-300">{day.slice(5)}</div>
-            </div>
-            
-            {/* Meals for this day */}
-            <div className="bg-white rounded-b-lg shadow-sm flex-1 min-h-[400px] p-2 space-y-2">
-              {mealsByDay[day].length === 0 ? (
-                <p className="text-slate-300 text-xs text-center py-4">No meals</p>
-              ) : (
-                mealsByDay[day].map((meal) => (
-                  <MealCard 
-                    key={meal.id} 
-                    meal={meal} 
-                    ingredients={ingredients[meal.id] || []}
-                    formatTime={formatTime}
-                  />
-                ))
+        {days.map((day) => {
+          const macros = getDayMacros(day);
+          const hasMacros = macros.calories > 0;
+          
+          return (
+            <div key={day} className="flex flex-col">
+              {/* Day header */}
+              <div className="bg-slate-800 text-white px-3 py-2 rounded-t-lg text-center">
+                <div className="font-semibold text-sm">{formatDay(day)}</div>
+                <div className="text-xs text-slate-300">{day.slice(5)}</div>
+              </div>
+              
+              {/* Daily macro summary */}
+              {hasMacros && (
+                <div className="bg-slate-700 text-white px-2 py-1.5 text-[10px]">
+                  <div className="flex justify-between">
+                    <span>🔥 {Math.round(macros.calories)}</span>
+                    <span>🥩 {Math.round(macros.protein)}g</span>
+                  </div>
+                  <div className="flex justify-between text-slate-300">
+                    <span>🍞 {Math.round(macros.carbs)}g</span>
+                    <span>🧈 {Math.round(macros.fat)}g</span>
+                  </div>
+                </div>
               )}
+              
+              {/* Meals for this day */}
+              <div className="bg-white rounded-b-lg shadow-sm flex-1 min-h-[400px] p-2 space-y-2">
+                {mealsByDay[day].length === 0 ? (
+                  <p className="text-slate-300 text-xs text-center py-4">No meals</p>
+                ) : (
+                  mealsByDay[day].map((meal) => (
+                    <MealCard 
+                      key={meal.id} 
+                      meal={meal} 
+                      ingredients={ingredients[meal.id] || []}
+                      formatTime={formatTime}
+                    />
+                  ))
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

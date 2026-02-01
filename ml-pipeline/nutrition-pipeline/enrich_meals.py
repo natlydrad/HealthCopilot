@@ -27,6 +27,66 @@ def normalize_quantity(ing):
     return ing
 
 
+# Unit to grams conversion (approximate)
+UNIT_TO_GRAMS = {
+    # Weight
+    "oz": 28.35,
+    "g": 1,
+    "grams": 1,
+    "gram": 1,
+    # Volume
+    "cup": 150,      # varies by food, conservative estimate
+    "cups": 150,
+    "tbsp": 15,
+    "tablespoon": 15,
+    "tsp": 5,
+    "teaspoon": 5,
+    # Count - smaller portions to avoid overestimating
+    "piece": 50,
+    "pieces": 50,
+    "slice": 20,
+    "slices": 20,
+    "serving": 100,
+    "link": 50,      # sausage link
+    "links": 50,
+    # Eggs
+    "eggs": 50,
+    "egg": 50,
+    # Supplements - no macros
+    "pill": 0,
+    "pills": 0,
+    "capsule": 0,
+    "capsules": 0,
+    "l": 0,
+}
+
+
+def estimate_grams(quantity: float, unit: str) -> float:
+    """Estimate weight in grams from quantity and unit."""
+    if not quantity:
+        quantity = 1
+    if not unit:
+        return quantity * 80  # default to smaller portion
+    
+    unit_lower = unit.lower().strip()
+    multiplier = UNIT_TO_GRAMS.get(unit_lower, 80)  # default to 80g if unknown unit
+    return quantity * multiplier
+
+
+def calculate_macros(macros_per_100g: dict, grams: float) -> dict:
+    """Scale macros from per-100g to actual amount consumed."""
+    if not macros_per_100g or grams <= 0:
+        return {"calories": 0, "protein": 0, "carbs": 0, "fat": 0}
+    
+    scale = grams / 100.0
+    return {
+        "calories": round(macros_per_100g.get("calories", 0) * scale, 1),
+        "protein": round(macros_per_100g.get("protein", 0) * scale, 1),
+        "carbs": round(macros_per_100g.get("carbs", 0) * scale, 1),
+        "fat": round(macros_per_100g.get("fat", 0) * scale, 1),
+    }
+
+
 def enrich_meals(skip_usda=False, limit=None, since_date=None):
     """
     Parse meals and store ingredients.
@@ -96,9 +156,16 @@ def enrich_meals(skip_usda=False, limit=None, since_date=None):
             
             # USDA lookup (optional for MVP)
             usda = None
+            macros = {"calories": 0, "protein": 0, "carbs": 0, "fat": 0}
+            
             if not skip_usda:
                 try:
                     usda = usda_lookup(ing["name"])
+                    if usda and usda.get("macros_per_100g"):
+                        # Calculate actual macros based on quantity eaten
+                        grams = estimate_grams(ing.get("quantity", 1), ing.get("unit", "serving"))
+                        macros = calculate_macros(usda["macros_per_100g"], grams)
+                        print(f"   📊 {ing['name']}: {grams:.0f}g → {macros['calories']:.0f} cal, {macros['protein']:.0f}g protein")
                 except Exception as e:
                     print(f"⚠️  USDA lookup failed for {ing['name']}: {e}")
             
@@ -115,7 +182,8 @@ def enrich_meals(skip_usda=False, limit=None, since_date=None):
                 "category": category,
                 "source": "usda" if usda else "gpt",
                 "usdaCode": usda["usdaCode"] if usda else None,
-                "nutrition": usda["nutrition"] if usda else {},
+                "nutrition": usda.get("nutrition", []) if usda else [],
+                "macros": macros,
                 "rawGPT": ing,
                 "rawUSDA": usda or {},
                 "timestamp": meal_timestamp,
