@@ -3,7 +3,9 @@ migrate((app) => {
   const collection = app.findCollectionByNameOrId("pbc_3146854971")
 
   // Add parsingStrategy field - tracks which parsing method was used
-  collection.fields.addAt(10, new Field({
+  // Skip if field already exists
+  if (!collection.fields.getById("select_parsing_strategy")) {
+    collection.fields.addAt(10, new Field({
     "hidden": false,
     "id": "select_parsing_strategy",
     "maxSelect": 1,
@@ -19,11 +21,13 @@ migrate((app) => {
       "gpt",           // From GPT Vision (current)
       "manual",        // User entered directly
       "cached"         // From parsing cache (Tier 4)
-    ]
-  }))
+    ]}))
+  }
 
   // Add confidence score - 0.0 to 1.0 (Tier 4)
-  collection.fields.addAt(11, new Field({
+  // Skip if field already exists
+  if (!collection.fields.getById("number_confidence")) {
+    collection.fields.addAt(11, new Field({
     "hidden": false,
     "id": "number_confidence",
     "max": 1,
@@ -35,9 +39,12 @@ migrate((app) => {
     "system": false,
     "type": "number"
   }))
+  }
 
   // Add parsingMetadata - flexible JSON for future parsing details
-  collection.fields.addAt(12, new Field({
+  // Skip if field already exists
+  if (!collection.fields.getById("json_parsing_metadata")) {
+    collection.fields.addAt(12, new Field({
     "hidden": false,
     "id": "json_parsing_metadata",
     "maxSize": 0,
@@ -47,6 +54,7 @@ migrate((app) => {
     "system": false,
     "type": "json"
   }))
+  }
 
   // Update source field to include new parsing strategies
   // Note: This migration assumes source field already exists

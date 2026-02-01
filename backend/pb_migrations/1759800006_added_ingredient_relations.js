@@ -4,7 +4,9 @@ migrate((txApp) => {
 
   // Add templateId - if parsed from meal template (Tier 3)
   // Note: This field is added after meal_templates collection is created
-  collection.fields.addAt(13, new Field({
+  // Skip if field already exists
+  if (!collection.fields.getById("relation_template")) {
+    collection.fields.addAt(13, new Field({
     "cascadeDelete": false,
     "collectionId": "pbc_meal_templates",
     "hidden": false,
@@ -17,10 +19,13 @@ migrate((txApp) => {
     "system": false,
     "type": "relation"
   }))
+  }
 
   // Add brandFoodId - if parsed from brand database (Tier 2)
   // Note: This field is added after brand_foods collection is created
-  collection.fields.addAt(14, new Field({
+  // Skip if field already exists
+  if (!collection.fields.getById("relation_brand_food")) {
+    collection.fields.addAt(14, new Field({
     "cascadeDelete": false,
     "collectionId": "pbc_brand_foods",
     "hidden": false,
@@ -33,6 +38,7 @@ migrate((txApp) => {
     "system": false,
     "type": "relation"
   }))
+  }
 
   return txApp.save(collection)
 }, (txApp) => {
