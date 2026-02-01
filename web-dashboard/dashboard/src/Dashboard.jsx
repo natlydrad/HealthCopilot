@@ -165,6 +165,52 @@ export default function Dashboard() {
     return totals;
   };
 
+  // Calculate daily micronutrient totals
+  const getDayMicros = (day) => {
+    const dayMeals = mealsByDay[day] || [];
+    const micros = {};
+    
+    const UNIT_TO_GRAMS = {
+      oz: 28.35, g: 1, grams: 1, gram: 1,
+      cup: 150, cups: 150, tbsp: 15, tablespoon: 15, tsp: 5, teaspoon: 5,
+      piece: 50, pieces: 50, slice: 20, slices: 20,
+      serving: 100, eggs: 50, egg: 50,
+      pill: 0, pills: 0, capsule: 0, capsules: 0, l: 0,
+      liter: 1000, ml: 1,
+    };
+    
+    const keyNutrients = [
+      "Fiber, total dietary", "Calcium, Ca", "Iron, Fe", "Sodium, Na",
+      "Potassium, K", "Magnesium, Mg", "Zinc, Zn",
+      "Vitamin C", "Thiamin", "Riboflavin", "Niacin", "Vitamin B-6",
+      "Folate, total", "Vitamin E (alpha-tocopherol)", "Vitamin K (phylloquinone)"
+    ];
+    
+    for (const meal of dayMeals) {
+      const mealIngs = ingredients[meal.id] || [];
+      for (const ing of mealIngs) {
+        const nutrition = ing.nutrition || [];
+        if (!Array.isArray(nutrition)) continue;
+        
+        const multiplier = UNIT_TO_GRAMS[(ing.unit || "").toLowerCase()] ?? 80;
+        const grams = (ing.quantity || 1) * multiplier;
+        const scale = grams / 100;
+        
+        for (const n of nutrition) {
+          const name = n.nutrientName || "";
+          if (keyNutrients.some(key => name.includes(key))) {
+            if (!micros[name]) {
+              micros[name] = { value: 0, unit: n.unitName || "" };
+            }
+            micros[name].value += (n.value || 0) * scale;
+          }
+        }
+      }
+    }
+    
+    return micros;
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 p-4">
       <h1 className="text-2xl font-bold text-slate-800 mb-4">This Week</h1>
@@ -172,7 +218,9 @@ export default function Dashboard() {
       <div className="grid grid-cols-7 gap-2">
         {days.map((day) => {
           const macros = getDayMacros(day);
+          const micros = getDayMicros(day);
           const hasMacros = macros.calories > 0;
+          const hasMicros = Object.keys(micros).length > 0;
           
           return (
             <div key={day} className="flex flex-col">
@@ -193,6 +241,36 @@ export default function Dashboard() {
                     <span>🍞 {Math.round(macros.carbs)}g</span>
                     <span>🧈 {Math.round(macros.fat)}g</span>
                   </div>
+                </div>
+              )}
+              
+              {/* Daily micronutrient summary */}
+              {hasMicros && (
+                <div className="bg-slate-600 text-white px-2 py-1 text-[9px]">
+                  {micros["Fiber, total dietary"] && (
+                    <div className="flex justify-between">
+                      <span>🌾 Fiber:</span>
+                      <span>{Math.round(micros["Fiber, total dietary"].value)}g</span>
+                    </div>
+                  )}
+                  {micros["Calcium, Ca"] && (
+                    <div className="flex justify-between">
+                      <span>🥛 Ca:</span>
+                      <span>{Math.round(micros["Calcium, Ca"].value)}mg</span>
+                    </div>
+                  )}
+                  {micros["Iron, Fe"] && (
+                    <div className="flex justify-between">
+                      <span>⚙️ Fe:</span>
+                      <span>{Math.round(micros["Iron, Fe"].value)}mg</span>
+                    </div>
+                  )}
+                  {micros["Sodium, Na"] && (
+                    <div className="flex justify-between">
+                      <span>🧂 Na:</span>
+                      <span>{Math.round(micros["Sodium, Na"].value)}mg</span>
+                    </div>
+                  )}
                 </div>
               )}
               
@@ -222,6 +300,7 @@ export default function Dashboard() {
 const PB_URL = "https://pocketbase-1j2x.onrender.com";
 
 function MealCard({ meal, ingredients, formatTime }) {
+  const [expanded, setExpanded] = useState(false);
   const hasImage = !!meal.image;
   const hasText = !!(meal.text && meal.text.trim());
   const text = hasText ? meal.text : "";
@@ -231,6 +310,57 @@ function MealCard({ meal, ingredients, formatTime }) {
   const imageUrl = hasImage 
     ? `${PB_URL}/api/files/${meal.collectionId}/${meal.id}/${meal.image}?thumb=200x200`
     : null;
+  
+  // Extract micronutrients from ingredients
+  const extractMicronutrients = (ing) => {
+    const nutrition = ing.nutrition || [];
+    if (!Array.isArray(nutrition) || nutrition.length === 0) return {};
+    
+    const UNIT_TO_GRAMS = {
+      oz: 28.35, g: 1, grams: 1, gram: 1,
+      cup: 150, cups: 150, tbsp: 15, tablespoon: 15, tsp: 5, teaspoon: 5,
+      piece: 50, pieces: 50, slice: 20, slices: 20,
+      serving: 100, eggs: 50, egg: 50,
+      pill: 0, pills: 0, capsule: 0, capsules: 0, l: 0,
+      liter: 1000, ml: 1,
+    };
+    
+    const multiplier = UNIT_TO_GRAMS[(ing.unit || "").toLowerCase()] ?? 80;
+    const grams = (ing.quantity || 1) * multiplier;
+    const scale = grams / 100;
+    
+    const micros = {};
+    const keyNutrients = [
+      "Fiber, total dietary", "Calcium, Ca", "Iron, Fe", "Sodium, Na",
+      "Potassium, K", "Magnesium, Mg", "Zinc, Zn",
+      "Vitamin C", "Thiamin", "Riboflavin", "Niacin", "Vitamin B-6",
+      "Folate, total", "Vitamin E (alpha-tocopherol)", "Vitamin K (phylloquinone)",
+      "Vitamin A", "Vitamin D"
+    ];
+    
+    for (const n of nutrition) {
+      const name = n.nutrientName || "";
+      if (keyNutrients.some(key => name.includes(key))) {
+        const value = (n.value || 0) * scale;
+        const unit = n.unitName || "";
+        micros[name] = { value, unit };
+      }
+    }
+    
+    return micros;
+  };
+  
+  // Calculate total micronutrients for this meal
+  const mealMicros = {};
+  for (const ing of ingredients) {
+    const ingMicros = extractMicronutrients(ing);
+    for (const [name, data] of Object.entries(ingMicros)) {
+      if (!mealMicros[name]) {
+        mealMicros[name] = { value: 0, unit: data.unit };
+      }
+      mealMicros[name].value += data.value;
+    }
+  }
   
   return (
     <div className="bg-slate-50 rounded-lg p-2 text-xs border border-slate-100">
@@ -291,6 +421,34 @@ function MealCard({ meal, ingredients, formatTime }) {
               <div className="text-slate-400">+{ingredients.length - 4} more</div>
             )}
           </div>
+          
+          {/* Expandable micronutrients */}
+          {Object.keys(mealMicros).length > 0 && (
+            <div className="mt-2">
+              <button
+                onClick={() => setExpanded(!expanded)}
+                className="text-[10px] text-slate-400 hover:text-slate-600 flex items-center gap-1"
+              >
+                {expanded ? "▼" : "▶"} Micronutrients
+              </button>
+              {expanded && (
+                <div className="mt-1 pt-1 border-t border-slate-200 text-[10px] text-slate-500">
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                    {Object.entries(mealMicros).map(([name, data]) => {
+                      const shortName = name.replace(/Vitamin |, total|, Ca|, Fe|, Na|, K|, Mg|, Zn| \(alpha-tocopherol\)| \(phylloquinone\)/g, "");
+                      const displayValue = data.value < 1 ? data.value.toFixed(2) : Math.round(data.value);
+                      return (
+                        <div key={name} className="flex justify-between">
+                          <span>{shortName}:</span>
+                          <span className="text-slate-600">{displayValue} {data.unit}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
