@@ -185,3 +185,57 @@ export async function updateIngredient(ingredientId, updates) {
 
   return res.json();
 }
+
+// USDA FoodData Central API lookup
+const USDA_API_KEY = "W26xpKvwmvxKKmff5ymcSwIfOVtVW1dR6gmC3BId";
+
+export async function lookupUSDANutrition(foodName) {
+  try {
+    // Search for the food
+    const searchUrl = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${USDA_API_KEY}&query=${encodeURIComponent(foodName)}&pageSize=5&dataType=Foundation,SR%20Legacy`;
+    
+    const searchRes = await fetch(searchUrl);
+    if (!searchRes.ok) return null;
+    
+    const searchData = await searchRes.json();
+    const foods = searchData.foods || [];
+    
+    if (foods.length === 0) return null;
+    
+    // Get the best match (first result)
+    const match = foods[0];
+    
+    return {
+      usdaCode: String(match.fdcId),
+      description: match.description,
+      nutrition: match.foodNutrients || [],
+      source: "usda",
+    };
+  } catch (err) {
+    console.error("USDA lookup failed:", err);
+    return null;
+  }
+}
+
+// Update ingredient with new name AND re-fetch nutrition
+export async function updateIngredientWithNutrition(ingredientId, updates, originalName) {
+  // If name changed, re-lookup nutrition
+  if (updates.name && updates.name !== originalName) {
+    console.log(`Name changed: "${originalName}" → "${updates.name}", looking up nutrition...`);
+    
+    const usda = await lookupUSDANutrition(updates.name);
+    
+    if (usda) {
+      console.log(`Found USDA match: ${usda.description}`);
+      updates.usdaCode = usda.usdaCode;
+      updates.nutrition = usda.nutrition;
+      updates.source = "usda";
+    } else {
+      console.log("No USDA match found, keeping as GPT source");
+      updates.source = "gpt";
+      updates.usdaCode = null;
+    }
+  }
+  
+  return updateIngredient(ingredientId, updates);
+}

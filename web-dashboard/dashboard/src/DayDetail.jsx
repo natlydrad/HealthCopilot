@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { fetchMeals, fetchIngredients, correctIngredient, updateIngredient } from "./api";
+import { fetchMeals, fetchIngredients, correctIngredient, updateIngredientWithNutrition } from "./api";
 
 // Determine if an ingredient is low confidence (needs review)
 function isLowConfidence(ing) {
@@ -248,15 +248,30 @@ function CorrectionChat({ ingredient, meal, onClose, onSave }) {
       
       await correctIngredient(ingredient.id, originalParse, correction);
       
-      // Update the actual ingredient
-      await updateIngredient(ingredient.id, {
-        name: correction.name,
-        quantity: correction.quantity,
-        unit: correction.unit,
-      });
+      // Check if name changed
+      const nameChanged = correction.name !== ingredient.name;
+      if (nameChanged) {
+        addBotMessage("Looking up nutrition for the correct food...");
+      }
       
-      addBotMessage("Saved! I'll remember this for next time.");
-      setTimeout(() => onSave(correction), 1000);
+      // Update the actual ingredient (with nutrition re-lookup if name changed)
+      const updated = await updateIngredientWithNutrition(
+        ingredient.id,
+        {
+          name: correction.name,
+          quantity: correction.quantity,
+          unit: correction.unit,
+        },
+        ingredient.name // original name to detect changes
+      );
+      
+      if (nameChanged && updated.usdaCode) {
+        addBotMessage("Found it! Updated nutrition data too.");
+      } else {
+        addBotMessage("Saved! I'll remember this for next time.");
+      }
+      
+      setTimeout(() => onSave({ ...correction, ...updated }), 1000);
     } catch (err) {
       console.error("Failed to save correction:", err);
       addBotMessage("Oops, something went wrong. Try again?");
