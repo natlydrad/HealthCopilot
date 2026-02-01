@@ -36,23 +36,39 @@ export default function Dashboard() {
     load();
   }, []);
 
-  // Get last 7 days
+  // Get last 7 days (in local timezone)
   const days = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
-    days.push(d.toISOString().split("T")[0]);
+    // Get local date in YYYY-MM-DD format
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const date = String(d.getDate()).padStart(2, '0');
+    days.push(`${year}-${month}-${date}`);
   }
 
-  // Group meals by day (handle both "T" and space separator in timestamps)
+  // Group meals by day (convert to local date for proper grouping)
   const mealsByDay = {};
   for (const day of days) {
-    mealsByDay[day] = meals.filter((m) => {
+    const dayMeals = meals.filter((m) => {
       if (!m.timestamp) return false;
-      // Handle both ISO format (T separator) and space separator
-      const mealDay = m.timestamp.split(/[T ]/)[0];
+      // Parse timestamp and get local date string (handles timezone correctly)
+      const mealDate = new Date(m.timestamp);
+      // Get local date in YYYY-MM-DD format
+      const year = mealDate.getFullYear();
+      const month = String(mealDate.getMonth() + 1).padStart(2, '0');
+      const date = String(mealDate.getDate()).padStart(2, '0');
+      const mealDay = `${year}-${month}-${date}`;
       return mealDay === day;
     });
+    // Sort chronologically (earliest first)
+    dayMeals.sort((a, b) => {
+      const timeA = new Date(a.timestamp).getTime();
+      const timeB = new Date(b.timestamp).getTime();
+      return timeA - timeB;
+    });
+    mealsByDay[day] = dayMeals;
   }
 
   const formatDay = (dateStr) => {
