@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { fetchMeals, fetchAllIngredients } from "./api";
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [meals, setMeals] = useState([]);
   const [ingredients, setIngredients] = useState({});
   const [loading, setLoading] = useState(true);
@@ -331,8 +333,11 @@ export default function Dashboard() {
           
           return (
             <div key={day} className="flex flex-col">
-              {/* Day header */}
-              <div className="bg-slate-800 text-white px-3 py-2 rounded-t-lg text-center">
+              {/* Day header - clickable to view details */}
+              <div 
+                onClick={() => navigate(`/day/${day}`)}
+                className="bg-slate-800 text-white px-3 py-2 rounded-t-lg text-center cursor-pointer hover:bg-slate-700 transition-colors"
+              >
                 <div className="font-semibold text-sm">{formatDay(day)}</div>
                 <div className="text-xs text-slate-300">{day.slice(5)}</div>
               </div>
