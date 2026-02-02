@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { fetchMeals, fetchIngredients, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getCorrections, getLearningStats, parseAndSaveMeal, deleteCorrection } from "./api";
+import { fetchMealsForDateRange, fetchIngredients, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getCorrections, getLearningStats, parseAndSaveMeal, deleteCorrection } from "./api";
 
 // Determine if an ingredient is low confidence (needs review)
 function isLowConfidence(ing) {
@@ -20,11 +20,9 @@ export default function DayDetail() {
 
   useEffect(() => {
     async function load() {
-      const allMeals = await fetchMeals();
-      console.log("Fetched meals:", allMeals.map(m => ({ id: m.id, text: m.text })));
-      const dayMeals = allMeals.filter(
-        (m) => new Date(m.timestamp).toISOString().split("T")[0] === date
-      );
+      // Fetch meals for this specific day only
+      const dayMeals = await fetchMealsForDateRange(date, date);
+      console.log(`Fetched ${dayMeals.length} meals for ${date}:`, dayMeals.map(m => ({ id: m.id, text: m.text })));
       setMeals(dayMeals);
 
       let totalCals = 0;
