@@ -24,9 +24,18 @@ export default function DayDetail() {
       const dayMeals = await fetchMealsForDateRange(date, date);
       
       // Sort by timestamp (earliest first for chronological order)
-      dayMeals.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      dayMeals.sort((a, b) => {
+        const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+        const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+        return timeA - timeB;
+      });
       
-      console.log(`Fetched ${dayMeals.length} meals for ${date}:`, dayMeals.map(m => ({ id: m.id, text: m.text, time: m.timestamp })));
+      console.log(`Fetched ${dayMeals.length} meals for ${date} (sorted):`, dayMeals.map(m => ({ 
+        id: m.id, 
+        text: m.text?.slice(0, 30), 
+        time: m.timestamp,
+        parsed: m.timestamp ? new Date(m.timestamp).toLocaleTimeString() : 'no time'
+      })));
       setMeals(dayMeals);
 
       let totalCals = 0;
