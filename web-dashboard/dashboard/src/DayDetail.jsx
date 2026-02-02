@@ -125,12 +125,29 @@ function MealCard({ meal }) {
   // Check if this meal needs parsing
   const needsParsing = loaded && ingredients.length === 0 && meal.text?.trim();
 
+  // Build image URL if meal has an image
+  const imageUrl = meal.image ? 
+    `https://pocketbase-1j2x.onrender.com/api/files/meals/${meal.id}/${meal.image}` : null;
+
   return (
     <div className="bg-white p-4 rounded-xl shadow mb-4">
-      <h2 className="font-semibold mb-1">{meal.text || "(no text)"}</h2>
-      <p className="text-gray-500 text-sm mb-2">
-        {meal.timestamp ? new Date(meal.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}
-      </p>
+      <div className="flex gap-4">
+        {/* Image thumbnail if exists */}
+        {imageUrl && (
+          <img 
+            src={imageUrl} 
+            alt="Meal" 
+            className="w-20 h-20 object-cover rounded-lg flex-shrink-0"
+          />
+        )}
+        
+        <div className="flex-1">
+          <h2 className="font-semibold mb-1">{meal.text || "(image only)"}</h2>
+          <p className="text-gray-500 text-sm mb-2">
+            {meal.timestamp ? new Date(meal.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}
+          </p>
+        </div>
+      </div>
 
       {/* Needs parsing state */}
       {needsParsing && !parsing && (
