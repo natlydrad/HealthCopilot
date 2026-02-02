@@ -26,23 +26,23 @@ EXPOSE 8080
 
 # ─────────────────────────────────────────────
 #  Entry point
-#  1. Create /data (persistent Render volume)
-#  2. If /data is empty, seed it from pb_data_clean
-#  3. Launch PocketBase using /data for persistence
+#  1. Use /var/data (Render persistent disk mount)
+#  2. If /var/data is empty, seed it from pb_data_clean
+#  3. Launch PocketBase using /var/data for persistence
 # ─────────────────────────────────────────────
 CMD ["/bin/sh", "-c", "\
-  mkdir -p /data && \
+  mkdir -p /var/data && \
   # CRITICAL: Only seed on FIRST deployment (when data.db doesn't exist) \
   # Never overwrite existing production data! \
-  if [ ! -f /data/data.db ]; then \
+  if [ ! -f /var/data/data.db ]; then \
     echo '🪴 First deployment detected - seeding initial PocketBase data from pb_data_clean...'; \
-    cp -r /app/pb_data_clean/* /data/ || true; \
+    cp -r /app/pb_data_clean/* /var/data/ || true; \
   else \
     echo '💾 Existing PocketBase database found - PRESERVING DATA and skipping seed.'; \
     echo '⚠️  If you see this on a redeploy, your data should be safe.'; \
   fi && \
   echo '🔄 Running migrations...' && \
-  /app/pocketbase migrate --dir /data --migrationsDir /app/pb_migrations && \
+  /app/pocketbase migrate --dir /var/data --migrationsDir /app/pb_migrations && \
   echo '🚀 Starting PocketBase server...' && \
-  /app/pocketbase serve --dir /data --http 0.0.0.0:8080 \
+  /app/pocketbase serve --dir /var/data --http 0.0.0.0:8080 \
 "]
