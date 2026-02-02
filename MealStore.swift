@@ -288,8 +288,22 @@ class MealStore: ObservableObject {
                     print("⚠️ Failed to delete \(localFilename): \(error)")
                 }
             } else {
+                // Image not on server - try to upload it!
                 skippedNotOnServer += 1
-                print("⚠️ Keeping local image (not confirmed on server): \(localFilename)")
+                print("📤 Local image not on server, queuing re-upload: \(localFilename)")
+                
+                if let imageData = try? Data(contentsOf: imgURL) {
+                    // Capture meal for async task
+                    let mealToUpload = meal
+                    Task {
+                        do {
+                            try await SyncManager.shared.setMealPhoto(for: mealToUpload, imageData: imageData)
+                            print("✅ Re-uploaded image for meal: \(mealToUpload.localId)")
+                        } catch {
+                            print("❌ Re-upload failed for \(mealToUpload.localId): \(error)")
+                        }
+                    }
+                }
             }
         }
         
