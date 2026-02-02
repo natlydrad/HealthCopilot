@@ -24,17 +24,20 @@ export default function DayDetail() {
       const dayMeals = await fetchMealsForDateRange(date, date);
       
       // Sort by timestamp (earliest first for chronological order)
-      dayMeals.sort((a, b) => {
-        const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-        const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-        return timeA - timeB;
-      });
+      // PocketBase uses "YYYY-MM-DD HH:MM:SS" format with space, need to convert to ISO
+      const parseTimestamp = (ts) => {
+        if (!ts) return 0;
+        // Replace space with T for proper ISO parsing
+        const isoString = ts.replace(' ', 'T');
+        return new Date(isoString).getTime() || 0;
+      };
+      
+      dayMeals.sort((a, b) => parseTimestamp(a.timestamp) - parseTimestamp(b.timestamp));
       
       console.log(`Fetched ${dayMeals.length} meals for ${date} (sorted):`, dayMeals.map(m => ({ 
-        id: m.id, 
         text: m.text?.slice(0, 30), 
         time: m.timestamp,
-        parsed: m.timestamp ? new Date(m.timestamp).toLocaleTimeString() : 'no time'
+        parsedMs: parseTimestamp(m.timestamp)
       })));
       setMeals(dayMeals);
 
@@ -154,7 +157,7 @@ function MealCard({ meal }) {
         <div className="flex-1">
           <h2 className="font-semibold mb-1">{meal.text || "(image only)"}</h2>
           <p className="text-gray-500 text-sm mb-2">
-            {meal.timestamp ? new Date(meal.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}
+            {meal.timestamp ? new Date(meal.timestamp.replace(' ', 'T')).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}
           </p>
         </div>
       </div>
