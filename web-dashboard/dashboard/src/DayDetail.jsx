@@ -148,7 +148,9 @@ function MealCard({ meal }) {
         )}
         
         <div className="flex-1">
-          <h2 className="font-semibold mb-1">{meal.text || "(image only)"}</h2>
+          <h2 className="font-semibold mb-1">
+            {meal.text || (meal.image ? "(image only)" : "(empty entry)")}
+          </h2>
           <p className="text-gray-500 text-sm mb-2">
             {meal.timestamp ? new Date(meal.timestamp.replace(' ', 'T')).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}
           </p>
