@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchMeals, fetchAllIngredients } from "./api";
+import { fetchMealsForDateRange, fetchAllIngredients } from "./api";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -10,12 +10,31 @@ export default function Dashboard() {
   const [weekOffset, setWeekOffset] = useState(0); // 0 = current week, -1 = last week, etc.
   const [showCalendar, setShowCalendar] = useState(false);
 
+  // Calculate the days for the current week view
+  const days = useMemo(() => {
+    const result = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i + (weekOffset * 7));
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const date = String(d.getDate()).padStart(2, '0');
+      result.push(`${year}-${month}-${date}`);
+    }
+    return result;
+  }, [weekOffset]);
+
+  // Fetch meals whenever the week changes
   useEffect(() => {
-    async function load() {
+    async function loadWeek() {
+      setLoading(true);
       try {
-        // Fetch meals and ingredients in parallel
+        const startDate = days[0];
+        const endDate = days[6];
+        
+        // Fetch meals for this week and ingredients in parallel
         const [mealItems, allIngredients] = await Promise.all([
-          fetchMeals(),
+          fetchMealsForDateRange(startDate, endDate),
           fetchAllIngredients()
         ]);
         
@@ -30,26 +49,15 @@ export default function Dashboard() {
           ingMap[mealId].push(ing);
         }
         setIngredients(ingMap);
-        console.log("Loaded", mealItems.length, "meals and", allIngredients.length, "ingredients");
+        console.log(`Loaded ${mealItems.length} meals for week ${startDate} to ${endDate}`);
       } catch (e) {
         console.error("Failed to load:", e);
       } finally {
         setLoading(false);
       }
     }
-    load();
-  }, []);
-
-  // Get 7 days based on weekOffset
-  const days = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i + (weekOffset * 7));
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const date = String(d.getDate()).padStart(2, '0');
-    days.push(`${year}-${month}-${date}`);
-  }
+    loadWeek();
+  }, [days]);
 
   // Get week label
   const getWeekLabel = () => {

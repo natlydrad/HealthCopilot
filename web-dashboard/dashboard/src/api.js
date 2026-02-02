@@ -18,19 +18,52 @@ export async function fetchMeals() {
   });
 
   const data = await res.json();
-  console.log("Raw meals response:", data); // <-- log everything
+  console.log("Raw meals response:", data);
 
   if (!data || !data.items) {
     console.warn("No 'items' field in meal data:", data);
     return [];
   }
 
-  // Optional: sort client-side by created just to be sure
   const sorted = [...data.items].sort(
     (a, b) => new Date(b.created) - new Date(a.created)
   );
-  console.log("Sorted meal IDs:", sorted.map((m) => m.id));
   return sorted;
+}
+
+// Fetch meals for a specific date range (on-demand loading)
+export async function fetchMealsForDateRange(startDate, endDate) {
+  if (!authToken) throw new Error("Not logged in");
+
+  // PocketBase filter: created >= startDate AND created <= endDate
+  // Format dates as ISO strings for PocketBase
+  const start = new Date(startDate);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(endDate);
+  end.setHours(23, 59, 59, 999);
+
+  const filter = encodeURIComponent(
+    `created >= "${start.toISOString()}" && created <= "${end.toISOString()}"`
+  );
+
+  const url = `${PB_BASE}/api/collections/meals/records?perPage=100&sort=-created&filter=${filter}`;
+  console.log("Fetching meals for range:", startDate, "to", endDate);
+
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${authToken}`,
+    },
+  });
+
+  const data = await res.json();
+
+  if (!data || !data.items) {
+    console.warn("No meals found for date range");
+    return [];
+  }
+
+  console.log(`Found ${data.items.length} meals for ${startDate} to ${endDate}`);
+  return data.items;
 }
 
 
