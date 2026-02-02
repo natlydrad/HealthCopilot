@@ -7,8 +7,18 @@ export default function Dashboard() {
   const [meals, setMeals] = useState([]);
   const [ingredients, setIngredients] = useState({});
   const [loading, setLoading] = useState(true);
-  const [weekOffset, setWeekOffset] = useState(0); // 0 = current week, -1 = last week, etc.
   const [showCalendar, setShowCalendar] = useState(false);
+  
+  // Load weekOffset from localStorage, default to 0 (current week)
+  const [weekOffset, setWeekOffset] = useState(() => {
+    const saved = localStorage.getItem('healthcopilot_weekOffset');
+    return saved ? parseInt(saved, 10) : 0;
+  });
+  
+  // Save weekOffset to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem('healthcopilot_weekOffset', weekOffset.toString());
+  }, [weekOffset]);
 
   // Helper to calculate days for a given week offset
   const getDaysForWeek = (offset) => {
