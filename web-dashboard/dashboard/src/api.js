@@ -35,35 +35,46 @@ export async function fetchMeals() {
 export async function fetchMealsForDateRange(startDate, endDate) {
   if (!authToken) throw new Error("Not logged in");
 
-  // PocketBase filter: created >= startDate AND created <= endDate
-  // Format dates as ISO strings for PocketBase
+  // Filter by timestamp field (the actual meal time)
+  // PocketBase needs ISO format dates
   const start = new Date(startDate);
   start.setHours(0, 0, 0, 0);
   const end = new Date(endDate);
   end.setHours(23, 59, 59, 999);
 
+  // Use timestamp field for meal time filtering
   const filter = encodeURIComponent(
-    `created >= "${start.toISOString()}" && created <= "${end.toISOString()}"`
+    `timestamp >= "${start.toISOString()}" && timestamp <= "${end.toISOString()}"`
   );
 
-  const url = `${PB_BASE}/api/collections/meals/records?perPage=100&sort=-created&filter=${filter}`;
-  console.log("Fetching meals for range:", startDate, "to", endDate);
+  const url = `${PB_BASE}/api/collections/meals/records?perPage=100&sort=-timestamp&filter=${filter}`;
+  console.log("Fetching meals for range:", startDate, "to", endDate, "URL:", url);
 
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${authToken}`,
-    },
-  });
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
 
-  const data = await res.json();
+    if (!res.ok) {
+      console.error("API error:", res.status, await res.text());
+      return [];
+    }
 
-  if (!data || !data.items) {
-    console.warn("No meals found for date range");
+    const data = await res.json();
+
+    if (!data || !data.items) {
+      console.warn("No meals found for date range");
+      return [];
+    }
+
+    console.log(`Found ${data.items.length} meals for ${startDate} to ${endDate}`);
+    return data.items;
+  } catch (err) {
+    console.error("Failed to fetch meals:", err);
     return [];
   }
-
-  console.log(`Found ${data.items.length} meals for ${startDate} to ${endDate}`);
-  return data.items;
 }
 
 

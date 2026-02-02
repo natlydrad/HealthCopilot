@@ -414,6 +414,27 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Loading indicator */}
+      {loading && (
+        <div className="mb-4">
+          <div className="flex items-center justify-center gap-2 text-slate-500 mb-2">
+            <div className="animate-spin h-4 w-4 border-2 border-slate-300 border-t-slate-600 rounded-full"></div>
+            <span>Loading meals for {days[0]} to {days[6]}...</span>
+          </div>
+          <div className="h-1 bg-slate-200 rounded-full overflow-hidden">
+            <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{width: '60%'}}></div>
+          </div>
+        </div>
+      )}
+
+      {/* No meals message */}
+      {!loading && meals.length === 0 && (
+        <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg text-center">
+          <p className="text-amber-700">No meals found for this week</p>
+          <p className="text-amber-500 text-sm">Try navigating to a different week</p>
+        </div>
+      )}
       
       <div className="grid grid-cols-7 gap-2">
         {days.map((day) => {
