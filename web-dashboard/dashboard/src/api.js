@@ -32,13 +32,24 @@ export async function fetchMeals() {
 }
 
 // Fetch meals for a specific date range (on-demand loading)
+// Converts local dates to UTC for proper timezone handling
 export async function fetchMealsForDateRange(startDate, endDate) {
   if (!authToken) throw new Error("Not logged in");
 
-  // PocketBase stores timestamps with space instead of T: "2025-12-17 22:47:57.000Z"
-  // startDate and endDate are in format "YYYY-MM-DD"
-  const startTS = `${startDate} 00:00:00.000Z`;
-  const endTS = `${endDate} 23:59:59.999Z`;
+  // startDate and endDate are in format "YYYY-MM-DD" (local time)
+  // Convert to UTC bounds based on user's timezone
+  
+  // Create local midnight for start date, then convert to UTC
+  const localStart = new Date(`${startDate}T00:00:00`);
+  const localEnd = new Date(`${endDate}T23:59:59.999`);
+  
+  // Format as PocketBase expects (space instead of T)
+  const formatForPB = (date) => {
+    return date.toISOString().replace('T', ' ');
+  };
+  
+  const startTS = formatForPB(localStart);
+  const endTS = formatForPB(localEnd);
 
   // Use timestamp field for meal time filtering
   const filter = encodeURIComponent(
@@ -46,7 +57,7 @@ export async function fetchMealsForDateRange(startDate, endDate) {
   );
 
   const url = `${PB_BASE}/api/collections/meals/records?perPage=100&sort=timestamp&filter=${filter}`;
-  console.log("🔍 Fetching meals:", startDate, "to", endDate);
+  console.log("🔍 Fetching meals:", startDate, "to", endDate, "| UTC:", startTS, "to", endTS);
 
   try {
     const res = await fetch(url, {

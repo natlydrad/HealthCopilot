@@ -24,23 +24,15 @@ export default function DayDetail() {
       const dayMeals = await fetchMealsForDateRange(date, date);
       
       // Sort by timestamp (earliest first for chronological order)
-      // PocketBase uses "YYYY-MM-DD HH:MM:SS" format with space, need to convert to ISO
       const parseTimestamp = (ts) => {
         if (!ts) return 0;
-        // Replace space with T for proper ISO parsing
-        const isoString = ts.replace(' ', 'T');
-        return new Date(isoString).getTime() || 0;
+        return new Date(ts.replace(' ', 'T')).getTime() || 0;
       };
       
-      dayMeals.sort((a, b) => parseTimestamp(a.timestamp) - parseTimestamp(b.timestamp));
+      const sortedMeals = [...dayMeals].sort((a, b) => parseTimestamp(a.timestamp) - parseTimestamp(b.timestamp));
       
-      // Log before sort
-      console.log(`BEFORE SORT (${dayMeals.length} meals):`, dayMeals.map(m => m.timestamp));
-      
-      // Log after sort
-      console.log(`AFTER SORT:`, dayMeals.map(m => m.timestamp));
-      
-      setMeals([...dayMeals]); // Create new array to force re-render
+      console.log(`📅 ${date}: ${sortedMeals.length} meals loaded`);
+      setMeals(sortedMeals);
 
       let totalCals = 0;
       for (const meal of dayMeals) {
