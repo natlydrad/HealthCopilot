@@ -319,6 +319,39 @@ class MealStore: ObservableObject {
         let imgURL = docs.appendingPathComponent(photoName)
         return try? Data(contentsOf: imgURL)
     }
+    
+    // MARK: - Recovery: Force Re-sync After Server Data Loss
+    
+    /// Reset sync state for all meals - use when server data was lost
+    /// This clears pbId and marks everything as pending, triggering full re-upload
+    func forceResyncAll() {
+        print("🔄 FORCE RESYNC: Resetting sync state for \(meals.count) meals...")
+        
+        var resetCount = 0
+        for i in meals.indices {
+            // Clear server ID - we'll get a new one on upload
+            if meals[i].pbId != nil {
+                meals[i].pbId = nil
+                resetCount += 1
+            }
+            // Mark as needing sync
+            meals[i].pendingSync = true
+            
+            // Reset photo to local filename if we have a local copy
+            let localFilename = "meal-\(meals[i].localId).jpg"
+            let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            let imgURL = docs.appendingPathComponent(localFilename)
+            if FileManager.default.fileExists(atPath: imgURL.path) {
+                meals[i].photo = localFilename
+                print("   📸 \(meals[i].localId): has local image")
+            } else if meals[i].photo != nil {
+                print("   ⚠️ \(meals[i].localId): no local image backup, will lose photo")
+            }
+        }
+        
+        saveMeals()
+        print("✅ Reset \(resetCount) meals, all marked pending. Call SyncManager.pushDirty() to upload.")
+    }
 
     
     func photoCaptureDate(from imageData: Data) -> Date? {
