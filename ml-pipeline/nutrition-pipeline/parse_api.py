@@ -451,9 +451,11 @@ def save_correction(ingredient_id):
             update["unit"] = correction["unit"]
         
         # If name changed, re-lookup USDA nutrition
+        usda_match_info = None  # Track what USDA returned for user feedback
         if correction.get("name") and correction["name"] != original.get("name"):
-            print(f"📝 Name changed: {original.get('name')} → {correction['name']}")
-            usda = usda_lookup(correction["name"])
+            corrected_name = correction["name"]
+            print(f"📝 Name changed: {original.get('name')} → {corrected_name}")
+            usda = usda_lookup(corrected_name)
             if usda:
                 quantity = correction.get("quantity", original.get("quantity", 1))
                 unit = correction.get("unit", original.get("unit", "serving"))
@@ -466,9 +468,25 @@ def save_correction(ingredient_id):
                 update["nutrition"] = scaled_nutrition
                 update["usdaCode"] = usda.get("usdaCode")
                 update["source"] = "usda"
-                print(f"   ✅ Found USDA match: {usda.get('name')}")
+                
+                # Check if USDA match is exact or a fallback
+                usda_name = usda.get("name", "").lower()
+                corrected_lower = corrected_name.lower()
+                is_exact_match = corrected_lower in usda_name or usda_name in corrected_lower
+                
+                usda_match_info = {
+                    "found": True,
+                    "matchedName": usda.get("name"),
+                    "isExactMatch": is_exact_match,
+                    "searchedFor": corrected_name
+                }
+                print(f"   ✅ Found USDA match: {usda.get('name')} (exact: {is_exact_match})")
             else:
                 update["source"] = "corrected"
+                usda_match_info = {
+                    "found": False,
+                    "searchedFor": corrected_name
+                }
                 print(f"   ⚠️ No USDA match for corrected name")
         
         # Update the ingredient
@@ -565,7 +583,8 @@ def save_correction(ingredient_id):
             "ingredient": updated,
             "learned": learned if should_learn else None,
             "shouldLearn": should_learn,
-            "correctionReason": correction_reason
+            "correctionReason": correction_reason,
+            "usdaMatch": usda_match_info  # Info about USDA lookup result
         })
         
     except Exception as e:

@@ -405,9 +405,21 @@ What would you like to change? You can tell me naturally, like "that's actually 
           learnedMsg = ` ${reasonExplanations[result.correctionReason] || ""}`;
         }
         
+        // Add USDA match info if applicable
+        let usdaMsg = "";
+        if (result.usdaMatch) {
+          if (result.usdaMatch.found) {
+            if (!result.usdaMatch.isExactMatch) {
+              usdaMsg = ` (Note: Couldn't find exact nutrition for "${result.usdaMatch.searchedFor}" - using USDA data for "${result.usdaMatch.matchedName}" instead.)`;
+            }
+          } else {
+            usdaMsg = ` (Note: No nutrition data found for "${result.usdaMatch.searchedFor}" in USDA database.)`;
+          }
+        }
+        
         setMessages(prev => [...prev, { 
           from: "bot", 
-          text: `Done! Updated to ${correction.name || ingredient.name} (${correction.quantity || ingredient.quantity} ${correction.unit || ingredient.unit}).${learnedMsg}` 
+          text: `Done! Updated to ${correction.name || ingredient.name} (${correction.quantity || ingredient.quantity} ${correction.unit || ingredient.unit}).${learnedMsg}${usdaMsg}` 
         }]);
 
         // Close after brief delay
