@@ -311,16 +311,23 @@ def parse_meal(meal_id):
             source_ing = "gpt"
             portion_grams = None
             
+            partial_label = False  # set when we had label but fell back to USDA (e.g. missing calories)
             if label_nutrition and isinstance(label_nutrition, dict):
                 serving_size_g = label_nutrition.get("servingSizeG") or 100.0
                 scaled_nutrition = nutrition_from_label_to_array(label_nutrition, quantity, serving_size_g)
-                if scaled_nutrition:
+                # Require calories from label; if missing, treat as partial and use USDA
+                has_calories = any(n.get("nutrientName") == "Energy" and (n.get("value") or 0) > 0 for n in scaled_nutrition)
+                if scaled_nutrition and has_calories:
                     print(f"   📋 Using nutrition from label for: '{ing.get('name')}'")
                     source_ing = "label"
                     portion_grams = round(quantity * serving_size_g, 1) if serving_size_g else None
                     label_used = True
                 else:
+                    if scaled_nutrition and not has_calories:
+                        partial_label = True
+                        print(f"   ⚠️ Label partial (no calories) for '{ing.get('name')}' — using USDA")
                     label_nutrition = None
+                    scaled_nutrition = []
                     label_used = False
             else:
                 label_used = False
@@ -370,6 +377,7 @@ def parse_meal(meal_id):
                     "reasoning": ing.get("reasoning", ""),
                     "portionGrams": portion_grams,
                     "fromLabel": label_used,
+                    "partialLabel": partial_label,
                 }
             }
             

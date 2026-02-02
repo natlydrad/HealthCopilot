@@ -317,7 +317,14 @@ function MealCard({ meal }) {
               >
                 {/* Low confidence indicator */}
                 {lowConf && (
-                  <span className="text-amber-500 text-xs" title="Tap to correct">?</span>
+                  <span 
+                    className="text-amber-500 text-xs" 
+                    title={ing.parsingMetadata?.partialLabel 
+                      ? "Label was partially visible – nutrition from USDA. Re-photo with full label for exact values." 
+                      : "Tap to correct"}
+                  >
+                    ?
+                  </span>
                 )}
                 
                 <span className="font-medium">{ing.name}</span>
@@ -326,6 +333,14 @@ function MealCard({ meal }) {
                 <span className={`text-[10px] px-1.5 py-0.5 rounded ${sourceInfo.color}`}>
                   {sourceInfo.label}
                 </span>
+                {ing.parsingMetadata?.partialLabel && (
+                  <span 
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700"
+                    title="Label was partially visible – nutrition from USDA. Re-photo with full label for exact values."
+                  >
+                    Partial label
+                  </span>
+                )}
                 
                 {ing.quantity && ing.unit && (
                   <span className="text-gray-400 text-xs">

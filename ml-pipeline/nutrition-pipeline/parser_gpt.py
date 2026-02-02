@@ -143,17 +143,11 @@ def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = No
         - Fried rice → rice, egg, vegetables, soy sauce
         List actual ingredients, not composite names.
         
-        NUTRITION FACTS LABEL: When you return ONE packaged product (Step 1), read the visible Nutrition Facts and add "nutritionFromLabel" to that item with:
-        - servingSizeG (number, optional) - serving size in grams if shown (e.g. 30, 42)
-        - calories (number) - Calories
-        - protein (number, g)
-        - totalCarb (number, g)
-        - dietaryFiber (number, g, optional)
-        - totalSugars (number, g, optional)
-        - totalFat (number, g)
-        - saturatedFat (number, g, optional)
-        - sodium (number, mg)
-        Use null for any value not visible. Only include nutritionFromLabel when you can clearly read the label.
+        NUTRITION FACTS LABEL: When you return ONE packaged product (Step 1), only add "nutritionFromLabel" if the FULL label is visible and you can read at least Calories and Serving size. Use:
+        - servingSizeG (number) - serving size in grams if shown (e.g. 30, 42)
+        - calories (number) - Calories (required; if you cannot read it, omit nutritionFromLabel)
+        - protein, totalCarb, totalFat, sodium, etc. (optional)
+        If the label is cut off, folded, or only partially visible so you cannot read Calories, do NOT include nutritionFromLabel — leave it out so the system will use USDA instead. Do not guess or infer calories.
         
         Return ONLY a JSON array (no markdown, no explanation).
         Each item must have:
