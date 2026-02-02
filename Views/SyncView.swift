@@ -4,6 +4,8 @@ import SwiftUI
 struct SyncView: View {
     @ObservedObject var healthSync = HealthSyncManager.shared
     @State private var isBigSyncing = false
+    @State private var isResyncingMeals = false
+    @State private var resyncStatus = ""
 
     var body: some View {
         ScrollView {
@@ -38,6 +40,53 @@ struct SyncView: View {
                     .disabled(isBigSyncing)
                 }
                 .padding(.top, 12)
+                
+                // --- Force Resync Meals Button ---
+                VStack(spacing: 8) {
+                    Button {
+                        guard !isResyncingMeals else { return }
+                        isResyncingMeals = true
+                        resyncStatus = "Checking for orphaned meals..."
+                        
+                        // Run reconcile which detects orphaned meals
+                        SyncManager.shared.reconcileLocalWithServer()
+                        
+                        // Give it a moment then update status
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            let pending = MealStore.shared.meals.filter { $0.pendingSync }.count
+                            if pending > 0 {
+                                resyncStatus = "Found \(pending) meals to sync. Uploading..."
+                                SyncManager.shared.pushDirty()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                                    resyncStatus = "Done! Check server for meals."
+                                    isResyncingMeals = false
+                                }
+                            } else {
+                                resyncStatus = "All meals are synced!"
+                                isResyncingMeals = false
+                            }
+                        }
+                    } label: {
+                        if isResyncingMeals {
+                            ProgressView()
+                        } else {
+                            Label("Force Resync Meals", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.orange)
+                    .disabled(isResyncingMeals)
+                    
+                    if !resyncStatus.isEmpty {
+                        Text(resyncStatus)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Text("Use if meals are missing from server")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
 
                 Divider().padding(.vertical, 8)
 

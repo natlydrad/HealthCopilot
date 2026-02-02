@@ -20,15 +20,13 @@ struct HealthCopilotApp: App {
             if success {
                 print("✅ Logged in to PocketBase")
                 
-                // Only reconcile if there are unsynced items (saves battery/heat)
+                // Light sync on startup - just fetch and merge
                 let pendingCount = MealStore.shared.meals.filter { $0.pendingSync }.count
                 if pendingCount > 0 {
-                    print("🔄 Found \(pendingCount) unsynced meals, running reconcile...")
-                    SyncManager.shared.reconcileLocalWithServer()
-                } else {
-                    print("✨ All meals synced, skipping reconcile")
-                    SyncManager.shared.fetchMeals()
+                    print("🔄 Found \(pendingCount) unsynced meals, pushing...")
+                    SyncManager.shared.pushDirty()
                 }
+                SyncManager.shared.fetchMeals()
             } else {
                 print("❌ Login failed")
             }
