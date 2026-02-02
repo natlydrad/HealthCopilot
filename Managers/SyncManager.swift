@@ -394,7 +394,7 @@ class SyncManager {
         // Fetch ALL server meals for this user (no delta so we see everything)
         let raw = "filter=" + "user='\(userId)'"
         let qs  = raw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? raw
-        guard let url = URL(string: "\(baseURL)/api/collections/meals/records?\(qs)&perPage=200") else { return }
+        guard let url = URL(string: "\(baseURL)/api/collections/meals/records?\(qs)&perPage=2000") else { return }
 
         print("🧭 reconcile: GET \(url.absoluteString)")
 
@@ -456,14 +456,19 @@ class SyncManager {
                         }
                     }
                 } else {
-                    // Case B: local has pbId — verify it still exists on server
-                    if serverByLocalId[m.localId] == nil {
+                    // Case B: local has pbId — DON'T clear it if we might have incomplete server data
+                    // Only clear pbId if we're confident the meal truly doesn't exist on server
+                    // For now, trust the existing pbId (it was valid when originally synced)
+                    // This prevents losing image records when server fetch is incomplete
+                    if serverByLocalId[m.localId] == nil && serverByLocalId.count < 100 {
+                        // Only clear if server has very few records (likely truly doesn't exist)
                         m.pbId = nil
                         m.pendingSync = true
                         MealStore.shared.meals[i] = m
                         changed = true
                         cleared += 1
                     }
+                    // Otherwise, keep the existing pbId - trust it's still valid
                 }
             }
 
