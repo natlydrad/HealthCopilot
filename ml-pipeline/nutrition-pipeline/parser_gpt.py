@@ -130,22 +130,20 @@ def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = No
         """
 
         prompt = f"""
-        Look at this image and identify ONLY edible items: foods, drinks, or supplements.
-        DO NOT include: furniture, rugs, appliances, plates, mugs, utensils, household items.
+        STEP 1 — Decide what the user is logging:
+        - If the image shows ONE packaged product (sandwich in a container, wrapped item, protein bar, bottle, etc.) with a visible Nutrition Facts label on the package → the user is logging THAT PRODUCT as one serving. Return exactly ONE item: the product name (e.g. "chicken salad sandwich" or the brand/product name). Do NOT list sub-ingredients like bread, chicken salad, etc. Read the label and fill nutritionFromLabel. Quantity = 1, unit = "serving".
+        - If the image shows a homemade/composed meal (e.g. a plate with a burrito, a bowl of salad, multiple items on a plate) with NO single packaged product with a label → then decompose into ingredients (see below).
+        
+        DO NOT include: furniture, rugs, appliances, plates, mugs, utensils, or random items in the background. Do NOT add drinks just because a cup appears — only add a beverage if it is clearly what the user is logging.
         {context_section}
-        IMPORTANT: Decompose visible dishes into their component ingredients.
-        Examples:
-        - A burrito → tortilla, rice, beans, cheese, salsa, meat
-        - A salad → greens, tomatoes, cucumber, dressing, croutons
-        - A sandwich → bread slices, meat, cheese, lettuce, condiments
+        
+        When you must decompose (only for non-packaged, composed meals):
+        - A burrito on a plate → tortilla, rice, beans, cheese, salsa, meat
+        - A bowl of salad → greens, tomatoes, cucumber, dressing, croutons
         - Fried rice → rice, egg, vegetables, soy sauce
-        - Pizza slice → crust, cheese, sauce, toppings
+        List actual ingredients, not composite names.
         
-        DO NOT return "burrito" or "salad" - list the actual ingredients you can see/infer!
-        Simple items stay as-is: apple, coffee, eggs, chicken breast
-        
-        NUTRITION FACTS LABEL: If a Nutrition Facts label is visible (e.g. on a package, bottle, or product),
-        read the per-serving values and add an optional "nutritionFromLabel" object to the matching item with:
+        NUTRITION FACTS LABEL: When you return ONE packaged product (Step 1), read the visible Nutrition Facts and add "nutritionFromLabel" to that item with:
         - servingSizeG (number, optional) - serving size in grams if shown (e.g. 30, 42)
         - calories (number) - Calories
         - protein (number, g)

@@ -49,7 +49,14 @@ def insert_ingredient(ingredient):
     url = f"{PB_URL}/api/collections/ingredients/records"
     headers = {"Authorization": f"Bearer {get_token()}"}
     r = requests.post(url, headers=headers, json=ingredient)
-    r.raise_for_status()
+    if r.status_code >= 400:
+        try:
+            err = r.json()
+            msg = err.get("message", r.text) or r.text
+            details = err.get("data", {})
+            raise RuntimeError(f"PocketBase {r.status_code}: {msg} | details: {details}")
+        except (ValueError, KeyError):
+            r.raise_for_status()
     return r.json()
 
 def fetch_records(collection_name, per_page=200):

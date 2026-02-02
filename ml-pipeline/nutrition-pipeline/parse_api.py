@@ -350,7 +350,8 @@ def parse_meal(meal_id):
                     source_ing = "gpt"
                     portion_grams = None
             
-            # Prepare payload with SCALED nutrition values
+            # Prepare payload — only send fields that exist on ingredients collection
+            # (no parsingSource; use parsingMetadata.parsingSource and parsingStrategy instead)
             payload = {
                 "mealId": meal_id,
                 "name": ing["name"],
@@ -359,10 +360,11 @@ def parse_meal(meal_id):
                 "category": ing.get("category", ""),
                 "nutrition": scaled_nutrition,
                 "usdaCode": usda.get("usdaCode") if usda else None,
-                "source": source_ing,
-                "parsingSource": source,
+                "source": source_ing if source_ing in ("usda", "gpt") else "gpt",  # avoid unknown enum "label"
+                "parsingStrategy": "gpt",
                 "parsingMetadata": {
                     "source": source_ing,
+                    "parsingSource": source,
                     "usdaMatch": bool(usda),
                     "parsedVia": "parse_api",
                     "reasoning": ing.get("reasoning", ""),
