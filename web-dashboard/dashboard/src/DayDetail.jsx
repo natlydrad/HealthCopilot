@@ -34,12 +34,13 @@ export default function DayDetail() {
       
       dayMeals.sort((a, b) => parseTimestamp(a.timestamp) - parseTimestamp(b.timestamp));
       
-      console.log(`Fetched ${dayMeals.length} meals for ${date} (sorted):`, dayMeals.map(m => ({ 
-        text: m.text?.slice(0, 30), 
-        time: m.timestamp,
-        parsedMs: parseTimestamp(m.timestamp)
-      })));
-      setMeals(dayMeals);
+      // Log before sort
+      console.log(`BEFORE SORT (${dayMeals.length} meals):`, dayMeals.map(m => m.timestamp));
+      
+      // Log after sort
+      console.log(`AFTER SORT:`, dayMeals.map(m => m.timestamp));
+      
+      setMeals([...dayMeals]); // Create new array to force re-render
 
       let totalCals = 0;
       for (const meal of dayMeals) {
