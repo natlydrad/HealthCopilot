@@ -450,11 +450,20 @@ def save_correction(ingredient_id):
         if correction.get("unit"):
             update["unit"] = correction["unit"]
         
-        # If name changed, re-lookup USDA nutrition
+        # Check if we need to re-lookup or re-scale nutrition
         usda_match_info = None  # Track what USDA returned for user feedback
-        if correction.get("name") and correction["name"] != original.get("name"):
-            corrected_name = correction["name"]
-            print(f"📝 Name changed: {original.get('name')} → {corrected_name}")
+        name_changed = correction.get("name") and correction["name"] != original.get("name")
+        quantity_changed = correction.get("quantity") is not None and correction["quantity"] != original.get("quantity")
+        unit_changed = correction.get("unit") and correction["unit"] != original.get("unit")
+        force_recalc = correction.get("forceRecalculate", False)
+        
+        if name_changed or force_recalc:
+            # Name changed or force recalc - do fresh USDA lookup
+            corrected_name = correction.get("name", original.get("name"))
+            if name_changed:
+                print(f"📝 Name changed: {original.get('name')} → {corrected_name}")
+            else:
+                print(f"🔄 Force recalculating nutrition for: {corrected_name}")
             usda = usda_lookup(corrected_name)
             if usda:
                 quantity = correction.get("quantity", original.get("quantity", 1))
@@ -488,6 +497,39 @@ def save_correction(ingredient_id):
                     "searchedFor": corrected_name
                 }
                 print(f"   ⚠️ No USDA match for corrected name")
+        
+        elif quantity_changed or unit_changed:
+            # Quantity/unit changed but name same - re-scale existing nutrition
+            print(f"📐 Quantity/unit changed: {original.get('quantity')} {original.get('unit')} → {correction.get('quantity', original.get('quantity'))} {correction.get('unit', original.get('unit'))}")
+            
+            # Get original nutrition and serving info
+            original_nutrition = original.get("nutrition", [])
+            original_quantity = original.get("quantity", 1)
+            original_unit = original.get("unit", "serving")
+            new_quantity = correction.get("quantity", original_quantity)
+            new_unit = correction.get("unit", original_unit)
+            
+            if original_nutrition and original_quantity:
+                # Calculate the multiplier: new_amount / original_amount
+                # First, convert to a common base (grams) if possible
+                from lookup_usda import UNIT_TO_GRAMS
+                
+                orig_grams = original_quantity * UNIT_TO_GRAMS.get(original_unit, 100)
+                new_grams = new_quantity * UNIT_TO_GRAMS.get(new_unit, 100)
+                
+                if orig_grams > 0:
+                    multiplier = new_grams / orig_grams
+                    print(f"   📊 Scaling nutrition by {multiplier:.2f}x")
+                    
+                    # Scale each nutrient value
+                    scaled_nutrition = []
+                    for nutrient in original_nutrition:
+                        scaled = nutrient.copy()
+                        if "value" in scaled:
+                            scaled["value"] = round(scaled["value"] * multiplier, 2)
+                        scaled_nutrition.append(scaled)
+                    
+                    update["nutrition"] = scaled_nutrition
         
         # Update the ingredient
         update_resp = requests.patch(
