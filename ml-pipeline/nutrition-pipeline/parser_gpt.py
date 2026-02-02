@@ -217,6 +217,8 @@ def correction_chat(
             reply: str,  # AI's conversational response
             correction: dict | None,  # {name, quantity, unit} if correction identified
             learned: dict | None,  # {mistaken, actual} if this is a learning opportunity
+            correctionReason: str,  # why the correction is needed
+            shouldLearn: bool,  # whether to save this for future learning
         }
     """
     try:
@@ -230,18 +232,32 @@ CURRENT INGREDIENT:
 
 Your job is to:
 1. Understand what the user wants to correct
-2. Have a natural conversation - ask clarifying questions if needed
-3. When you understand the correction, acknowledge it warmly
-4. Extract the corrected values
+2. Determine WHY they're correcting - this is crucial for learning:
+   - "misidentified": You got the food item wrong (e.g., mustard vs banana peppers) → SHOULD LEARN
+   - "added_after": User added more food after the photo was taken → DON'T LEARN
+   - "portion_estimate": The portion size looked different than it was → DON'T LEARN  
+   - "brand_specific": User is specifying a particular brand → MAYBE LEARN (only if visually distinguishable)
+   - "missing_item": User is adding something you didn't see → DON'T LEARN
+3. Have a natural conversation - if unclear, ask: "Just to make sure I learn the right thing - did I misidentify this, or is this something that changed after the photo?"
+4. When you understand the correction, acknowledge it and explain whether you'll remember this for next time
 
-IMPORTANT: Always end your response with a JSON block containing any corrections:
+IMPORTANT: Always end your response with a JSON block:
 ```json
-{{"correction": {{"name": "corrected name or null", "quantity": number or null, "unit": "unit or null"}}, "learned": {{"mistaken": "what you thought it was", "actual": "what it actually is"}} or null, "complete": true/false}}
+{{
+  "correction": {{"name": "corrected name or null", "quantity": number or null, "unit": "unit or null"}},
+  "correctionReason": "misidentified" | "added_after" | "portion_estimate" | "brand_specific" | "missing_item",
+  "shouldLearn": true/false,
+  "learned": {{"mistaken": "what you thought", "actual": "what it is"}} or null,
+  "complete": true/false
+}}
 ```
 
-Set "complete": true when the correction is finalized and ready to save.
-Set fields to null if they shouldn't change.
-Include "learned" only if this is a misidentification (not just a portion adjustment)."""
+RULES:
+- Set "shouldLearn": true ONLY for "misidentified" (and sometimes "brand_specific" if visually distinct)
+- Set "learned" ONLY when shouldLearn is true
+- Set "complete": true when the correction is finalized
+- Set correction fields to null if they shouldn't change
+- If unsure about the reason, ASK before setting complete=true"""
 
         # Build messages
         messages = [{"role": "system", "content": system_prompt}]
@@ -278,6 +294,8 @@ Include "learned" only if this is a misidentification (not just a portion adjust
         correction = None
         learned = None
         complete = False
+        correction_reason = None
+        should_learn = False
         
         # Look for JSON block at the end
         if "```json" in raw:
@@ -289,12 +307,19 @@ Include "learned" only if this is a misidentification (not just a portion adjust
                 correction = data.get("correction")
                 learned = data.get("learned")
                 complete = data.get("complete", False)
+                correction_reason = data.get("correctionReason")
+                should_learn = data.get("shouldLearn", False)
                 
                 # Clean up null values from correction
                 if correction:
                     correction = {k: v for k, v in correction.items() if v is not None}
                     if not correction:
                         correction = None
+                
+                # If shouldLearn is false, don't include learned data
+                if not should_learn:
+                    learned = None
+                    
             except json.JSONDecodeError:
                 pass
         
@@ -303,6 +328,8 @@ Include "learned" only if this is a misidentification (not just a portion adjust
             "correction": correction,
             "learned": learned,
             "complete": complete,
+            "correctionReason": correction_reason,
+            "shouldLearn": should_learn,
         }
         
     except Exception as e:
@@ -311,5 +338,7 @@ Include "learned" only if this is a misidentification (not just a portion adjust
             "reply": f"Sorry, I had trouble processing that. Could you try again? (Error: {str(e)})",
             "correction": None,
             "learned": None,
+            "correctionReason": None,
+            "shouldLearn": False,
             "complete": False,
         }

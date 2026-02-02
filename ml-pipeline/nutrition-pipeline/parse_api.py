@@ -406,11 +406,13 @@ def correct_ingredient_chat(ingredient_id):
 def save_correction(ingredient_id):
     """
     Save a correction and update the ingredient.
-    Also saves to learned patterns if applicable.
+    Also saves to learned patterns if applicable (only when shouldLearn=true).
     
     POST body: {
         correction: { name: "...", quantity: ..., unit: "..." },
-        learned: { mistaken: "...", actual: "..." } or null
+        learned: { mistaken: "...", actual: "..." } or null,
+        correctionReason: "misidentified" | "added_after" | "portion_estimate" | "brand_specific" | "missing_item",
+        shouldLearn: true/false
     }
     """
     try:
@@ -420,9 +422,13 @@ def save_correction(ingredient_id):
         data = request.get_json()
         correction = data.get("correction", {})
         learned = data.get("learned")
+        correction_reason = data.get("correctionReason", "unknown")
+        should_learn = data.get("shouldLearn", False)
         
         if not correction:
             return jsonify({"error": "No correction provided"}), 400
+        
+        print(f"📝 Saving correction: reason={correction_reason}, shouldLearn={should_learn}")
         
         # Fetch original ingredient
         ing_resp = requests.get(
@@ -476,23 +482,23 @@ def save_correction(ingredient_id):
         
         updated = update_resp.json()
         
-        # Save learned pattern if applicable
-        if learned and learned.get("mistaken") and learned.get("actual"):
-            print(f"🧠 Learning: {learned['mistaken']} → {learned['actual']}")
-            
-            # Get user ID from the meal
-            meal_id = original.get("mealId")
-            user_id = None
-            if meal_id:
-                try:
-                    meal_resp = requests.get(
-                        f"{PB_URL}/api/collections/meals/records/{meal_id}",
-                        headers=headers
-                    )
-                    if meal_resp.status_code == 200:
-                        user_id = meal_resp.json().get("user")
-                except:
-                    pass
+        # Get user ID from the meal (needed for both learning and logging)
+        meal_id = original.get("mealId")
+        user_id = None
+        if meal_id:
+            try:
+                meal_resp = requests.get(
+                    f"{PB_URL}/api/collections/meals/records/{meal_id}",
+                    headers=headers
+                )
+                if meal_resp.status_code == 200:
+                    user_id = meal_resp.json().get("user")
+            except:
+                pass
+        
+        # Save learned pattern ONLY if shouldLearn is true
+        if should_learn and learned and learned.get("mistaken") and learned.get("actual"):
+            print(f"🧠 Learning (shouldLearn=true): {learned['mistaken']} → {learned['actual']}")
             
             # Save to user_food_profile (the new learning system)
             if user_id:
@@ -502,40 +508,46 @@ def save_correction(ingredient_id):
                     print(f"   ✅ Updated user food profile")
                 except Exception as e:
                     print(f"   ⚠️ Could not update user food profile: {e}")
-            
-            # Also save to ingredient_corrections for backward compatibility
-            correction_record = {
-                "ingredientId": ingredient_id,
-                "user": user_id or meal_id,
-                "originalParse": {
-                    "name": original.get("name"),
-                    "quantity": original.get("quantity"),
-                    "unit": original.get("unit"),
-                },
-                "userCorrection": correction,
-                "correctionType": "name_change" if correction.get("name") else "quantity_change",
-                "context": {
-                    "learned": learned,
-                    "via": "correction_chat"
-                }
+        elif learned:
+            print(f"📝 Correction logged but NOT learning (reason: {correction_reason})")
+        
+        # Always save to ingredient_corrections for history/audit trail
+        correction_record = {
+            "ingredientId": ingredient_id,
+            "user": user_id or meal_id,
+            "originalParse": {
+                "name": original.get("name"),
+                "quantity": original.get("quantity"),
+                "unit": original.get("unit"),
+            },
+            "userCorrection": correction,
+            "correctionType": "name_change" if correction.get("name") else "quantity_change",
+            "correctionReason": correction_reason,
+            "shouldLearn": should_learn,
+            "context": {
+                "learned": learned if should_learn else None,
+                "via": "correction_chat"
             }
-            
-            # Try to save correction record (don't fail if collection doesn't exist)
-            try:
-                corr_resp = requests.post(
-                    f"{PB_URL}/api/collections/ingredient_corrections/records",
-                    headers=headers,
-                    json=correction_record
-                )
-                if corr_resp.status_code == 200:
-                    print(f"   ✅ Saved correction record")
-            except Exception as e:
-                print(f"   ⚠️ Could not save correction record: {e}")
+        }
+        
+        # Try to save correction record (don't fail if collection doesn't exist)
+        try:
+            corr_resp = requests.post(
+                f"{PB_URL}/api/collections/ingredient_corrections/records",
+                headers=headers,
+                json=correction_record
+            )
+            if corr_resp.status_code == 200:
+                print(f"   ✅ Saved correction record")
+        except Exception as e:
+            print(f"   ⚠️ Could not save correction record: {e}")
         
         return jsonify({
             "success": True,
             "ingredient": updated,
-            "learned": learned
+            "learned": learned if should_learn else None,
+            "shouldLearn": should_learn,
+            "correctionReason": correction_reason
         })
         
     except Exception as e:

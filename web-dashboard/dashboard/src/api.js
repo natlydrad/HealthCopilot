@@ -481,14 +481,19 @@ export async function sendCorrectionMessage(ingredientId, message, conversation 
 }
 
 // Save a finalized correction
-export async function saveCorrection(ingredientId, correction, learned = null) {
-  console.log("💾 Saving correction:", correction);
+export async function saveCorrection(ingredientId, correction, learned = null, correctionReason = null, shouldLearn = false) {
+  console.log("💾 Saving correction:", correction, "shouldLearn:", shouldLearn, "reason:", correctionReason);
   
   try {
     const res = await fetch(`${PARSE_API_URL}/correct/${ingredientId}/save`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ correction, learned }),
+      body: JSON.stringify({ 
+        correction, 
+        learned, 
+        correctionReason,
+        shouldLearn 
+      }),
     });
     
     if (!res.ok) {
@@ -497,7 +502,7 @@ export async function saveCorrection(ingredientId, correction, learned = null) {
     }
     
     const data = await res.json();
-    console.log("✅ Correction saved:", data.success);
+    console.log("✅ Correction saved:", data.success, "learned:", data.shouldLearn);
     return data;
   } catch (err) {
     console.error("Save correction error:", err);

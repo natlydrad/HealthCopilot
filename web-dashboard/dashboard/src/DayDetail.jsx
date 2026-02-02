@@ -294,6 +294,8 @@ function CorrectionChat({ ingredient, meal, onClose, onSave }) {
   const [loading, setLoading] = useState(false);
   const [pendingCorrection, setPendingCorrection] = useState(null);
   const [pendingLearned, setPendingLearned] = useState(null);
+  const [pendingReason, setPendingReason] = useState(null);
+  const [pendingShouldLearn, setPendingShouldLearn] = useState(false);
   const [conversationHistory, setConversationHistory] = useState([]);
   const messagesEndRef = useRef(null);
 
@@ -356,12 +358,16 @@ What would you like to change? You can tell me naturally, like "that's actually 
       if (result.learned) {
         setPendingLearned(result.learned);
       }
+      if (result.correctionReason) {
+        setPendingReason(result.correctionReason);
+      }
+      setPendingShouldLearn(result.shouldLearn || false);
 
       // If complete, show save button
       if (result.complete && result.correction) {
         // Auto-save after a brief delay
         setTimeout(async () => {
-          await handleSave(result.correction, result.learned);
+          await handleSave(result.correction, result.learned, result.correctionReason, result.shouldLearn);
         }, 500);
       }
 
@@ -376,18 +382,28 @@ What would you like to change? You can tell me naturally, like "that's actually 
     }
   };
 
-  const handleSave = async (correction = pendingCorrection, learned = pendingLearned) => {
+  const handleSave = async (correction = pendingCorrection, learned = pendingLearned, reason = pendingReason, shouldLearn = pendingShouldLearn) => {
     if (!correction) return;
 
     setMessages(prev => [...prev, { from: "bot", text: "Saving your correction..." }]);
 
     try {
-      const result = await saveCorrection(ingredient.id, correction, learned);
+      const result = await saveCorrection(ingredient.id, correction, learned, reason, shouldLearn);
       
       if (result.success) {
-        const learnedMsg = learned 
-          ? ` I'll remember that "${learned.mistaken}" is actually "${learned.actual}" for next time.`
-          : "";
+        let learnedMsg = "";
+        if (result.shouldLearn && learned) {
+          learnedMsg = ` I'll remember that "${learned.mistaken}" is actually "${learned.actual}" for next time.`;
+        } else if (result.correctionReason && result.correctionReason !== "misidentified") {
+          // Explain why we're not learning
+          const reasonExplanations = {
+            "added_after": "Since this was added after the photo, I won't learn from this.",
+            "portion_estimate": "Since this was a portion estimate issue, I won't generalize from this.",
+            "brand_specific": "Noted the brand info for this meal.",
+            "missing_item": "Added the missing item to this meal.",
+          };
+          learnedMsg = ` ${reasonExplanations[result.correctionReason] || ""}`;
+        }
         
         setMessages(prev => [...prev, { 
           from: "bot", 
