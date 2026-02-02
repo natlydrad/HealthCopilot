@@ -1,6 +1,11 @@
 """
 Simple API server for on-demand meal parsing.
 This allows the frontend to request parsing (including image parsing via GPT Vision).
+
+Flow:
+1. Classifier runs first (food vs non-food)
+2. If non-food → save to non_food_logs, skip nutrition parsing
+3. If food → GPT parses → USDA lookup → save ingredients
 """
 
 from flask import Flask, request, jsonify
@@ -8,6 +13,7 @@ from flask_cors import CORS
 from pb_client import get_token, insert_ingredient
 from parser_gpt import parse_ingredients, parse_ingredients_from_image
 from lookup_usda import usda_lookup
+from log_classifier import classify_log
 import requests
 import os
 
@@ -42,11 +48,85 @@ def health():
     return jsonify({"status": "ok"})
 
 
+@app.route("/classify/<meal_id>", methods=["POST"])
+def classify_meal(meal_id):
+    """
+    Classify a meal without parsing.
+    Useful for testing the classifier.
+    """
+    try:
+        token = get_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        
+        # Fetch the meal
+        resp = requests.get(f"{PB_URL}/api/collections/meals/records/{meal_id}", headers=headers)
+        if resp.status_code != 200:
+            return jsonify({"error": f"Meal not found: {meal_id}"}), 404
+        
+        meal = resp.json()
+        text = meal.get("text", "").strip()
+        
+        if not text:
+            return jsonify({"error": "Meal has no text to classify"}), 400
+        
+        # Classify
+        classification = classify_log(text)
+        categories = classification.get("categories", ["other"])
+        is_food = "food" in categories
+        
+        return jsonify({
+            "meal_id": meal_id,
+            "text": text,
+            "isFood": is_food,
+            "categories": categories,
+            "reasoning": classification.get("reasoning"),
+            "food_portion": classification.get("food_portion"),
+            "non_food_portions": classification.get("non_food_portions", {})
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/classify-text", methods=["POST"])
+def classify_text():
+    """
+    Classify arbitrary text (for testing without a meal ID).
+    POST body: {"text": "your log entry here"}
+    """
+    try:
+        data = request.get_json()
+        text = data.get("text", "").strip()
+        
+        if not text:
+            return jsonify({"error": "No text provided"}), 400
+        
+        classification = classify_log(text)
+        categories = classification.get("categories", ["other"])
+        is_food = "food" in categories
+        
+        return jsonify({
+            "text": text,
+            "isFood": is_food,
+            "categories": categories,
+            "reasoning": classification.get("reasoning"),
+            "food_portion": classification.get("food_portion"),
+            "non_food_portions": classification.get("non_food_portions", {})
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/parse/<meal_id>", methods=["POST"])
 def parse_meal(meal_id):
     """
     Parse a single meal by ID.
-    Returns the parsed ingredients.
+    
+    Flow:
+    1. Classify first (food vs non-food)
+    2. If non-food → save to non_food_logs, return early
+    3. If food → GPT parse → USDA → save ingredients
     """
     try:
         token = get_token()
@@ -61,6 +141,8 @@ def parse_meal(meal_id):
         meal = resp.json()
         text = meal.get("text", "").strip()
         image_field = meal.get("image")
+        user_id = meal.get("user")
+        timestamp = meal.get("timestamp")
         
         if not text and not image_field:
             return jsonify({"error": "Meal has no text or image to parse"}), 400
@@ -68,6 +150,74 @@ def parse_meal(meal_id):
         print(f"🍽️ Parsing meal: {meal_id}")
         print(f"   Text: {text or '[none]'}")
         print(f"   Image: {image_field or '[none]'}")
+        
+        # ============================================================
+        # STEP 1: CLASSIFY (food vs non-food)
+        # ============================================================
+        if text:
+            print("🏷️ Classifying...")
+            classification = classify_log(text)
+            categories = classification.get("categories", ["other"])
+            is_food = "food" in categories
+            food_portion = classification.get("food_portion")
+            non_food_portions = classification.get("non_food_portions", {})
+            
+            print(f"   isFood: {is_food}")
+            print(f"   Categories: {categories}")
+            
+            # Update meal with classification
+            update_resp = requests.patch(
+                f"{PB_URL}/api/collections/meals/records/{meal_id}",
+                headers=headers,
+                json={"isFood": is_food, "categories": categories}
+            )
+            if update_resp.status_code != 200:
+                print(f"   ⚠️ Failed to update meal classification: {update_resp.text}")
+            
+            # Save non-food entries to non_food_logs
+            for cat in categories:
+                if cat != "food" and cat != "other":
+                    content = non_food_portions.get(cat, text)
+                    non_food_payload = {
+                        "mealId": meal_id,
+                        "user": user_id,
+                        "category": cat,
+                        "content": content,
+                        "timestamp": timestamp
+                    }
+                    nf_resp = requests.post(
+                        f"{PB_URL}/api/collections/non_food_logs/records",
+                        headers=headers,
+                        json=non_food_payload
+                    )
+                    if nf_resp.status_code == 200:
+                        print(f"   📝 Saved non_food_log: {cat}")
+                    else:
+                        print(f"   ⚠️ Failed to save non_food_log: {nf_resp.text}")
+            
+            # If NOT food, we're done - no nutrition parsing needed
+            if not is_food:
+                print("   ⏭️ Non-food entry, skipping nutrition parsing")
+                return jsonify({
+                    "ingredients": [],
+                    "count": 0,
+                    "isFood": False,
+                    "categories": categories,
+                    "message": "Non-food entry - saved to non_food_logs"
+                })
+            
+            # If mixed entry, use just the food portion for parsing
+            if food_portion and len(categories) > 1:
+                print(f"   🔀 Mixed entry, parsing food portion: {food_portion}")
+                text = food_portion
+        else:
+            # Image-only: assume food, classify later if needed
+            is_food = True
+            categories = ["food"]
+        
+        # ============================================================
+        # STEP 2: PARSE FOOD (only runs if isFood=True)
+        # ============================================================
         
         # Parse with GPT
         parsed = []
@@ -130,7 +280,9 @@ def parse_meal(meal_id):
         return jsonify({
             "ingredients": saved,
             "count": len(saved),
-            "source": source
+            "source": source,
+            "isFood": True,
+            "categories": categories
         })
         
     except Exception as e:
