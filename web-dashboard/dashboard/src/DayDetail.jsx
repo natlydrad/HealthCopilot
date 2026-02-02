@@ -22,7 +22,11 @@ export default function DayDetail() {
     async function load() {
       // Fetch meals for this specific day only
       const dayMeals = await fetchMealsForDateRange(date, date);
-      console.log(`Fetched ${dayMeals.length} meals for ${date}:`, dayMeals.map(m => ({ id: m.id, text: m.text })));
+      
+      // Sort by timestamp (earliest first for chronological order)
+      dayMeals.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      
+      console.log(`Fetched ${dayMeals.length} meals for ${date}:`, dayMeals.map(m => ({ id: m.id, text: m.text, time: m.timestamp })));
       setMeals(dayMeals);
 
       let totalCals = 0;
