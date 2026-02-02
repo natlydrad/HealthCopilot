@@ -451,6 +451,60 @@ export async function parseAndSaveMeal(meal) {
   return saved;
 }
 
+// ============================================================
+// CORRECTION CHAT API
+// ============================================================
+
+// Send a message in the correction chat
+export async function sendCorrectionMessage(ingredientId, message, conversation = []) {
+  console.log("💬 Sending correction message:", message);
+  
+  try {
+    const res = await fetch(`${PARSE_API_URL}/correct/${ingredientId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message, conversation }),
+    });
+    
+    if (!res.ok) {
+      const error = await res.text();
+      throw new Error(`Correction API error: ${error}`);
+    }
+    
+    const data = await res.json();
+    console.log("💬 AI response:", data.reply?.substring(0, 100));
+    return data;
+  } catch (err) {
+    console.error("Correction chat error:", err);
+    throw err;
+  }
+}
+
+// Save a finalized correction
+export async function saveCorrection(ingredientId, correction, learned = null) {
+  console.log("💾 Saving correction:", correction);
+  
+  try {
+    const res = await fetch(`${PARSE_API_URL}/correct/${ingredientId}/save`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ correction, learned }),
+    });
+    
+    if (!res.ok) {
+      const error = await res.text();
+      throw new Error(`Save correction error: ${error}`);
+    }
+    
+    const data = await res.json();
+    console.log("✅ Correction saved:", data.success);
+    return data;
+  } catch (err) {
+    console.error("Save correction error:", err);
+    throw err;
+  }
+}
+
 // Unit to grams conversion (matches backend)
 const UNIT_TO_GRAMS = {
   oz: 28.35, ounce: 28.35, ounces: 28.35,

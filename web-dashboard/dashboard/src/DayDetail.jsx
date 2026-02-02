@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { fetchMealsForDateRange, fetchIngredients, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getCorrections, getLearningStats, parseAndSaveMeal, deleteCorrection, clearMealIngredients } from "./api";
+import { fetchMealsForDateRange, fetchIngredients, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getCorrections, getLearningStats, parseAndSaveMeal, deleteCorrection, clearMealIngredients, sendCorrectionMessage, saveCorrection } from "./api";
 
 // Determine if an ingredient is low confidence (needs review)
 function isLowConfidence(ing) {
@@ -287,233 +287,221 @@ function MealCard({ meal }) {
   );
 }
 
-// Chat-style correction component
+// Natural language correction chat component
 function CorrectionChat({ ingredient, meal, onClose, onSave }) {
-  const [messages, setMessages] = useState([
-    { 
-      from: "bot", 
-      text: `I logged "${ingredient.name}" (${ingredient.quantity || '?'} ${ingredient.unit || 'serving'}). What would you like to change?`
-    }
-  ]);
-  const [step, setStep] = useState("initial"); // initial, name, quantity, brand, confirm
-  const [correction, setCorrection] = useState({
-    name: ingredient.name,
-    quantity: ingredient.quantity,
-    unit: ingredient.unit,
-  });
+  const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [pendingCorrection, setPendingCorrection] = useState(null);
+  const [pendingLearned, setPendingLearned] = useState(null);
+  const [conversationHistory, setConversationHistory] = useState([]);
+  const messagesEndRef = useRef(null);
 
-  const addBotMessage = (text) => {
-    setMessages(prev => [...prev, { from: "bot", text }]);
-  };
+  // Build the meal image URL
+  const imageUrl = meal?.image ? 
+    `https://pocketbase-1j2x.onrender.com/api/files/meals/${meal.id}/${meal.image}` : null;
 
-  const addUserMessage = (text) => {
-    setMessages(prev => [...prev, { from: "user", text }]);
-  };
+  // Get the reasoning from parsing metadata
+  const reasoning = ingredient.parsingMetadata?.reasoning || "No reasoning recorded";
 
-  const handleOption = (option, value) => {
-    addUserMessage(option);
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Initial greeting with reasoning
+  useEffect(() => {
+    const greeting = `I identified this as **${ingredient.name}** (${ingredient.quantity || '?'} ${ingredient.unit || 'serving'}).
+
+**My reasoning:** ${reasoning}
+
+What would you like to change? You can tell me naturally, like "that's actually banana peppers" or "it was more like 4 oz".`;
     
-    if (step === "initial") {
-      if (value === "name") {
-        setStep("name");
-        addBotMessage("What should it be called?");
-      } else if (value === "quantity") {
-        setStep("quantity");
-        addBotMessage("What's the right amount?");
-      } else if (value === "wrong") {
-        setStep("name");
-        addBotMessage("Oops! What was it actually?");
-      } else if (value === "correct") {
-        addBotMessage("Great! No changes needed.");
-        setTimeout(onClose, 1000);
-      }
-    }
-  };
+    setMessages([{ from: "bot", text: greeting }]);
+  }, [ingredient, reasoning]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!inputValue.trim()) return;
+    if (!inputValue.trim() || loading) return;
 
-    addUserMessage(inputValue);
-
-    if (step === "name") {
-      setCorrection(prev => ({ ...prev, name: inputValue }));
-      setStep("quantity");
-      addBotMessage(`Got it, "${inputValue}". How much? (e.g., "1 cup", "8 oz", "2 pieces")`);
-    } else if (step === "quantity") {
-      // Parse quantity and unit from input
-      const match = inputValue.match(/^([\d.]+)\s*(.+)?$/);
-      if (match) {
-        setCorrection(prev => ({ 
-          ...prev, 
-          quantity: parseFloat(match[1]), 
-          unit: match[2]?.trim() || prev.unit 
-        }));
-      }
-      setStep("confirm");
-      addBotMessage(`Perfect! I'll remember: ${correction.name} - ${inputValue}. Save this?`);
-    }
-
+    const userMessage = inputValue.trim();
     setInputValue("");
+    
+    // Add user message to UI
+    setMessages(prev => [...prev, { from: "user", text: userMessage }]);
+    setLoading(true);
+
+    try {
+      // Send to correction API
+      const result = await sendCorrectionMessage(
+        ingredient.id,
+        userMessage,
+        conversationHistory
+      );
+
+      // Add bot response
+      setMessages(prev => [...prev, { from: "bot", text: result.reply }]);
+
+      // Update conversation history for context
+      setConversationHistory(prev => [
+        ...prev,
+        { role: "user", content: userMessage },
+        { role: "assistant", content: result.reply }
+      ]);
+
+      // Store pending correction if any
+      if (result.correction) {
+        setPendingCorrection(result.correction);
+      }
+      if (result.learned) {
+        setPendingLearned(result.learned);
+      }
+
+      // If complete, show save button
+      if (result.complete && result.correction) {
+        // Auto-save after a brief delay
+        setTimeout(async () => {
+          await handleSave(result.correction, result.learned);
+        }, 500);
+      }
+
+    } catch (err) {
+      console.error("Correction chat error:", err);
+      setMessages(prev => [...prev, { 
+        from: "bot", 
+        text: "Sorry, I had trouble processing that. The correction API might not be running. You can try again or close this dialog." 
+      }]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSave = async () => {
-    addUserMessage("Yes, save it!");
-    
+  const handleSave = async (correction = pendingCorrection, learned = pendingLearned) => {
+    if (!correction) return;
+
+    setMessages(prev => [...prev, { from: "bot", text: "Saving your correction..." }]);
+
     try {
-      // Save the correction record (for learning)
-      const originalParse = {
-        name: ingredient.name,
-        quantity: ingredient.quantity,
-        unit: ingredient.unit,
-        source: ingredient.source,
-      };
+      const result = await saveCorrection(ingredient.id, correction, learned);
       
-      // Build context for smarter learning
-      const mealTime = meal?.timestamp ? new Date(meal.timestamp) : new Date();
-      const hour = mealTime.getHours();
-      let mealType = "snack";
-      if (hour >= 5 && hour < 11) mealType = "breakfast";
-      else if (hour >= 11 && hour < 15) mealType = "lunch";
-      else if (hour >= 17 && hour < 21) mealType = "dinner";
-      
-      const context = {
-        mealTime: mealTime.toISOString(),
-        mealType,
-        mealText: meal?.text || "",
-        hourOfDay: hour,
-      };
-      
-      await correctIngredient(ingredient.id, originalParse, correction, context);
-      
-      // Check if name changed
-      const nameChanged = correction.name !== ingredient.name;
-      if (nameChanged) {
-        addBotMessage("Looking up nutrition for the correct food...");
+      if (result.success) {
+        const learnedMsg = learned 
+          ? ` I'll remember that "${learned.mistaken}" is actually "${learned.actual}" for next time.`
+          : "";
+        
+        setMessages(prev => [...prev, { 
+          from: "bot", 
+          text: `Done! Updated to ${correction.name || ingredient.name} (${correction.quantity || ingredient.quantity} ${correction.unit || ingredient.unit}).${learnedMsg}` 
+        }]);
+
+        // Close after brief delay
+        setTimeout(() => onSave(result.ingredient), 1500);
       }
-      
-      // Update the actual ingredient (with nutrition re-lookup if name changed)
-      const updated = await updateIngredientWithNutrition(
-        ingredient.id,
-        {
-          name: correction.name,
-          quantity: correction.quantity,
-          unit: correction.unit,
-        },
-        ingredient.name // original name to detect changes
-      );
-      
-      if (nameChanged && updated.usdaCode) {
-        addBotMessage("Found it! Updated nutrition data too.");
-      } else {
-        addBotMessage("Saved! I'll remember this for next time.");
-      }
-      
-      setTimeout(() => onSave({ ...correction, ...updated }), 1000);
     } catch (err) {
-      console.error("Failed to save correction:", err);
-      addBotMessage("Oops, something went wrong. Try again?");
+      console.error("Save error:", err);
+      setMessages(prev => [...prev, { from: "bot", text: "Failed to save. Please try again." }]);
     }
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white w-full max-w-lg rounded-2xl max-h-[90vh] flex flex-col shadow-xl">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
-          <h3 className="font-semibold">Correct Ingredient</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+        {/* Header with image */}
+        <div className="flex items-center gap-3 p-4 border-b">
+          {imageUrl && (
+            <img 
+              src={imageUrl} 
+              alt="Meal" 
+              className="w-12 h-12 object-cover rounded-lg"
+            />
+          )}
+          <div className="flex-1">
+            <h3 className="font-semibold">Correct: {ingredient.name}</h3>
+            <p className="text-xs text-gray-500">
+              {ingredient.quantity} {ingredient.unit} · {ingredient.source || 'GPT'} identified
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">
             ✕
           </button>
         </div>
 
         {/* Chat Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[200px]">
           {messages.map((msg, i) => (
             <div 
               key={i} 
               className={`flex ${msg.from === "user" ? "justify-end" : "justify-start"}`}
             >
               <div 
-                className={`max-w-[80%] px-4 py-2 rounded-2xl ${
+                className={`max-w-[85%] px-4 py-2 rounded-2xl whitespace-pre-wrap ${
                   msg.from === "user" 
                     ? "bg-blue-500 text-white rounded-br-md" 
                     : "bg-gray-100 text-gray-800 rounded-bl-md"
                 }`}
               >
-                {msg.text}
+                {/* Simple markdown bold support */}
+                {msg.text.split(/\*\*(.*?)\*\*/).map((part, j) => 
+                  j % 2 === 1 ? <strong key={j}>{part}</strong> : part
+                )}
               </div>
             </div>
           ))}
+          {loading && (
+            <div className="flex justify-start">
+              <div className="bg-gray-100 text-gray-500 px-4 py-2 rounded-2xl rounded-bl-md">
+                Thinking...
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
         </div>
 
-        {/* Quick Options or Input */}
+        {/* Input */}
         <div className="p-4 border-t bg-gray-50">
-          {step === "initial" && (
-            <div className="flex flex-wrap gap-2">
-              <button 
-                onClick={() => handleOption("Change the name", "name")}
-                className="px-4 py-2 bg-white border rounded-full text-sm hover:bg-gray-50"
-              >
-                Wrong name
-              </button>
-              <button 
-                onClick={() => handleOption("Change the amount", "quantity")}
-                className="px-4 py-2 bg-white border rounded-full text-sm hover:bg-gray-50"
-              >
-                Wrong amount
-              </button>
-              <button 
-                onClick={() => handleOption("This is completely wrong", "wrong")}
-                className="px-4 py-2 bg-white border rounded-full text-sm hover:bg-gray-50"
-              >
-                Totally wrong
-              </button>
-              <button 
-                onClick={() => handleOption("Looks good!", "correct")}
-                className="px-4 py-2 bg-green-50 border-green-200 border rounded-full text-sm text-green-700 hover:bg-green-100"
-              >
-                Looks correct
-              </button>
-            </div>
-          )}
-
-          {step === "confirm" && (
-            <div className="flex gap-2">
-              <button 
-                onClick={handleSave}
-                className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-full text-sm hover:bg-blue-600"
-              >
-                Save
-              </button>
-              <button 
-                onClick={onClose}
-                className="px-4 py-2 bg-gray-200 rounded-full text-sm hover:bg-gray-300"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-
-          {(step === "name" || step === "quantity") && (
-            <form onSubmit={handleSubmit} className="flex gap-2">
-              <input
-                type="text"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                placeholder={step === "name" ? "Enter correct name..." : "e.g., 1 cup, 8 oz"}
-                className="flex-1 px-4 py-2 border rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                autoFocus
-              />
-              <button 
-                type="submit"
-                className="px-4 py-2 bg-blue-500 text-white rounded-full text-sm hover:bg-blue-600"
-              >
-                Send
-              </button>
-            </form>
-          )}
+          <form onSubmit={handleSubmit} className="flex gap-2">
+            <input
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              placeholder="Tell me what to correct..."
+              className="flex-1 px-4 py-2 border rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              autoFocus
+              disabled={loading}
+            />
+            <button 
+              type="submit"
+              disabled={loading || !inputValue.trim()}
+              className="px-4 py-2 bg-blue-500 text-white rounded-full text-sm hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Send
+            </button>
+          </form>
+          
+          {/* Quick suggestions */}
+          <div className="flex flex-wrap gap-2 mt-2">
+            <button
+              onClick={() => setInputValue("That's not what this is")}
+              className="text-xs px-3 py-1 bg-white border rounded-full hover:bg-gray-50"
+            >
+              Wrong item
+            </button>
+            <button
+              onClick={() => setInputValue("The amount is wrong")}
+              className="text-xs px-3 py-1 bg-white border rounded-full hover:bg-gray-50"
+            >
+              Wrong amount
+            </button>
+            <button
+              onClick={() => {
+                setMessages(prev => [...prev, { from: "bot", text: "No changes needed. Closing..." }]);
+                setTimeout(onClose, 1000);
+              }}
+              className="text-xs px-3 py-1 bg-green-50 border-green-200 border rounded-full text-green-700 hover:bg-green-100"
+            >
+              Looks correct
+            </button>
+          </div>
         </div>
       </div>
     </div>

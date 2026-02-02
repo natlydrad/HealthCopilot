@@ -510,3 +510,184 @@ def lookup_similar_meal_in_history(user_id: str, meal_text: str, limit: int = 5)
         print(f"⚠️ History lookup failed: {e}")
     
     return []
+
+
+# ============================================================
+# USER FOOD PROFILE - Personal food vocabulary and learning
+# ============================================================
+
+def get_user_food_profile(user_id: str):
+    """
+    Get a user's food profile (common foods, confusion pairs, portion bias).
+    Returns the profile record or None if not found.
+    """
+    if not user_id:
+        return None
+    
+    import urllib.parse
+    filter_str = f"(user='{user_id}')"
+    encoded_filter = urllib.parse.quote(filter_str)
+    url = f"{PB_URL}/api/collections/user_food_profile/records?filter={encoded_filter}"
+    headers = {"Authorization": f"Bearer {get_token()}"}
+    
+    try:
+        r = requests.get(url, headers=headers)
+        if r.status_code == 200:
+            items = r.json().get("items", [])
+            if items:
+                return items[0]
+    except Exception as e:
+        print(f"⚠️ Failed to get user food profile: {e}")
+    
+    return None
+
+
+def get_or_create_user_food_profile(user_id: str):
+    """
+    Get or create a user's food profile.
+    Returns the profile record.
+    """
+    profile = get_user_food_profile(user_id)
+    if profile:
+        return profile
+    
+    # Create new profile
+    headers = {"Authorization": f"Bearer {get_token()}"}
+    url = f"{PB_URL}/api/collections/user_food_profile/records"
+    
+    new_profile = {
+        "user": user_id,
+        "foods": [],
+        "confusionPairs": [],
+        "portionBias": 1.0,
+    }
+    
+    try:
+        r = requests.post(url, headers=headers, json=new_profile)
+        if r.status_code == 200:
+            print(f"📝 Created new food profile for user {user_id}")
+            return r.json()
+    except Exception as e:
+        print(f"⚠️ Failed to create user food profile: {e}")
+    
+    return None
+
+
+def update_user_food_profile(profile_id: str, updates: dict):
+    """
+    Update a user's food profile.
+    """
+    headers = {"Authorization": f"Bearer {get_token()}"}
+    url = f"{PB_URL}/api/collections/user_food_profile/records/{profile_id}"
+    
+    try:
+        r = requests.patch(url, headers=headers, json=updates)
+        if r.status_code == 200:
+            return r.json()
+    except Exception as e:
+        print(f"⚠️ Failed to update user food profile: {e}")
+    
+    return None
+
+
+def add_learned_confusion(user_id: str, mistaken: str, actual: str):
+    """
+    Add a confusion pair to user's profile (mistaken -> actual).
+    E.g., "yellow mustard" -> "pickled banana peppers"
+    """
+    profile = get_or_create_user_food_profile(user_id)
+    if not profile:
+        return None
+    
+    confusion_pairs = profile.get("confusionPairs", []) or []
+    
+    # Check if this pair already exists
+    for pair in confusion_pairs:
+        if pair.get("mistaken", "").lower() == mistaken.lower():
+            # Update existing pair
+            pair["actual"] = actual
+            pair["count"] = pair.get("count", 0) + 1
+            break
+    else:
+        # Add new pair
+        confusion_pairs.append({
+            "mistaken": mistaken,
+            "actual": actual,
+            "count": 1
+        })
+    
+    return update_user_food_profile(profile["id"], {"confusionPairs": confusion_pairs})
+
+
+def add_common_food(user_id: str, food_name: str, default_portion: str = None, aliases: list = None):
+    """
+    Add a food to user's common foods list.
+    """
+    profile = get_or_create_user_food_profile(user_id)
+    if not profile:
+        return None
+    
+    foods = profile.get("foods", []) or []
+    
+    # Check if food already exists
+    for food in foods:
+        if food.get("name", "").lower() == food_name.lower():
+            # Update frequency
+            food["frequency"] = food.get("frequency", 0) + 1
+            if default_portion:
+                food["defaultPortion"] = default_portion
+            if aliases:
+                existing_aliases = food.get("aliases", [])
+                food["aliases"] = list(set(existing_aliases + aliases))
+            break
+    else:
+        # Add new food
+        foods.append({
+            "name": food_name,
+            "frequency": 1,
+            "defaultPortion": default_portion,
+            "aliases": aliases or []
+        })
+    
+    return update_user_food_profile(profile["id"], {"foods": foods})
+
+
+def build_user_context_prompt(user_id: str) -> str:
+    """
+    Build a context string for GPT prompts based on user's food profile.
+    Returns a string to inject into parsing prompts.
+    """
+    profile = get_user_food_profile(user_id)
+    if not profile:
+        return ""
+    
+    context_parts = []
+    
+    # Common foods
+    foods = profile.get("foods", [])
+    if foods:
+        food_names = [f.get("name") for f in foods[:10] if f.get("name")]  # Top 10
+        if food_names:
+            context_parts.append(f"USER'S COMMON FOODS: {', '.join(food_names)}")
+    
+    # Confusion pairs (most important for learning)
+    confusions = profile.get("confusionPairs", [])
+    if confusions:
+        confusion_strs = []
+        for c in confusions[:5]:  # Top 5
+            mistaken = c.get("mistaken")
+            actual = c.get("actual")
+            if mistaken and actual:
+                confusion_strs.append(f'"{mistaken}" is usually "{actual}"')
+        if confusion_strs:
+            context_parts.append(f"KNOWN CONFUSIONS: {'; '.join(confusion_strs)}")
+    
+    # Portion bias
+    portion_bias = profile.get("portionBias", 1.0)
+    if portion_bias and abs(portion_bias - 1.0) > 0.1:
+        if portion_bias > 1.0:
+            context_parts.append(f"PORTION NOTE: User's portions are typically {portion_bias:.1f}x larger than average")
+        else:
+            context_parts.append(f"PORTION NOTE: User's portions are typically {portion_bias:.1f}x smaller than average")
+    
+    return "\n".join(context_parts)

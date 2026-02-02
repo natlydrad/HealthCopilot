@@ -10,8 +10,8 @@ Flow:
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from pb_client import get_token, insert_ingredient
-from parser_gpt import parse_ingredients, parse_ingredients_from_image
+from pb_client import get_token, insert_ingredient, build_user_context_prompt, add_learned_confusion, add_common_food
+from parser_gpt import parse_ingredients, parse_ingredients_from_image, correction_chat
 from lookup_usda import usda_lookup, scale_nutrition
 from log_classifier import classify_log
 import requests
@@ -222,22 +222,29 @@ def parse_meal(meal_id):
         # STEP 2: PARSE FOOD (only runs if isFood=True)
         # ============================================================
         
+        # Get user context for personalized parsing
+        user_context = ""
+        if user_id:
+            user_context = build_user_context_prompt(user_id)
+            if user_context:
+                print(f"👤 User context loaded:\n{user_context}")
+        
         # Parse with GPT
         parsed = []
         
         if text and image_field:
             print("🧠 GPT: Parsing both text + image...")
-            ingredients_text = parse_ingredients(text)
-            ingredients_image = parse_ingredients_from_image(meal, PB_URL, token)
+            ingredients_text = parse_ingredients(text, user_context)
+            ingredients_image = parse_ingredients_from_image(meal, PB_URL, token, user_context)
             parsed = ingredients_text + ingredients_image
             source = "gpt_both"
         elif image_field:
             print("🧠 GPT: Parsing image...")
-            parsed = parse_ingredients_from_image(meal, PB_URL, token)
+            parsed = parse_ingredients_from_image(meal, PB_URL, token, user_context)
             source = "gpt_image"
         else:
             print("🧠 GPT: Parsing text...")
-            parsed = parse_ingredients(text)
+            parsed = parse_ingredients(text, user_context)
             source = "gpt_text"
         
         if not parsed:
@@ -294,6 +301,7 @@ def parse_meal(meal_id):
                     "source": "usda" if usda else "gpt",
                     "usdaMatch": bool(usda),
                     "parsedVia": "parse_api",
+                    "reasoning": ing.get("reasoning", ""),  # GPT's reasoning for this identification
                     "portionGrams": round(quantity * (usda.get("serving_size_g", 100) if usda and unit in ("serving", "piece") else 
                                           28.35 if unit == "oz" else 
                                           240 if unit == "cup" else 
@@ -317,6 +325,221 @@ def parse_meal(meal_id):
         
     except Exception as e:
         print(f"❌ Error parsing meal {meal_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/correct/<ingredient_id>", methods=["POST"])
+def correct_ingredient_chat(ingredient_id):
+    """
+    Conversational correction endpoint.
+    
+    POST body: {
+        message: "that's banana peppers not mustard",
+        conversation: [{role: "user", content: "..."}, {role: "assistant", content: "..."}, ...]
+    }
+    
+    Response: {
+        reply: "I see - those pickled banana peppers do look similar...",
+        correction: { name: "pickled banana peppers", quantity: 1, unit: "oz" } or null,
+        learned: { mistaken: "yellow mustard", actual: "pickled banana peppers" } or null,
+        complete: true/false
+    }
+    """
+    try:
+        token = get_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        
+        # Get request data
+        data = request.get_json()
+        user_message = data.get("message", "").strip()
+        conversation = data.get("conversation", [])
+        
+        if not user_message:
+            return jsonify({"error": "No message provided"}), 400
+        
+        # Fetch the ingredient
+        ing_resp = requests.get(
+            f"{PB_URL}/api/collections/ingredients/records/{ingredient_id}",
+            headers=headers
+        )
+        if ing_resp.status_code != 200:
+            return jsonify({"error": f"Ingredient not found: {ingredient_id}"}), 404
+        
+        ingredient = ing_resp.json()
+        meal_id = ingredient.get("mealId")
+        
+        # Fetch the meal (for image access)
+        meal_resp = requests.get(
+            f"{PB_URL}/api/collections/meals/records/{meal_id}",
+            headers=headers
+        )
+        if meal_resp.status_code != 200:
+            return jsonify({"error": f"Meal not found: {meal_id}"}), 404
+        
+        meal = meal_resp.json()
+        
+        print(f"💬 Correction chat for ingredient: {ingredient.get('name')}")
+        print(f"   User: {user_message}")
+        
+        # Call the correction chat function
+        result = correction_chat(
+            meal=meal,
+            ingredient=ingredient,
+            user_message=user_message,
+            conversation_history=conversation,
+            pb_url=PB_URL,
+            token=token
+        )
+        
+        print(f"   AI: {result.get('reply', '')[:100]}...")
+        if result.get("correction"):
+            print(f"   Correction: {result['correction']}")
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"❌ Error in correction chat: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/correct/<ingredient_id>/save", methods=["POST"])
+def save_correction(ingredient_id):
+    """
+    Save a correction and update the ingredient.
+    Also saves to learned patterns if applicable.
+    
+    POST body: {
+        correction: { name: "...", quantity: ..., unit: "..." },
+        learned: { mistaken: "...", actual: "..." } or null
+    }
+    """
+    try:
+        token = get_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        
+        data = request.get_json()
+        correction = data.get("correction", {})
+        learned = data.get("learned")
+        
+        if not correction:
+            return jsonify({"error": "No correction provided"}), 400
+        
+        # Fetch original ingredient
+        ing_resp = requests.get(
+            f"{PB_URL}/api/collections/ingredients/records/{ingredient_id}",
+            headers=headers
+        )
+        if ing_resp.status_code != 200:
+            return jsonify({"error": f"Ingredient not found: {ingredient_id}"}), 404
+        
+        original = ing_resp.json()
+        
+        # Build update payload
+        update = {}
+        if correction.get("name"):
+            update["name"] = correction["name"]
+        if correction.get("quantity") is not None:
+            update["quantity"] = correction["quantity"]
+        if correction.get("unit"):
+            update["unit"] = correction["unit"]
+        
+        # If name changed, re-lookup USDA nutrition
+        if correction.get("name") and correction["name"] != original.get("name"):
+            print(f"📝 Name changed: {original.get('name')} → {correction['name']}")
+            usda = usda_lookup(correction["name"])
+            if usda:
+                quantity = correction.get("quantity", original.get("quantity", 1))
+                unit = correction.get("unit", original.get("unit", "serving"))
+                scaled_nutrition = scale_nutrition(
+                    usda.get("nutrition", []),
+                    quantity,
+                    unit,
+                    usda.get("serving_size_g", 100.0)
+                )
+                update["nutrition"] = scaled_nutrition
+                update["usdaCode"] = usda.get("usdaCode")
+                update["source"] = "usda"
+                print(f"   ✅ Found USDA match: {usda.get('name')}")
+            else:
+                update["source"] = "corrected"
+                print(f"   ⚠️ No USDA match for corrected name")
+        
+        # Update the ingredient
+        update_resp = requests.patch(
+            f"{PB_URL}/api/collections/ingredients/records/{ingredient_id}",
+            headers=headers,
+            json=update
+        )
+        
+        if update_resp.status_code != 200:
+            return jsonify({"error": f"Failed to update: {update_resp.text}"}), 500
+        
+        updated = update_resp.json()
+        
+        # Save learned pattern if applicable
+        if learned and learned.get("mistaken") and learned.get("actual"):
+            print(f"🧠 Learning: {learned['mistaken']} → {learned['actual']}")
+            
+            # Get user ID from the meal
+            meal_id = original.get("mealId")
+            user_id = None
+            if meal_id:
+                try:
+                    meal_resp = requests.get(
+                        f"{PB_URL}/api/collections/meals/records/{meal_id}",
+                        headers=headers
+                    )
+                    if meal_resp.status_code == 200:
+                        user_id = meal_resp.json().get("user")
+                except:
+                    pass
+            
+            # Save to user_food_profile (the new learning system)
+            if user_id:
+                try:
+                    add_learned_confusion(user_id, learned["mistaken"], learned["actual"])
+                    add_common_food(user_id, learned["actual"])
+                    print(f"   ✅ Updated user food profile")
+                except Exception as e:
+                    print(f"   ⚠️ Could not update user food profile: {e}")
+            
+            # Also save to ingredient_corrections for backward compatibility
+            correction_record = {
+                "ingredientId": ingredient_id,
+                "user": user_id or meal_id,
+                "originalParse": {
+                    "name": original.get("name"),
+                    "quantity": original.get("quantity"),
+                    "unit": original.get("unit"),
+                },
+                "userCorrection": correction,
+                "correctionType": "name_change" if correction.get("name") else "quantity_change",
+                "context": {
+                    "learned": learned,
+                    "via": "correction_chat"
+                }
+            }
+            
+            # Try to save correction record (don't fail if collection doesn't exist)
+            try:
+                corr_resp = requests.post(
+                    f"{PB_URL}/api/collections/ingredient_corrections/records",
+                    headers=headers,
+                    json=correction_record
+                )
+                if corr_resp.status_code == 200:
+                    print(f"   ✅ Saved correction record")
+            except Exception as e:
+                print(f"   ⚠️ Could not save correction record: {e}")
+        
+        return jsonify({
+            "success": True,
+            "ingredient": updated,
+            "learned": learned
+        })
+        
+    except Exception as e:
+        print(f"❌ Error saving correction: {e}")
         return jsonify({"error": str(e)}), 500
 
 
