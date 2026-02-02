@@ -515,9 +515,26 @@ class SyncManager {
 
 
     func uploadMealWithImage(meal: Meal, imageData: Data) async throws {
+        // --- COMPRESS IMAGE IF NEEDED ---
+        let maxBytes = 4_500_000  // Stay under PocketBase's 5MB limit
+        let compressed: Data
+        if imageData.count > maxBytes {
+            print("🗜️ Image too large (\(imageData.count) bytes), compressing...")
+            if let ui = UIImage(data: imageData),
+               let optimized = resizeAndCompressImage(ui) {
+                compressed = optimized
+                print("🗜️ Compressed: \(imageData.count) → \(compressed.count) bytes")
+            } else {
+                print("⚠️ Compression failed, using original")
+                compressed = imageData
+            }
+        } else {
+            compressed = imageData
+        }
+        
         // --- BUILD REQUEST ---
         let filename = "meal-\(meal.localId.prefix(8)).jpg"
-        let files = [(name: PB_PHOTO_FIELD, filename: filename, mime: "image/jpeg", data: imageData)]
+        let files = [(name: PB_PHOTO_FIELD, filename: filename, mime: "image/jpeg", data: compressed)]
         let boundary = "Boundary-\(UUID().uuidString)"
 
         // 🔒 Auth check
