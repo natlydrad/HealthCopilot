@@ -144,21 +144,27 @@ def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = No
         DO NOT return "burrito" or "salad" - list the actual ingredients you can see/infer!
         Simple items stay as-is: apple, coffee, eggs, chicken breast
         
+        NUTRITION FACTS LABEL: If a Nutrition Facts label is visible (e.g. on a package, bottle, or product),
+        read the per-serving values and add an optional "nutritionFromLabel" object to the matching item with:
+        - servingSizeG (number, optional) - serving size in grams if shown (e.g. 30, 42)
+        - calories (number) - Calories
+        - protein (number, g)
+        - totalCarb (number, g)
+        - dietaryFiber (number, g, optional)
+        - totalSugars (number, g, optional)
+        - totalFat (number, g)
+        - saturatedFat (number, g, optional)
+        - sodium (number, mg)
+        Use null for any value not visible. Only include nutritionFromLabel when you can clearly read the label.
+        
         Return ONLY a JSON array (no markdown, no explanation).
         Each item must have:
         - name (string) - specific ingredient name
-        - quantity (float) - estimate realistic portions:
-            * Meats: oz (chicken→4, steak→6)
-            * Rice/grains: cups (0.5-1)
-            * Vegetables: cups (0.25-0.5)
-            * Cheese: oz (1-2)
-            * Sauces: tbsp (1-2)
-            * Drinks: oz (8-12)
-            * Supplements: count visible
-        - unit (string) - oz, cup, tbsp, piece, pill, etc.
+        - quantity (float) - estimate realistic portions (or 1 serving if using label)
+        - unit (string) - oz, cup, tbsp, piece, serving, etc.
         - category (string) - "food", "drink", or "supplement"
-        - reasoning (string) - brief explanation of what you see that led to this identification
-          e.g., "yellow condiment in squeeze pattern typical of mustard" or "appears to be a standard hot dog bun size"
+        - reasoning (string) - brief explanation
+        - nutritionFromLabel (object, optional) - only when a Nutrition Facts label is visible for this item
         
         If no edible items are visible, return an empty array [].
         """

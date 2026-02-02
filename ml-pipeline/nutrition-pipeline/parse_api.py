@@ -46,6 +46,35 @@ def normalize_quantity(ing):
     return ing
 
 
+def nutrition_from_label_to_array(label: dict, quantity: float, serving_size_g: float) -> list:
+    """
+    Convert GPT-extracted nutritionFromLabel (per serving) to our nutrition array format,
+    scaled by quantity (e.g. 2 servings). Label values are per serving; serving_size_g is per serving.
+    Returns list of { nutrientName, unitName, value } for storage.
+    """
+    if not label or serving_size_g <= 0:
+        return []
+    scale = quantity  # e.g. 2 servings => 2x values
+    out = []
+    if label.get("calories") is not None:
+        out.append({"nutrientName": "Energy", "unitName": "KCAL", "value": round((label["calories"] or 0) * scale, 2)})
+    if label.get("protein") is not None:
+        out.append({"nutrientName": "Protein", "unitName": "G", "value": round((label["protein"] or 0) * scale, 2)})
+    if label.get("totalCarb") is not None:
+        out.append({"nutrientName": "Carbohydrate, by difference", "unitName": "G", "value": round((label["totalCarb"] or 0) * scale, 2)})
+    if label.get("dietaryFiber") is not None:
+        out.append({"nutrientName": "Fiber, total dietary", "unitName": "G", "value": round((label["dietaryFiber"] or 0) * scale, 2)})
+    if label.get("totalSugars") is not None:
+        out.append({"nutrientName": "Total Sugars", "unitName": "G", "value": round((label["totalSugars"] or 0) * scale, 2)})
+    if label.get("totalFat") is not None:
+        out.append({"nutrientName": "Total lipid (fat)", "unitName": "G", "value": round((label["totalFat"] or 0) * scale, 2)})
+    if label.get("saturatedFat") is not None:
+        out.append({"nutrientName": "Fatty acids, total saturated", "unitName": "G", "value": round((label["saturatedFat"] or 0) * scale, 2)})
+    if label.get("sodium") is not None:
+        out.append({"nutrientName": "Sodium, Na", "unitName": "MG", "value": round((label["sodium"] or 0) * scale, 2)})
+    return out
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"})
@@ -272,28 +301,54 @@ def parse_meal(meal_id):
                 continue
             
             ing = normalize_quantity(ing)
-            
-            # USDA lookup
-            print(f"🔎 Looking up USDA nutrition for: '{name}'")
-            usda = usda_lookup(name)
-            
-            # Get quantity and unit for scaling
             quantity = ing.get("quantity", 1)
             unit = ing.get("unit", "serving")
             
-            if usda:
-                print(f"   ✅ USDA match found: {usda.get('name')}")
-                # Scale nutrition to actual portion size
-                serving_size = usda.get("serving_size_g", 100.0)
-                scaled_nutrition = scale_nutrition(
-                    usda.get("nutrition", []),
-                    quantity,
-                    unit,
-                    serving_size
-                )
+            # Prefer nutrition from visible label when GPT read it
+            label_nutrition = ing.get("nutritionFromLabel")
+            usda = None
+            scaled_nutrition = []
+            source_ing = "gpt"
+            portion_grams = None
+            
+            if label_nutrition and isinstance(label_nutrition, dict):
+                serving_size_g = label_nutrition.get("servingSizeG") or 100.0
+                scaled_nutrition = nutrition_from_label_to_array(label_nutrition, quantity, serving_size_g)
+                if scaled_nutrition:
+                    print(f"   📋 Using nutrition from label for: '{ing.get('name')}'")
+                    source_ing = "label"
+                    portion_grams = round(quantity * serving_size_g, 1) if serving_size_g else None
+                    label_used = True
+                else:
+                    label_nutrition = None
+                    label_used = False
             else:
-                print(f"   ⚠️ No USDA match for '{name}'")
-                scaled_nutrition = []
+                label_used = False
+            
+            if not scaled_nutrition:
+                # USDA lookup
+                print(f"🔎 Looking up USDA nutrition for: '{name}'")
+                usda = usda_lookup(name)
+                if usda:
+                    print(f"   ✅ USDA match found: {usda.get('name')}")
+                    serving_size = usda.get("serving_size_g", 100.0)
+                    scaled_nutrition = scale_nutrition(
+                        usda.get("nutrition", []),
+                        quantity,
+                        unit,
+                        serving_size
+                    )
+                    source_ing = "usda"
+                    portion_grams = round(quantity * (usda.get("serving_size_g", 100) if unit in ("serving", "piece") else
+                                          28.35 if unit == "oz" else
+                                          240 if unit == "cup" else
+                                          15 if unit == "tbsp" else 100), 1)
+                else:
+                    print(f"   ⚠️ No USDA match for '{name}'")
+                    scaled_nutrition = []
+                    usda = None
+                    source_ing = "gpt"
+                    portion_grams = None
             
             # Prepare payload with SCALED nutrition values
             payload = {
@@ -302,19 +357,17 @@ def parse_meal(meal_id):
                 "quantity": quantity,
                 "unit": unit,
                 "category": ing.get("category", ""),
-                "nutrition": scaled_nutrition,  # Now scaled to actual portion!
+                "nutrition": scaled_nutrition,
                 "usdaCode": usda.get("usdaCode") if usda else None,
-                "source": "usda" if usda else "gpt",
+                "source": source_ing,
                 "parsingSource": source,
                 "parsingMetadata": {
-                    "source": "usda" if usda else "gpt",
+                    "source": source_ing,
                     "usdaMatch": bool(usda),
                     "parsedVia": "parse_api",
-                    "reasoning": ing.get("reasoning", ""),  # GPT's reasoning for this identification
-                    "portionGrams": round(quantity * (usda.get("serving_size_g", 100) if usda and unit in ("serving", "piece") else 
-                                          28.35 if unit == "oz" else 
-                                          240 if unit == "cup" else 
-                                          15 if unit == "tbsp" else 100), 1) if usda else None
+                    "reasoning": ing.get("reasoning", ""),
+                    "portionGrams": portion_grams,
+                    "fromLabel": label_used,
                 }
             }
             
