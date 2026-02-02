@@ -45,7 +45,7 @@ export async function fetchMealsForDateRange(startDate, endDate) {
     `timestamp >= "${startTS}" && timestamp <= "${endTS}"`
   );
 
-  const url = `${PB_BASE}/api/collections/meals/records?perPage=100&sort=-timestamp&filter=${filter}`;
+  const url = `${PB_BASE}/api/collections/meals/records?perPage=100&sort=timestamp&filter=${filter}`;
   console.log("🔍 Fetching meals:", startDate, "to", endDate);
 
   try {
