@@ -482,9 +482,11 @@ def save_correction(ingredient_id):
         
         updated = update_resp.json()
         
-        # Get user ID from the meal (needed for both learning and logging)
+        # Get user ID and meal info (needed for both learning and logging)
         meal_id = original.get("mealId")
         user_id = None
+        meal_text = None
+        meal_data = None
         if meal_id:
             try:
                 meal_resp = requests.get(
@@ -492,7 +494,9 @@ def save_correction(ingredient_id):
                     headers=headers
                 )
                 if meal_resp.status_code == 200:
-                    user_id = meal_resp.json().get("user")
+                    meal_data = meal_resp.json()
+                    user_id = meal_data.get("user")
+                    meal_text = meal_data.get("text", "")
             except:
                 pass
         
@@ -500,12 +504,22 @@ def save_correction(ingredient_id):
         if should_learn and learned and learned.get("mistaken") and learned.get("actual"):
             print(f"🧠 Learning (shouldLearn=true): {learned['mistaken']} → {learned['actual']}")
             
+            # Extract context for smarter learning
+            visual_context = original.get("parsingMetadata", {}).get("reasoning", "")
+            meal_context = meal_text[:50] if meal_text else None  # First 50 chars of meal description
+            
             # Save to user_food_profile (the new learning system)
             if user_id:
                 try:
-                    add_learned_confusion(user_id, learned["mistaken"], learned["actual"])
+                    add_learned_confusion(
+                        user_id, 
+                        learned["mistaken"], 
+                        learned["actual"],
+                        visual_context=visual_context,
+                        meal_context=meal_context
+                    )
                     add_common_food(user_id, learned["actual"])
-                    print(f"   ✅ Updated user food profile")
+                    print(f"   ✅ Updated user food profile (with context: {visual_context[:30]}...)")
                 except Exception as e:
                     print(f"   ⚠️ Could not update user food profile: {e}")
         elif learned:

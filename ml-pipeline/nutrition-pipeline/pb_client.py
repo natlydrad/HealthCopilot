@@ -590,10 +590,17 @@ def update_user_food_profile(profile_id: str, updates: dict):
     return None
 
 
-def add_learned_confusion(user_id: str, mistaken: str, actual: str):
+def add_learned_confusion(user_id: str, mistaken: str, actual: str, visual_context: str = None, meal_context: str = None):
     """
     Add a confusion pair to user's profile (mistaken -> actual).
     E.g., "yellow mustard" -> "pickled banana peppers"
+    
+    Args:
+        user_id: The user's ID
+        mistaken: What GPT thought it was
+        actual: What it actually was
+        visual_context: Description of what it looked like (e.g., "sliced rings on hot dog")
+        meal_context: What meal this was part of (e.g., "hot dog")
     """
     profile = get_or_create_user_food_profile(user_id)
     if not profile:
@@ -602,19 +609,35 @@ def add_learned_confusion(user_id: str, mistaken: str, actual: str):
     confusion_pairs = profile.get("confusionPairs", []) or []
     
     # Check if this pair already exists
+    found = False
     for pair in confusion_pairs:
-        if pair.get("mistaken", "").lower() == mistaken.lower():
+        if pair.get("mistaken", "").lower() == mistaken.lower() and pair.get("actual", "").lower() == actual.lower():
             # Update existing pair
-            pair["actual"] = actual
             pair["count"] = pair.get("count", 0) + 1
+            # Add visual context if provided and not already there
+            if visual_context:
+                contexts = pair.get("visualContexts", [])
+                if visual_context not in contexts:
+                    contexts.append(visual_context)
+                pair["visualContexts"] = contexts[-5:]  # Keep last 5
+            if meal_context:
+                meals = pair.get("mealContexts", [])
+                if meal_context not in meals:
+                    meals.append(meal_context)
+                pair["mealContexts"] = meals[-5:]  # Keep last 5
+            found = True
             break
-    else:
+    
+    if not found:
         # Add new pair
-        confusion_pairs.append({
+        new_pair = {
             "mistaken": mistaken,
             "actual": actual,
-            "count": 1
-        })
+            "count": 1,
+            "visualContexts": [visual_context] if visual_context else [],
+            "mealContexts": [meal_context] if meal_context else [],
+        }
+        confusion_pairs.append(new_pair)
     
     return update_user_food_profile(profile["id"], {"confusionPairs": confusion_pairs})
 
@@ -656,6 +679,11 @@ def build_user_context_prompt(user_id: str) -> str:
     """
     Build a context string for GPT prompts based on user's food profile.
     Returns a string to inject into parsing prompts.
+    
+    Key principles:
+    - Common foods: User preferences (they eat these often)
+    - Confusions: Only suggest after 3+ occurrences, frame as questions not assertions
+    - Never auto-replace, always ask for confirmation
     """
     profile = get_user_food_profile(user_id)
     if not profile:
@@ -663,24 +691,45 @@ def build_user_context_prompt(user_id: str) -> str:
     
     context_parts = []
     
-    # Common foods
+    # Common foods - these are user preferences, not visual confusions
+    # Frame as: "User frequently eats X" not "X is always Y"
     foods = profile.get("foods", [])
     if foods:
-        food_names = [f.get("name") for f in foods[:10] if f.get("name")]  # Top 10
-        if food_names:
-            context_parts.append(f"USER'S COMMON FOODS: {', '.join(food_names)}")
+        # Sort by frequency, get top foods
+        sorted_foods = sorted(foods, key=lambda f: f.get("frequency", 0), reverse=True)
+        frequent_foods = [f.get("name") for f in sorted_foods[:8] if f.get("name") and f.get("frequency", 0) >= 2]
+        if frequent_foods:
+            context_parts.append(f"USER FREQUENTLY EATS: {', '.join(frequent_foods)}")
+            context_parts.append("(Consider these as possibilities when identifying ambiguous items)")
     
-    # Confusion pairs (most important for learning)
+    # Confusion pairs - ONLY include if count >= 3 (reliable pattern)
+    # Frame as QUESTIONS/POSSIBILITIES, not assertions
     confusions = profile.get("confusionPairs", [])
-    if confusions:
-        confusion_strs = []
-        for c in confusions[:5]:  # Top 5
+    reliable_confusions = [c for c in confusions if c.get("count", 0) >= 3]
+    
+    if reliable_confusions:
+        context_parts.append("")
+        context_parts.append("PAST IDENTIFICATION NOTES (ask user to confirm, don't auto-replace):")
+        for c in reliable_confusions[:5]:
             mistaken = c.get("mistaken")
             actual = c.get("actual")
+            count = c.get("count", 0)
+            visual_contexts = c.get("visualContexts", [])
+            
             if mistaken and actual:
-                confusion_strs.append(f'"{mistaken}" is usually "{actual}"')
-        if confusion_strs:
-            context_parts.append(f"KNOWN CONFUSIONS: {'; '.join(confusion_strs)}")
+                note = f"- When you see something that looks like '{mistaken}'"
+                if visual_contexts:
+                    note += f" (especially: {', '.join(visual_contexts[:2])})"
+                note += f", it might actually be '{actual}' (corrected {count}x)"
+                note += f" - ASK the user to confirm before assuming"
+                context_parts.append(note)
+    
+    # Pending confusions (1-2 occurrences) - mention but don't emphasize
+    pending_confusions = [c for c in confusions if 0 < c.get("count", 0) < 3]
+    if pending_confusions:
+        pending_items = [c.get("actual") for c in pending_confusions if c.get("actual")]
+        if pending_items:
+            context_parts.append(f"(Learning: user has also mentioned eating {', '.join(pending_items[:3])})")
     
     # Portion bias
     portion_bias = profile.get("portionBias", 1.0)
