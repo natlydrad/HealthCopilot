@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchMealsForDateRange, fetchAllIngredients } from "./api";
 
@@ -10,34 +10,41 @@ export default function Dashboard() {
   const [weekOffset, setWeekOffset] = useState(0); // 0 = current week, -1 = last week, etc.
   const [showCalendar, setShowCalendar] = useState(false);
 
-  // Calculate the days for the current week view
-  const days = useMemo(() => {
+  // Helper to calculate days for a given week offset
+  const getDaysForWeek = (offset) => {
     const result = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
-      d.setDate(d.getDate() - i + (weekOffset * 7));
+      d.setDate(d.getDate() - i + (offset * 7));
       const year = d.getFullYear();
       const month = String(d.getMonth() + 1).padStart(2, '0');
       const date = String(d.getDate()).padStart(2, '0');
       result.push(`${year}-${month}-${date}`);
     }
     return result;
-  }, [weekOffset]);
+  };
+
+  // Calculate current week's days
+  const days = getDaysForWeek(weekOffset);
 
   // Fetch meals whenever the week changes
   useEffect(() => {
     async function loadWeek() {
       setLoading(true);
+      const weekDays = getDaysForWeek(weekOffset);
+      const startDate = weekDays[0];
+      const endDate = weekDays[6];
+      
+      console.log(`🔄 Fetching meals for ${startDate} to ${endDate}...`);
+      
       try {
-        const startDate = days[0];
-        const endDate = days[6];
-        
         // Fetch meals for this week and ingredients in parallel
         const [mealItems, allIngredients] = await Promise.all([
           fetchMealsForDateRange(startDate, endDate),
           fetchAllIngredients()
         ]);
         
+        console.log(`✅ Got ${mealItems.length} meals`);
         setMeals(mealItems);
         
         // Group ingredients by mealId
@@ -49,15 +56,14 @@ export default function Dashboard() {
           ingMap[mealId].push(ing);
         }
         setIngredients(ingMap);
-        console.log(`Loaded ${mealItems.length} meals for week ${startDate} to ${endDate}`);
       } catch (e) {
-        console.error("Failed to load:", e);
+        console.error("❌ Failed to load:", e);
       } finally {
         setLoading(false);
       }
     }
     loadWeek();
-  }, [days]);
+  }, [weekOffset]); // Only re-run when weekOffset changes
 
   // Get week label
   const getWeekLabel = () => {
