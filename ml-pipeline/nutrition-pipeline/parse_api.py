@@ -424,6 +424,7 @@ def save_correction(ingredient_id):
         learned = data.get("learned")
         correction_reason = data.get("correctionReason", "unknown")
         should_learn = data.get("shouldLearn", False)
+        conversation = data.get("conversation", [])  # Chat history for reference
         
         if not correction:
             return jsonify({"error": "No correction provided"}), 400
@@ -540,7 +541,8 @@ def save_correction(ingredient_id):
             "shouldLearn": should_learn,
             "context": {
                 "learned": learned if should_learn else None,
-                "via": "correction_chat"
+                "via": "correction_chat",
+                "conversation": conversation  # Full chat history for reference
             }
         }
         
@@ -551,8 +553,10 @@ def save_correction(ingredient_id):
                 headers=headers,
                 json=correction_record
             )
-            if corr_resp.status_code == 200:
+            if corr_resp.status_code in (200, 201):
                 print(f"   ✅ Saved correction record")
+            else:
+                print(f"   ⚠️ Correction record save failed: {corr_resp.status_code} - {corr_resp.text[:200]}")
         except Exception as e:
             print(f"   ⚠️ Could not save correction record: {e}")
         

@@ -481,7 +481,7 @@ export async function sendCorrectionMessage(ingredientId, message, conversation 
 }
 
 // Save a finalized correction
-export async function saveCorrection(ingredientId, correction, learned = null, correctionReason = null, shouldLearn = false) {
+export async function saveCorrection(ingredientId, correction, learned = null, correctionReason = null, shouldLearn = false, conversation = []) {
   console.log("💾 Saving correction:", correction, "shouldLearn:", shouldLearn, "reason:", correctionReason);
   
   try {
@@ -492,7 +492,8 @@ export async function saveCorrection(ingredientId, correction, learned = null, c
         correction, 
         learned, 
         correctionReason,
-        shouldLearn 
+        shouldLearn,
+        conversation  // Full chat history for reference
       }),
     });
     

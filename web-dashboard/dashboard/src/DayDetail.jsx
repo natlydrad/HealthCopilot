@@ -388,7 +388,7 @@ What would you like to change? You can tell me naturally, like "that's actually 
     setMessages(prev => [...prev, { from: "bot", text: "Saving your correction..." }]);
 
     try {
-      const result = await saveCorrection(ingredient.id, correction, learned, reason, shouldLearn);
+      const result = await saveCorrection(ingredient.id, correction, learned, reason, shouldLearn, conversationHistory);
       
       if (result.success) {
         let learnedMsg = "";
