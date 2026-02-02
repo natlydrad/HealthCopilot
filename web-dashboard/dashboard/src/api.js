@@ -35,14 +35,14 @@ export async function fetchMeals() {
 export async function fetchMealsForDateRange(startDate, endDate) {
   if (!authToken) throw new Error("Not logged in");
 
-  // Build ISO strings directly from date strings to avoid timezone issues
+  // PocketBase stores timestamps with space instead of T: "2025-12-17 22:47:57.000Z"
   // startDate and endDate are in format "YYYY-MM-DD"
-  const startISO = `${startDate}T00:00:00.000Z`;
-  const endISO = `${endDate}T23:59:59.999Z`;
+  const startTS = `${startDate} 00:00:00.000Z`;
+  const endTS = `${endDate} 23:59:59.999Z`;
 
   // Use timestamp field for meal time filtering
   const filter = encodeURIComponent(
-    `timestamp >= "${startISO}" && timestamp <= "${endISO}"`
+    `timestamp >= "${startTS}" && timestamp <= "${endTS}"`
   );
 
   const url = `${PB_BASE}/api/collections/meals/records?perPage=100&sort=-timestamp&filter=${filter}`;
