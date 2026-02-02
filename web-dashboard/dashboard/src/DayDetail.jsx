@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { fetchMealsForDateRange, fetchIngredients, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getCorrections, getLearningStats, parseAndSaveMeal, deleteCorrection } from "./api";
+import { fetchMealsForDateRange, fetchIngredients, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getCorrections, getLearningStats, parseAndSaveMeal, deleteCorrection, clearMealIngredients } from "./api";
 
 // Determine if an ingredient is low confidence (needs review)
 function isLowConfidence(ing) {
@@ -100,6 +100,7 @@ function MealCard({ meal }) {
   const [ingredients, setIngredients] = useState([]);
   const [correcting, setCorrecting] = useState(null);
   const [parsing, setParsing] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -124,6 +125,20 @@ function MealCard({ meal }) {
       console.error("Parse failed:", err);
     } finally {
       setParsing(false);
+    }
+  };
+
+  // Clear all ingredients for this meal
+  const handleClear = async () => {
+    if (!confirm("Delete all parsed ingredients for this meal?")) return;
+    setClearing(true);
+    try {
+      await clearMealIngredients(meal.id);
+      setIngredients([]);
+    } catch (err) {
+      console.error("Clear failed:", err);
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -180,7 +195,18 @@ function MealCard({ meal }) {
 
       {/* Ingredients list */}
       {ingredients.length > 0 && (
-        <ul className="text-sm text-gray-700 space-y-1">
+        <div>
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-xs text-gray-400">{ingredients.length} ingredient{ingredients.length !== 1 ? 's' : ''}</span>
+            <button
+              onClick={handleClear}
+              disabled={clearing}
+              className="text-xs text-red-400 hover:text-red-600 disabled:opacity-50"
+            >
+              {clearing ? "Clearing..." : "🗑️ Clear"}
+            </button>
+          </div>
+          <ul className="text-sm text-gray-700 space-y-1">
           {ingredients.map((ing) => {
             const nutrients = Array.isArray(ing.nutrition) ? ing.nutrition : [];
             const energy = nutrients.find((n) => n.nutrientName === "Energy");
@@ -238,7 +264,8 @@ function MealCard({ meal }) {
               </li>
             );
           })}
-        </ul>
+          </ul>
+        </div>
       )}
 
       {/* Correction Chat Modal */}

@@ -16,6 +16,9 @@ from lookup_usda import usda_lookup
 from log_classifier import classify_log
 import requests
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)  # Allow frontend requests
@@ -242,6 +245,8 @@ def parse_meal(meal_id):
         
         # Process and save ingredients
         saved = []
+        print(f"📦 Processing {len(parsed)} parsed ingredients...")
+        
         for ing in parsed:
             name = ing.get("name", "").lower().strip()
             
@@ -253,7 +258,13 @@ def parse_meal(meal_id):
             ing = normalize_quantity(ing)
             
             # USDA lookup
+            print(f"🔎 Looking up USDA nutrition for: '{name}'")
             usda = usda_lookup(name)
+            
+            if usda:
+                print(f"   ✅ USDA match found: {usda.get('name')}")
+            else:
+                print(f"   ⚠️ No USDA match for '{name}'")
             
             # Prepare payload
             payload = {
@@ -262,7 +273,9 @@ def parse_meal(meal_id):
                 "quantity": ing.get("quantity", 1),
                 "unit": ing.get("unit", "serving"),
                 "category": ing.get("category", ""),
-                "nutrition": usda if usda else [],
+                "nutrition": usda.get("nutrition", []) if usda else [],
+                "usdaCode": usda.get("usdaCode") if usda else None,
+                "source": "usda" if usda else "gpt",
                 "parsingSource": source,
                 "parsingMetadata": {
                     "source": "usda" if usda else "gpt",
@@ -272,7 +285,7 @@ def parse_meal(meal_id):
             }
             
             # Save to PocketBase
-            result = insert_ingredient(payload, token)
+            result = insert_ingredient(payload)
             if result:
                 saved.append(result)
                 print(f"   ✅ Saved: {ing['name']}")

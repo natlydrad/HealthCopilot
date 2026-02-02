@@ -89,32 +89,60 @@ def usda_lookup(ingredient_name):
     Look up nutrition data from USDA FoodData Central.
     Returns macros per 100g serving, or None if match seems invalid.
     """
+    print(f"🔍 USDA lookup for: '{ingredient_name}'")
+    print(f"   API key present: {bool(USDA_KEY)} (length: {len(USDA_KEY) if USDA_KEY else 0})")
+    
+    if not USDA_KEY:
+        print("   ❌ ERROR: USDA_KEY environment variable is not set!")
+        return None
+    
     params = {
         "query": ingredient_name,
         "api_key": USDA_KEY,
         "pageSize": 1
     }
-    r = requests.get(USDA_URL, params=params)
-    r.raise_for_status()
-    data = r.json()
     
-    if data.get("foods"):
-        f = data["foods"][0]
-        raw_nutrients = f.get("foodNutrients", [])
-        macros = extract_macros(raw_nutrients)
-        matched_name = f["description"]
+    try:
+        r = requests.get(USDA_URL, params=params)
+        print(f"   Response status: {r.status_code}")
         
-        # Validate the match
-        is_valid, reason = validate_usda_match(ingredient_name, matched_name, macros)
-        if not is_valid:
-            print(f"⚠️  Rejected USDA match: {reason}")
+        if r.status_code != 200:
+            print(f"   ❌ USDA API error: {r.status_code} - {r.text[:200]}")
             return None
+            
+        data = r.json()
+        foods = data.get("foods", [])
+        print(f"   Results found: {len(foods)}")
         
-        return {
-            "usdaCode": f["fdcId"],
-            "name": matched_name,
-            "nutrition": raw_nutrients,
-            "macros_per_100g": macros,
-            "serving_size_g": f.get("servingSize", 100),
-        }
-    return None
+        if foods:
+            f = foods[0]
+            raw_nutrients = f.get("foodNutrients", [])
+            macros = extract_macros(raw_nutrients)
+            matched_name = f["description"]
+            
+            print(f"   ✅ Matched: '{matched_name}' (fdcId: {f['fdcId']})")
+            print(f"   Macros: {macros}")
+            
+            # Validate the match
+            is_valid, reason = validate_usda_match(ingredient_name, matched_name, macros)
+            if not is_valid:
+                print(f"   ⚠️ Rejected USDA match: {reason}")
+                return None
+            
+            return {
+                "usdaCode": f["fdcId"],
+                "name": matched_name,
+                "nutrition": raw_nutrients,
+                "macros_per_100g": macros,
+                "serving_size_g": f.get("servingSize", 100),
+            }
+        else:
+            print(f"   ⚠️ No USDA results for '{ingredient_name}'")
+            return None
+            
+    except requests.exceptions.RequestException as e:
+        print(f"   ❌ USDA request failed: {e}")
+        return None
+    except Exception as e:
+        print(f"   ❌ USDA lookup error: {e}")
+        return None

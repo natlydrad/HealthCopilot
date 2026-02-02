@@ -307,6 +307,48 @@ function guessCategory(name) {
   return "food";
 }
 
+// Delete an ingredient record
+export async function deleteIngredient(ingredientId) {
+  if (!authToken) throw new Error("Not logged in");
+
+  const url = `${PB_BASE}/api/collections/ingredients/records/${ingredientId}`;
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${authToken}`,
+    },
+  });
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(`Failed to delete ingredient: ${error}`);
+  }
+
+  return true;
+}
+
+// Delete ALL ingredients for a meal (clear parse)
+export async function clearMealIngredients(mealId) {
+  if (!authToken) throw new Error("Not logged in");
+
+  // First fetch all ingredients for this meal
+  const ingredients = await fetchIngredients(mealId);
+  console.log(`🗑️ Clearing ${ingredients.length} ingredients for meal ${mealId}`);
+
+  // Delete each one
+  const results = await Promise.all(
+    ingredients.map(ing => deleteIngredient(ing.id).catch(err => {
+      console.error(`Failed to delete ${ing.id}:`, err);
+      return false;
+    }))
+  );
+
+  const deleted = results.filter(Boolean).length;
+  console.log(`✅ Deleted ${deleted}/${ingredients.length} ingredients`);
+  
+  return deleted;
+}
+
 // Create an ingredient record
 export async function createIngredient(ingredient) {
   if (!authToken) throw new Error("Not logged in");
