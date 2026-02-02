@@ -35,20 +35,18 @@ export async function fetchMeals() {
 export async function fetchMealsForDateRange(startDate, endDate) {
   if (!authToken) throw new Error("Not logged in");
 
-  // Filter by timestamp field (the actual meal time)
-  // PocketBase needs ISO format dates
-  const start = new Date(startDate);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(endDate);
-  end.setHours(23, 59, 59, 999);
+  // Build ISO strings directly from date strings to avoid timezone issues
+  // startDate and endDate are in format "YYYY-MM-DD"
+  const startISO = `${startDate}T00:00:00.000Z`;
+  const endISO = `${endDate}T23:59:59.999Z`;
 
   // Use timestamp field for meal time filtering
   const filter = encodeURIComponent(
-    `timestamp >= "${start.toISOString()}" && timestamp <= "${end.toISOString()}"`
+    `timestamp >= "${startISO}" && timestamp <= "${endISO}"`
   );
 
   const url = `${PB_BASE}/api/collections/meals/records?perPage=100&sort=-timestamp&filter=${filter}`;
-  console.log("Fetching meals for range:", startDate, "to", endDate, "URL:", url);
+  console.log("🔍 Fetching meals:", startDate, "to", endDate);
 
   try {
     const res = await fetch(url, {
@@ -58,21 +56,22 @@ export async function fetchMealsForDateRange(startDate, endDate) {
     });
 
     if (!res.ok) {
-      console.error("API error:", res.status, await res.text());
+      const errorText = await res.text();
+      console.error("❌ API error:", res.status, errorText);
       return [];
     }
 
     const data = await res.json();
 
     if (!data || !data.items) {
-      console.warn("No meals found for date range");
+      console.warn("⚠️ No meals in response");
       return [];
     }
 
-    console.log(`Found ${data.items.length} meals for ${startDate} to ${endDate}`);
+    console.log(`✅ Found ${data.items.length} meals (total: ${data.totalItems})`);
     return data.items;
   } catch (err) {
-    console.error("Failed to fetch meals:", err);
+    console.error("❌ Failed to fetch meals:", err);
     return [];
   }
 }
