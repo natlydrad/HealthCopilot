@@ -96,13 +96,20 @@ export default function Dashboard() {
     setShowCalendar(false);
   };
 
+  // Helper to parse PocketBase timestamp (has space instead of T)
+  const parseTimestamp = (ts) => {
+    if (!ts) return null;
+    return new Date(ts.replace(' ', 'T'));
+  };
+
   // Group meals by day (convert to local date for proper grouping)
   const mealsByDay = {};
   for (const day of days) {
     const dayMeals = meals.filter((m) => {
       if (!m.timestamp) return false;
-      // Parse timestamp and get local date string (handles timezone correctly)
-      const mealDate = new Date(m.timestamp);
+      // Parse timestamp and get local date string
+      const mealDate = parseTimestamp(m.timestamp);
+      if (!mealDate || isNaN(mealDate.getTime())) return false;
       // Get local date in YYYY-MM-DD format
       const year = mealDate.getFullYear();
       const month = String(mealDate.getMonth() + 1).padStart(2, '0');
@@ -112,8 +119,8 @@ export default function Dashboard() {
     });
     // Sort chronologically (earliest first)
     dayMeals.sort((a, b) => {
-      const timeA = new Date(a.timestamp).getTime();
-      const timeB = new Date(b.timestamp).getTime();
+      const timeA = parseTimestamp(a.timestamp)?.getTime() || 0;
+      const timeB = parseTimestamp(b.timestamp)?.getTime() || 0;
       return timeA - timeB;
     });
     mealsByDay[day] = dayMeals;
@@ -131,7 +138,7 @@ export default function Dashboard() {
 
   const formatTime = (timestamp) => {
     if (!timestamp) return "";
-    const d = new Date(timestamp);
+    const d = parseTimestamp(timestamp);
     return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   };
 
