@@ -108,9 +108,9 @@ function MealCard({ meal }) {
     loadIngredients();
   }, [meal.id]);
 
-  // Parse meal on demand
+  // Parse meal on demand (works with text OR images via backend API)
   const handleParse = async () => {
-    if (!meal.text?.trim()) return;
+    if (!meal.text?.trim() && !meal.image) return;
     setParsing(true);
     try {
       const saved = await parseAndSaveMeal(meal);
@@ -122,8 +122,9 @@ function MealCard({ meal }) {
     }
   };
 
-  // Check if this meal needs parsing
-  const needsParsing = loaded && ingredients.length === 0 && meal.text?.trim();
+  // Check if this meal needs parsing (either text or image)
+  const hasContent = meal.text?.trim() || meal.image;
+  const needsParsing = loaded && ingredients.length === 0 && hasContent;
 
   // Build image URL if meal has an image
   const imageUrl = meal.image ? 
@@ -169,10 +170,6 @@ function MealCard({ meal }) {
         </div>
       )}
 
-      {/* No text state */}
-      {loaded && !meal.text?.trim() && ingredients.length === 0 && (
-        <p className="text-gray-400 italic">Image only - view in app to parse</p>
-      )}
 
       {/* Ingredients list */}
       {ingredients.length > 0 && (

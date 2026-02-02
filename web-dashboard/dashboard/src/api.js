@@ -318,15 +318,46 @@ export async function createIngredient(ingredient) {
   return res.json();
 }
 
+// Backend Parse API URL (for GPT Vision image parsing)
+const PARSE_API_URL = import.meta.env.VITE_PARSE_API_URL || "http://localhost:5001";
+
 // Parse and save ingredients for a meal (parse-on-view)
+// Tries backend API first (supports images), falls back to simple text parsing
 export async function parseAndSaveMeal(meal) {
-  if (!meal.text?.trim()) return [];
+  const hasText = meal.text?.trim();
+  const hasImage = meal.image;
   
-  console.log("🧠 Parsing meal:", meal.text);
+  if (!hasText && !hasImage) return [];
   
-  // Simple rule-based parsing (no API key needed)
+  console.log("🧠 Parsing meal:", meal.id, hasText ? `"${meal.text}"` : "[image only]");
+  
+  // Try backend API first (supports images via GPT Vision)
+  try {
+    console.log("🔗 Trying Parse API...");
+    const apiRes = await fetch(`${PARSE_API_URL}/parse/${meal.id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    
+    if (apiRes.ok) {
+      const data = await apiRes.json();
+      console.log("✅ Parse API success:", data.count, "ingredients from", data.source);
+      return data.ingredients || [];
+    }
+    
+    console.log("⚠️ Parse API unavailable, falling back to simple parser");
+  } catch (err) {
+    console.log("⚠️ Parse API error:", err.message, "- falling back to simple parser");
+  }
+  
+  // Fallback: Simple text parsing (no images)
+  if (!hasText) {
+    console.log("❌ Image-only meal requires Parse API");
+    return [];
+  }
+  
   const parsed = await parseMealSimple(meal.text);
-  console.log("📝 Parsed:", parsed);
+  console.log("📝 Simple parsed:", parsed);
   
   if (parsed.length === 0) return [];
   
