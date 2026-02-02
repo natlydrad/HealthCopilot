@@ -8,6 +8,102 @@ USDA_KEY = os.getenv("USDA_KEY")
 USDA_URL = "https://api.nal.usda.gov/fdc/v1/foods/search"
 
 
+# Unit to grams conversion table
+# These are approximate but reasonable defaults
+UNIT_TO_GRAMS = {
+    # Weight units
+    "oz": 28.35,
+    "ounce": 28.35,
+    "ounces": 28.35,
+    "g": 1.0,
+    "gram": 1.0,
+    "grams": 1.0,
+    "lb": 453.6,
+    "pound": 453.6,
+    "pounds": 453.6,
+    "kg": 1000.0,
+    
+    # Volume units (approximate for typical foods)
+    "cup": 240.0,
+    "cups": 240.0,
+    "tbsp": 15.0,
+    "tablespoon": 15.0,
+    "tablespoons": 15.0,
+    "tsp": 5.0,
+    "teaspoon": 5.0,
+    "teaspoons": 5.0,
+    "ml": 1.0,  # close enough for most foods
+    "fl oz": 30.0,
+    "fluid ounce": 30.0,
+    
+    # Count units - these need context, use reasonable defaults
+    "piece": 100.0,  # default, will be overridden by serving_size if available
+    "pieces": 100.0,
+    "slice": 30.0,   # bread slice ~30g
+    "slices": 30.0,
+    "egg": 50.0,
+    "eggs": 50.0,
+    "pill": 1.0,     # supplements - negligible weight
+    "pills": 1.0,
+    "capsule": 1.0,
+    "capsules": 1.0,
+    "serving": 100.0,  # default to 100g if no other info
+    "servings": 100.0,
+}
+
+
+def convert_to_grams(quantity: float, unit: str, serving_size_g: float = 100.0) -> float:
+    """
+    Convert a quantity + unit to grams.
+    
+    Args:
+        quantity: The numeric amount (e.g., 4)
+        unit: The unit string (e.g., "oz")
+        serving_size_g: USDA serving size in grams (used for "piece"/"serving" units)
+    
+    Returns:
+        Weight in grams
+    """
+    unit_lower = unit.lower().strip() if unit else "serving"
+    
+    # Special handling for serving/piece - use USDA serving size
+    if unit_lower in ("serving", "servings", "piece", "pieces"):
+        return quantity * serving_size_g
+    
+    # Look up conversion factor
+    grams_per_unit = UNIT_TO_GRAMS.get(unit_lower, 100.0)  # default 100g if unknown
+    
+    return quantity * grams_per_unit
+
+
+def scale_nutrition(nutrients: list, quantity: float, unit: str, serving_size_g: float = 100.0) -> list:
+    """
+    Scale USDA nutrition values (per 100g) to the actual portion size.
+    
+    Args:
+        nutrients: List of nutrient dicts from USDA (values per 100g)
+        quantity: Amount of food
+        unit: Unit of measurement
+        serving_size_g: USDA serving size for this food
+    
+    Returns:
+        New list with scaled nutrient values
+    """
+    grams = convert_to_grams(quantity, unit, serving_size_g)
+    scale_factor = grams / 100.0  # USDA data is per 100g
+    
+    print(f"   📊 Scaling: {quantity} {unit} = {grams:.1f}g (scale factor: {scale_factor:.2f}x)")
+    
+    scaled = []
+    for n in nutrients:
+        scaled_nutrient = n.copy()
+        if "value" in scaled_nutrient and scaled_nutrient["value"] is not None:
+            scaled_nutrient["value"] = round(scaled_nutrient["value"] * scale_factor, 2)
+        scaled.append(scaled_nutrient)
+    
+    return scaled
+
+
 def extract_macros(nutrients: list) -> dict:
     """Extract key macros from USDA nutrient array. Values are per 100g."""
     macros = {"calories": 0, "protein": 0, "carbs": 0, "fat": 0}

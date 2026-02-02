@@ -421,26 +421,61 @@ export async function parseAndSaveMeal(meal) {
       // Look up nutrition from USDA
       const usda = await lookupUSDANutrition(ing.name);
       
+      const quantity = ing.quantity || 1;
+      const unit = ing.unit || "serving";
+      
+      // Scale nutrition to actual portion size
+      const scaledNutrition = usda?.nutrition 
+        ? scaleNutrition(usda.nutrition, quantity, unit)
+        : [];
+      
       const ingredient = {
         mealId: meal.id,
         name: ing.name,
-        quantity: ing.quantity || 1,
-        unit: ing.unit || "serving",
+        quantity,
+        unit,
         category: ing.category || "food",
         source: usda ? "usda" : "simple",
         usdaCode: usda?.usdaCode || null,
-        nutrition: usda?.nutrition || [],
+        nutrition: scaledNutrition,
       };
       
       const result = await createIngredient(ingredient);
       saved.push(result);
-      console.log("✅ Saved:", ing.name);
+      console.log("✅ Saved:", ing.name, `(${quantity} ${unit})`);
     } catch (err) {
       console.error("Failed to save ingredient:", ing.name, err);
     }
   }
   
   return saved;
+}
+
+// Unit to grams conversion (matches backend)
+const UNIT_TO_GRAMS = {
+  oz: 28.35, ounce: 28.35, ounces: 28.35,
+  g: 1.0, gram: 1.0, grams: 1.0,
+  cup: 240.0, cups: 240.0,
+  tbsp: 15.0, tablespoon: 15.0,
+  tsp: 5.0, teaspoon: 5.0,
+  piece: 100.0, pieces: 100.0,
+  slice: 30.0, slices: 30.0,
+  egg: 50.0, eggs: 50.0,
+  serving: 100.0, servings: 100.0,
+};
+
+// Scale nutrition values from per-100g to actual portion
+function scaleNutrition(nutrients, quantity, unit) {
+  const gramsPerUnit = UNIT_TO_GRAMS[unit?.toLowerCase()] || 100;
+  const grams = quantity * gramsPerUnit;
+  const scaleFactor = grams / 100;
+  
+  console.log(`📊 Scaling: ${quantity} ${unit} = ${grams.toFixed(1)}g (${scaleFactor.toFixed(2)}x)`);
+  
+  return nutrients.map(n => ({
+    ...n,
+    value: n.value != null ? Math.round(n.value * scaleFactor * 100) / 100 : n.value
+  }));
 }
 
 // USDA FoodData Central API lookup

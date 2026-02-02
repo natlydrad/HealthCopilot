@@ -12,7 +12,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pb_client import get_token, insert_ingredient
 from parser_gpt import parse_ingredients, parse_ingredients_from_image
-from lookup_usda import usda_lookup
+from lookup_usda import usda_lookup, scale_nutrition
 from log_classifier import classify_log
 import requests
 import os
@@ -261,26 +261,43 @@ def parse_meal(meal_id):
             print(f"🔎 Looking up USDA nutrition for: '{name}'")
             usda = usda_lookup(name)
             
+            # Get quantity and unit for scaling
+            quantity = ing.get("quantity", 1)
+            unit = ing.get("unit", "serving")
+            
             if usda:
                 print(f"   ✅ USDA match found: {usda.get('name')}")
+                # Scale nutrition to actual portion size
+                serving_size = usda.get("serving_size_g", 100.0)
+                scaled_nutrition = scale_nutrition(
+                    usda.get("nutrition", []),
+                    quantity,
+                    unit,
+                    serving_size
+                )
             else:
                 print(f"   ⚠️ No USDA match for '{name}'")
+                scaled_nutrition = []
             
-            # Prepare payload
+            # Prepare payload with SCALED nutrition values
             payload = {
                 "mealId": meal_id,
                 "name": ing["name"],
-                "quantity": ing.get("quantity", 1),
-                "unit": ing.get("unit", "serving"),
+                "quantity": quantity,
+                "unit": unit,
                 "category": ing.get("category", ""),
-                "nutrition": usda.get("nutrition", []) if usda else [],
+                "nutrition": scaled_nutrition,  # Now scaled to actual portion!
                 "usdaCode": usda.get("usdaCode") if usda else None,
                 "source": "usda" if usda else "gpt",
                 "parsingSource": source,
                 "parsingMetadata": {
                     "source": "usda" if usda else "gpt",
                     "usdaMatch": bool(usda),
-                    "parsedVia": "parse_api"
+                    "parsedVia": "parse_api",
+                    "portionGrams": round(quantity * (usda.get("serving_size_g", 100) if usda and unit in ("serving", "piece") else 
+                                          28.35 if unit == "oz" else 
+                                          240 if unit == "cup" else 
+                                          15 if unit == "tbsp" else 100), 1) if usda else None
                 }
             }
             
