@@ -80,8 +80,9 @@ export default function Dashboard() {
     if (weekOffset === 0) return "This Week";
     if (weekOffset === -1) return "Last Week";
     if (weekOffset === 1) return "Next Week";
-    const startDate = new Date(days[0]);
-    const endDate = new Date(days[6]);
+    // Add T12:00:00 to avoid timezone issues when parsing date strings
+    const startDate = new Date(days[0] + "T12:00:00");
+    const endDate = new Date(days[6] + "T12:00:00");
     return `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
   };
 
