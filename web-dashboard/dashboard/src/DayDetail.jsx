@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { fetchMealsForDateRange, fetchIngredients, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getCorrections, getLearningStats, parseAndSaveMeal, deleteCorrection, clearMealIngredients, sendCorrectionMessage, saveCorrection } from "./api";
+import { fetchMealsForDateRange, fetchIngredients, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getLearningStats, parseAndSaveMeal, clearMealIngredients, sendCorrectionMessage, saveCorrection } from "./api";
 
 // Determine if an ingredient is low confidence (needs review)
 function isLowConfidence(ing) {
@@ -539,21 +539,18 @@ What would you like to change? You can tell me naturally, like "that's actually 
 // Learning Panel - shows what the app has learned
 function LearningPanel({ onClose }) {
   const [patterns, setPatterns] = useState([]);
-  const [recentCorrections, setRecentCorrections] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('patterns'); // patterns | timeline | history
+  const [activeTab, setActiveTab] = useState('patterns'); // patterns | timeline
 
   useEffect(() => {
     async function load() {
       try {
-        const [p, c, s] = await Promise.all([
+        const [p, s] = await Promise.all([
           getLearnedPatterns(),
-          getCorrections(50),
           getLearningStats()
         ]);
         setPatterns(p);
-        setRecentCorrections(c);
         setStats(s);
       } catch (err) {
         console.error("Failed to load learning data:", err);
@@ -600,7 +597,6 @@ function LearningPanel({ onClose }) {
           {[
             { id: 'patterns', label: 'Patterns' },
             { id: 'timeline', label: 'Timeline' },
-            { id: 'history', label: 'History' },
           ].map(tab => (
             <button
               key={tab.id}
@@ -696,81 +692,6 @@ function LearningPanel({ onClose }) {
                               </div>
                             )}
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* History Tab */}
-              {activeTab === 'history' && (
-                <div>
-                  {recentCorrections.length === 0 ? (
-                    <p className="text-gray-400 text-sm text-center py-8">No corrections yet.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {recentCorrections.map((c, i) => (
-                        <div key={c.id || i} className="text-sm bg-gray-50 p-3 rounded-lg">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <span className="text-gray-500">{c.originalParse?.name}</span>
-                              <span className="mx-2">→</span>
-                              <span className="font-medium">{c.userCorrection?.name}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-400 whitespace-nowrap">
-                                {new Date(c.created).toLocaleString()}
-                              </span>
-                              {/* Delete button */}
-                              <button
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  if (confirm("Delete this correction? The system will 'unlearn' this.")) {
-                                    try {
-                                      await deleteCorrection(c.id);
-                                      setRecentCorrections(prev => prev.filter(x => x.id !== c.id));
-                                      // Refresh stats
-                                      const [p, s] = await Promise.all([getLearnedPatterns(), getLearningStats()]);
-                                      setPatterns(p);
-                                      setStats(s);
-                                    } catch (err) {
-                                      console.error("Failed to delete:", err);
-                                    }
-                                  }
-                                }}
-                                className="text-red-400 hover:text-red-600 text-xs"
-                                title="Delete correction"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {/* Correction type badge */}
-                            {c.correctionType && (
-                              <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">
-                                {c.correctionType.replace('_', ' ')}
-                              </span>
-                            )}
-                            {/* Context badges */}
-                            {c.context?.mealType && (
-                              <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded">
-                                {c.context.mealType}
-                              </span>
-                            )}
-                            {c.context?.hourOfDay !== undefined && (
-                              <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded">
-                                {c.context.hourOfDay}:00
-                              </span>
-                            )}
-                          </div>
-                          {/* Meal text preview */}
-                          {c.context?.mealText && (
-                            <p className="text-xs text-gray-400 mt-1 truncate" title={c.context.mealText}>
-                              from: "{c.context.mealText}"
-                            </p>
-                          )}
                         </div>
                       ))}
                     </div>
