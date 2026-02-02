@@ -102,6 +102,7 @@ function MealCard({ meal }) {
   const [parsing, setParsing] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [expandedNutrientId, setExpandedNutrientId] = useState(null);
 
   useEffect(() => {
     async function loadIngredients() {
@@ -308,57 +309,94 @@ function MealCard({ meal }) {
             };
             const sourceInfo = getSourceLabel();
 
+            const showNutrients = expandedNutrientId === ing.id;
+            const fg = ing.parsingMetadata?.foodGroupServings;
+
             return (
               <li 
                 key={ing.id}
-                onClick={() => setCorrecting(ing)}
-                className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors
-                  ${lowConf ? 'bg-amber-50 hover:bg-amber-100' : 'hover:bg-gray-50'}`}
+                className={`rounded-lg transition-colors ${lowConf ? 'bg-amber-50' : ''}`}
               >
-                {/* Low confidence indicator */}
-                {lowConf && (
-                  <span 
-                    className="text-amber-500 text-xs" 
-                    title={ing.parsingMetadata?.partialLabel 
-                      ? "Label was partially visible – nutrition from USDA. Re-photo with full label for exact values." 
-                      : "Tap to correct"}
+                <div
+                  onClick={() => setCorrecting(ing)}
+                  className={`flex items-center gap-2 p-2 cursor-pointer ${lowConf ? 'hover:bg-amber-100' : 'hover:bg-gray-50'}`}
+                >
+                  {/* Low confidence indicator */}
+                  {lowConf && (
+                    <span 
+                      className="text-amber-500 text-xs" 
+                      title={ing.parsingMetadata?.partialLabel 
+                        ? "Label was partially visible – nutrition from USDA. Re-photo with full label for exact values." 
+                        : "Tap to correct"}
+                    >
+                      ?
+                    </span>
+                  )}
+                  
+                  <span className="font-medium">{ing.name}</span>
+                  
+                  {/* Source badge */}
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${sourceInfo.color}`}>
+                    {sourceInfo.label}
+                  </span>
+                  {ing.parsingMetadata?.partialLabel && (
+                    <span 
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700"
+                      title="Label was partially visible – nutrition from USDA. Re-photo with full label for exact values."
+                    >
+                      Partial label
+                    </span>
+                  )}
+                  
+                  {ing.quantity && ing.unit && (
+                    <span className="text-gray-400 text-xs">
+                      ({ing.quantity} {ing.unit})
+                    </span>
+                  )}
+                  
+                  {energy || protein || carbs || fat ? (
+                    <span className="text-gray-500 text-xs ml-auto">
+                      {energy ? `${Math.round(energy.value)} cal` : ""}
+                      {protein ? ` · ${Math.round(protein.value)}g P` : ""}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400 text-xs ml-auto italic">no data</span>
+                  )}
+                  
+                  {/* View nutrients toggle */}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setExpandedNutrientId(showNutrients ? null : ing.id); }}
+                    className="text-[10px] text-gray-400 hover:text-gray-600"
                   >
-                    ?
-                  </span>
-                )}
-                
-                <span className="font-medium">{ing.name}</span>
-                
-                {/* Source badge */}
-                <span className={`text-[10px] px-1.5 py-0.5 rounded ${sourceInfo.color}`}>
-                  {sourceInfo.label}
-                </span>
-                {ing.parsingMetadata?.partialLabel && (
-                  <span 
-                    className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700"
-                    title="Label was partially visible – nutrition from USDA. Re-photo with full label for exact values."
+                    {showNutrients ? "▼ Nutrients" : "▶ Nutrients"}
+                  </button>
+                  <span className="text-gray-300 text-xs">tap to edit</span>
+                </div>
+                {/* Expanded: full macro/micro list */}
+                {showNutrients && (
+                  <div 
+                    className="px-2 pb-2 pt-0 border-t border-gray-100"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    Partial label
-                  </span>
+                    {nutrients.length > 0 ? (
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px] text-gray-600">
+                        {nutrients.map((n, i) => (
+                          <span key={i}>
+                            {n.nutrientName?.replace(/,.*$/, "")}: {n.value != null ? (n.value < 1 ? n.value.toFixed(2) : Math.round(n.value)) : "—"} {n.unitName || ""}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-gray-400 italic">No nutrient data stored.</p>
+                    )}
+                    {fg && (fg.grains || fg.protein || fg.vegetables || fg.fruits || fg.dairy || fg.fats) && (
+                      <p className="text-[10px] text-purple-600 mt-1.5">
+                        Food groups: grains {fg.grains || 0} · protein {fg.protein || 0} · veg {fg.vegetables || 0} · fruit {fg.fruits || 0} · dairy {fg.dairy || 0} · fats {fg.fats || 0}
+                      </p>
+                    )}
+                  </div>
                 )}
-                
-                {ing.quantity && ing.unit && (
-                  <span className="text-gray-400 text-xs">
-                    ({ing.quantity} {ing.unit})
-                  </span>
-                )}
-                
-                {energy || protein || carbs || fat ? (
-                  <span className="text-gray-500 text-xs ml-auto">
-                    {energy ? `${Math.round(energy.value)} cal` : ""}
-                    {protein ? ` · ${Math.round(protein.value)}g P` : ""}
-                  </span>
-                ) : (
-                  <span className="text-gray-400 text-xs ml-auto italic">no data</span>
-                )}
-                
-                {/* Edit hint */}
-                <span className="text-gray-300 text-xs">tap to edit</span>
               </li>
             );
           })}

@@ -157,6 +157,7 @@ def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = No
         - category (string) - "food", "drink", or "supplement"
         - reasoning (string) - brief explanation
         - nutritionFromLabel (object, optional) - only when a Nutrition Facts label is visible for this item
+        - foodGroupServings (object, optional) - estimated serving equivalents for food-group counting. Use when you can infer composition (e.g. sandwich = bread + protein + veg). Format: { "grains": 1, "protein": 1, "vegetables": 0.25, "fruits": 0, "dairy": 0, "fats": 0.5 }. Use 0 for missing groups. One serving ≈ 1 slice bread, 1 oz meat, 1/2 cup veg, 1 piece fruit, 1 cup milk, 1 tsp oil.
         
         If no edible items are visible, return an empty array [].
         """

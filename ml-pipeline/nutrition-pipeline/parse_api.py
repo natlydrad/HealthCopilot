@@ -75,6 +75,26 @@ def nutrition_from_label_to_array(label: dict, quantity: float, serving_size_g: 
     return out
 
 
+def merge_label_onto_usda(usda_nutrition: list, label_nutrition: list) -> list:
+    """
+    Overlay label values on top of USDA nutrition. For each nutrient present in label_nutrition,
+    replace the value in usda_nutrition (match by nutrientName + unitName). Returns a new list.
+    """
+    if not label_nutrition:
+        return list(usda_nutrition) if usda_nutrition else []
+    by_key = {}
+    for n in usda_nutrition:
+        key = (n.get("nutrientName"), n.get("unitName"))
+        by_key[key] = {**n, "value": n.get("value")}
+    for n in label_nutrition:
+        key = (n.get("nutrientName"), n.get("unitName"))
+        if key in by_key:
+            by_key[key]["value"] = n.get("value")
+        else:
+            by_key[key] = dict(n)
+    return list(by_key.values())
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"})
@@ -312,10 +332,11 @@ def parse_meal(meal_id):
             portion_grams = None
             
             partial_label = False  # set when we had label but fell back to USDA (e.g. missing calories)
+            partial_label_array = []  # values we read from label to overlay onto USDA
             if label_nutrition and isinstance(label_nutrition, dict):
                 serving_size_g = label_nutrition.get("servingSizeG") or 100.0
                 scaled_nutrition = nutrition_from_label_to_array(label_nutrition, quantity, serving_size_g)
-                # Require calories from label; if missing, treat as partial and use USDA
+                # Require calories from label; if missing, treat as partial and use USDA (merge label onto USDA)
                 has_calories = any(n.get("nutrientName") == "Energy" and (n.get("value") or 0) > 0 for n in scaled_nutrition)
                 if scaled_nutrition and has_calories:
                     print(f"   📋 Using nutrition from label for: '{ing.get('name')}'")
@@ -325,7 +346,8 @@ def parse_meal(meal_id):
                 else:
                     if scaled_nutrition and not has_calories:
                         partial_label = True
-                        print(f"   ⚠️ Label partial (no calories) for '{ing.get('name')}' — using USDA")
+                        partial_label_array = scaled_nutrition  # keep to overlay onto USDA
+                        print(f"   ⚠️ Label partial (no calories) for '{ing.get('name')}' — using USDA + label overlay")
                     label_nutrition = None
                     scaled_nutrition = []
                     label_used = False
@@ -345,6 +367,10 @@ def parse_meal(meal_id):
                         unit,
                         serving_size
                     )
+                    # If we had partial label, overlay label values onto USDA (label overrides where present)
+                    if partial_label and partial_label_array:
+                        scaled_nutrition = merge_label_onto_usda(scaled_nutrition, partial_label_array)
+                        print(f"   📋 Overlaid {len(partial_label_array)} label values onto USDA")
                     source_ing = "usda"
                     portion_grams = round(quantity * (usda.get("serving_size_g", 100) if unit in ("serving", "piece") else
                                           28.35 if unit == "oz" else
@@ -378,6 +404,7 @@ def parse_meal(meal_id):
                     "portionGrams": portion_grams,
                     "fromLabel": label_used,
                     "partialLabel": partial_label,
+                    "foodGroupServings": ing.get("foodGroupServings") if isinstance(ing.get("foodGroupServings"), dict) else None,
                 }
             }
             
