@@ -587,6 +587,8 @@ const PB_URL = "https://pocketbase-1j2x.onrender.com";
 
 function MealCard({ meal, ingredients, formatTime }) {
   const [expanded, setExpanded] = useState(false);
+  const [showZoom, setShowZoom] = useState(false);
+  const [rotation, setRotation] = useState(0);
   const hasImage = !!meal.image;
   const hasText = !!(meal.text && meal.text.trim());
   const text = hasText ? meal.text : "";
@@ -595,6 +597,9 @@ function MealCard({ meal, ingredients, formatTime }) {
   // PocketBase file URL: /api/files/{collectionId}/{recordId}/{filename}
   const imageUrl = hasImage 
     ? `${PB_URL}/api/files/${meal.collectionId}/${meal.id}/${meal.image}?thumb=200x200`
+    : null;
+  const imageUrlFull = hasImage 
+    ? `${PB_URL}/api/files/${meal.collectionId}/${meal.id}/${meal.image}`
     : null;
   
   // Extract macros and micronutrients from ingredients
@@ -674,15 +679,55 @@ function MealCard({ meal, ingredients, formatTime }) {
     <div className="bg-slate-50 rounded-lg p-2 text-xs border border-slate-100">
       <div className="text-slate-400 text-[10px] mb-1">{formatTime(meal.timestamp)}</div>
       
-      {/* Photo thumbnail */}
+      {/* Photo thumbnail — click to zoom and rotate */}
       {imageUrl && (
         <div className="mb-2">
-          <img 
-            src={imageUrl} 
-            alt="meal" 
-            className="w-full h-24 object-cover rounded"
-            loading="lazy"
-          />
+          <button
+            type="button"
+            onClick={() => { setShowZoom(true); setRotation(0); }}
+            className="block w-full rounded focus:outline-none focus:ring-2 focus:ring-purple-400"
+          >
+            <img 
+              src={imageUrl} 
+              alt="meal" 
+              className="w-full h-24 object-cover rounded hover:opacity-90"
+              loading="lazy"
+            />
+          </button>
+          {showZoom && imageUrlFull && (
+            <div 
+              className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4"
+              onClick={() => setShowZoom(false)}
+            >
+              <div 
+                className="relative max-w-[90vw] max-h-[90vh] flex flex-col items-center"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <img 
+                  src={imageUrlFull} 
+                  alt="Meal zoomed" 
+                  className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+                  style={{ transform: `rotate(${rotation}deg)` }}
+                />
+                <div className="flex gap-2 mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setRotation((r) => (r + 90) % 360)}
+                    className="px-4 py-2 bg-white/90 text-gray-800 rounded-lg text-sm font-medium hover:bg-white"
+                  >
+                    Rotate 90°
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowZoom(false)}
+                    className="px-4 py-2 bg-white/90 text-gray-800 rounded-lg text-sm font-medium hover:bg-white"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
       

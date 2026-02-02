@@ -159,16 +159,61 @@ function MealCard({ meal }) {
   const imageUrl = meal.image ? 
     `https://pocketbase-1j2x.onrender.com/api/files/meals/${meal.id}/${meal.image}` : null;
 
+  // Zoom modal: click thumbnail to open, rotate 90°
+  const [showZoom, setShowZoom] = useState(false);
+  const [rotation, setRotation] = useState(0);
+
   return (
     <div className="bg-white p-4 rounded-xl shadow mb-4">
       <div className="flex gap-4">
-        {/* Image thumbnail if exists */}
+        {/* Image thumbnail if exists — click to zoom */}
         {imageUrl && (
-          <img 
-            src={imageUrl} 
-            alt="Meal" 
-            className="w-20 h-20 object-cover rounded-lg flex-shrink-0"
-          />
+          <button
+            type="button"
+            onClick={() => { setShowZoom(true); setRotation(0); }}
+            className="flex-shrink-0 rounded-lg overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-400"
+          >
+            <img 
+              src={imageUrl} 
+              alt="Meal" 
+              className="w-20 h-20 object-cover rounded-lg hover:opacity-90"
+            />
+          </button>
+        )}
+        {/* Zoom modal */}
+        {showZoom && imageUrl && (
+          <div 
+            className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4"
+            onClick={() => setShowZoom(false)}
+          >
+            <div 
+              className="relative max-w-[90vw] max-h-[90vh] flex flex-col items-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <img 
+                src={imageUrl} 
+                alt="Meal zoomed" 
+                className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+                style={{ transform: `rotate(${rotation}deg)` }}
+              />
+              <div className="flex gap-2 mt-3">
+                <button
+                  type="button"
+                  onClick={() => setRotation((r) => (r + 90) % 360)}
+                  className="px-4 py-2 bg-white/90 text-gray-800 rounded-lg text-sm font-medium hover:bg-white"
+                >
+                  Rotate 90°
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowZoom(false)}
+                  className="px-4 py-2 bg-white/90 text-gray-800 rounded-lg text-sm font-medium hover:bg-white"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
         )}
         
         <div className="flex-1">
