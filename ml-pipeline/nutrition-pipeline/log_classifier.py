@@ -70,6 +70,41 @@ If it's ONLY food, non_food_portions should be empty {}.
 If it's ONLY non-food, food_portion should be null.
 """
 
+CLASSIFICATION_WITH_IMAGE_PROMPT = """You are a health log classifier. Analyze the user's log entry.
+
+You are given:
+1. An optional caption/text (e.g. "1 serving", "lunch", or empty)
+2. An image (photo of what was logged)
+
+Classify the ENTIRE entry (image + text together) using the same categories as text-only classification.
+
+Categories:
+- food: Eating food, meals, snacks, beverages with calories (coffee, matcha, smoothies). The image shows actual food/drink to log.
+- hydration: Water intake (plain water, water bottle) - NOT drinks with calories
+- poop: Bowel movements, stool descriptions
+- mood: Emotions, feelings
+- symptom: Physical symptoms
+- supplement: Vitamins, supplements (pills, capsules, gummies)
+- medication: Drugs, medicine, OTC meds
+- activity: Exercise, sleep, activities
+- other: Doesn't fit above (e.g. photo of a pill bottle, screenshot, non-food item)
+
+CRITICAL: Use the IMAGE to decide. If the image shows a meal, plate of food, drink with calories, or edible items → include "food".
+If the image shows only medication, supplements, a water bottle (hydration), or non-food (e.g. rug, receipt) → do NOT include "food".
+Do not put non-food items (medication, supplements, hydration-only) into ingredients; classify them correctly so we do not parse them as food.
+
+Return the same JSON format:
+{
+  "categories": ["food"] or ["supplement"] or ["medication"] etc,
+  "primary": "food" or the main category,
+  "food_portion": "description of food" if food, else null,
+  "non_food_portions": { "category": "content" } for non-food parts,
+  "confidence": 0.95,
+  "reasoning": "Brief explanation using both image and text"
+}
+"""
+
+
 def classify_log(entry_text: str, verbose: bool = False) -> dict:
     """
     Classify a raw log entry.
@@ -125,6 +160,45 @@ def classify_log(entry_text: str, verbose: bool = False) -> dict:
             "confidence": 0.0,
             "reasoning": f"Error: {str(e)}"
         }
+
+
+def classify_log_with_image(entry_text: str, meal: dict, pb_url: str, token: str | None = None, verbose: bool = False) -> dict:
+    """
+    Classify a log entry using both optional text and image.
+    Use this when the meal has an image so classification considers the photo (e.g. food vs medication vs supplement).
+    Falls back to text-only classify_log when no image is available.
+    Returns same shape as classify_log().
+    """
+    from parser_gpt import get_image_base64
+
+    image_b64 = get_image_base64(meal, pb_url, token) if meal else None
+
+    if not image_b64:
+        return classify_log(entry_text or "", verbose=verbose)
+
+    text_part = (entry_text or "").strip()
+    user_content = [
+        {"type": "text", "text": f"Classify this log entry. Caption/text: \"{text_part or '(none)'}\"\n\nUse the image to decide. Same JSON format as text-only classification."},
+        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}},
+    ]
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": CLASSIFICATION_WITH_IMAGE_PROMPT},
+                {"role": "user", "content": user_content},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.1,
+        )
+        result = json.loads(response.choices[0].message.content)
+        if verbose:
+            print(f"Classify (text+image): categories={result.get('categories')}")
+        return result
+    except Exception as e:
+        print(f"Error classifying with image: {e}")
+        return classify_log(entry_text or "", verbose=verbose)
 
 
 def classify_batch(entries: list, verbose: bool = False) -> list:

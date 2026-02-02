@@ -380,13 +380,13 @@ export async function parseAndSaveMeal(meal) {
   const hasText = meal.text?.trim();
   const hasImage = meal.image;
   
-  if (!hasText && !hasImage) return [];
+  if (!hasText && !hasImage) return { ingredients: [], classificationResult: null };
   
   console.log("🧠 Parsing meal:", meal.id, hasText ? `"${meal.text}"` : "[image only]");
   
   // Try backend API first (supports images via GPT Vision)
   try {
-    console.log("🔗 Trying Parse API...");
+    console.log("🔗 Trying Parse API...", `${PARSE_API_URL}/parse/${meal.id}`);
     const apiRes = await fetch(`${PARSE_API_URL}/parse/${meal.id}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -394,26 +394,41 @@ export async function parseAndSaveMeal(meal) {
     
     if (apiRes.ok) {
       const data = await apiRes.json();
-      console.log("✅ Parse API success:", data.count, "ingredients from", data.source);
-      return data.ingredients || [];
+      console.log("✅ Parse API success:", data.count, "ingredients from", data.source, data.classificationResult || "");
+      return {
+        ingredients: data.ingredients || [],
+        classificationResult: data.classificationResult || null,
+        isFood: data.isFood,
+        message: data.message,
+      };
     }
     
-    console.log("⚠️ Parse API unavailable, falling back to simple parser");
+    // Surface backend error so user sees why it failed
+    const errBody = await apiRes.json().catch(() => ({}));
+    const msg = errBody?.error || errBody?.message || `Parse API returned ${apiRes.status}`;
+    console.warn("⚠️ Parse API error:", msg);
+    throw new Error(msg);
   } catch (err) {
-    console.log("⚠️ Parse API error:", err.message, "- falling back to simple parser");
+    if (err instanceof Error && err.message?.startsWith("Parse API returned")) {
+      throw err;
+    }
+    if (err instanceof Error && err.message && err.message !== "Failed to fetch") {
+      throw err;
+    }
+    console.log("⚠️ Parse API unreachable:", err?.message || err, "- falling back to simple parser");
   }
   
   // Fallback: Simple text parsing (no images)
   if (!hasText) {
-    console.log("❌ Image-only meal requires Parse API");
-    return [];
+    const msg = "Parse server unreachable. Image-only meals need the parse server; text-only meals will use simple parser.";
+    throw new Error(msg);
   }
   
   const parsed = await parseMealSimple(meal.text);
   console.log("📝 Simple parsed:", parsed);
   
-  if (parsed.length === 0) return [];
-  
+  if (parsed.length === 0) return { ingredients: [], classificationResult: null };
+
   // Save each ingredient
   const saved = [];
   for (const ing of parsed) {
@@ -448,7 +463,7 @@ export async function parseAndSaveMeal(meal) {
     }
   }
   
-  return saved;
+  return { ingredients: saved, classificationResult: null };
 }
 
 // ============================================================

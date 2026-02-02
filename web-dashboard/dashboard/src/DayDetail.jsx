@@ -115,14 +115,23 @@ function MealCard({ meal }) {
   }, [meal.id]);
 
   // Parse meal on demand (works with text OR images via backend API)
+  const [parseError, setParseError] = useState(null);
+  const [classificationResult, setClassificationResult] = useState(null); // "not_food" when classified as non-food
   const handleParse = async () => {
     if (!meal.text?.trim() && !meal.image) return;
     setParsing(true);
+    setParseError(null);
+    setClassificationResult(null);
     try {
-      const saved = await parseAndSaveMeal(meal);
-      setIngredients(saved);
+      const result = await parseAndSaveMeal(meal);
+      const data = result?.ingredients !== undefined ? result : { ingredients: result, classificationResult: null };
+      const ingredientsList = Array.isArray(data.ingredients) ? data.ingredients : [];
+      setIngredients(ingredientsList);
+      setClassificationResult(data.classificationResult || null);
     } catch (err) {
-      console.error("Parse failed:", err);
+      const message = err?.message || String(err);
+      console.error("Parse failed:", message);
+      setParseError(message);
     } finally {
       setParsing(false);
     }
@@ -172,8 +181,8 @@ function MealCard({ meal }) {
         </div>
       </div>
 
-      {/* Needs parsing state */}
-      {needsParsing && !parsing && (
+      {/* Needs parsing state (hide when we already got "not food") */}
+      {needsParsing && !parsing && classificationResult !== "not_food" && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
           <p className="text-blue-700 text-sm mb-2">Not parsed yet</p>
           <button
@@ -192,6 +201,35 @@ function MealCard({ meal }) {
         </div>
       )}
 
+      {/* Parse error */}
+      {parseError && !parsing && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+          <p className="text-red-700 text-sm font-medium">Parse failed</p>
+          <p className="text-red-600 text-xs mt-1 break-words">{parseError}</p>
+          <button
+            type="button"
+            onClick={() => setParseError(null)}
+            className="mt-2 text-xs text-red-500 hover:underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Not food (classification result) */}
+      {classificationResult === "not_food" && !parsing && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
+          <p className="text-amber-800 text-sm font-medium">Not food</p>
+          <p className="text-amber-700 text-xs mt-1">Classified as non-food — no ingredients added.</p>
+          <button
+            type="button"
+            onClick={() => setClassificationResult(null)}
+            className="mt-2 text-xs text-amber-600 hover:underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Ingredients list */}
       {ingredients.length > 0 && (
