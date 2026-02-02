@@ -2,42 +2,43 @@
 
 // Migration: Add isFood and categories fields to meals table for classification
 
-migrate((db) => {
-  const dao = new Dao(db);
-  const collection = dao.findCollectionByNameOrId("meals");
+migrate((txApp) => {
+  const collection = txApp.findCollectionByNameOrId("meals");
 
-  // Add isFood boolean field
-  collection.fields.push({
-    "hidden": false,
-    "id": "bool_isFood",
-    "name": "isFood",
-    "presentable": false,
-    "required": false,
-    "system": false,
-    "type": "bool"
-  });
+  // Add isFood boolean field (if not exists)
+  if (!collection.fields.getByName("isFood")) {
+    collection.fields.add(new Field({
+      "hidden": false,
+      "id": "bool_isFood",
+      "name": "isFood",
+      "presentable": false,
+      "required": false,
+      "system": false,
+      "type": "bool"
+    }));
+  }
 
-  // Add categories JSON array field
-  collection.fields.push({
-    "hidden": false,
-    "id": "json_categories",
-    "maxSize": 2000,
-    "name": "categories",
-    "presentable": false,
-    "required": false,
-    "system": false,
-    "type": "json"
-  });
+  // Add categories JSON array field (if not exists)
+  if (!collection.fields.getByName("categories")) {
+    collection.fields.add(new Field({
+      "hidden": false,
+      "id": "json_categories",
+      "maxSize": 2000,
+      "name": "categories",
+      "presentable": false,
+      "required": false,
+      "system": false,
+      "type": "json"
+    }));
+  }
 
-  return dao.saveCollection(collection);
-}, (db) => {
-  const dao = new Dao(db);
-  const collection = dao.findCollectionByNameOrId("meals");
+  return txApp.save(collection);
+}, (txApp) => {
+  const collection = txApp.findCollectionByNameOrId("meals");
 
   // Remove the fields
-  collection.fields = collection.fields.filter(f => 
-    f.name !== "isFood" && f.name !== "categories"
-  );
+  collection.fields.removeById("bool_isFood");
+  collection.fields.removeById("json_categories");
 
-  return dao.saveCollection(collection);
+  return txApp.save(collection);
 });

@@ -2,8 +2,7 @@
 
 // Migration: Create non_food_logs table for hydration, poop, mood, symptoms, etc.
 
-migrate((db) => {
-  const dao = new Dao(db);
+migrate((txApp) => {
   const collection = new Collection({
     "id": "pbc_non_food_logs",
     "name": "non_food_logs",
@@ -124,18 +123,16 @@ migrate((db) => {
         "system": false,
         "type": "autodate"
       }
+    ],
+    "indexes": [
+      "CREATE INDEX `idx_non_food_user` ON `non_food_logs` (`user`)",
+      "CREATE INDEX `idx_non_food_category` ON `non_food_logs` (`category`)",
+      "CREATE INDEX `idx_non_food_mealId` ON `non_food_logs` (`mealId`)"
     ]
   });
 
-  collection.indexes = [
-    "CREATE INDEX `idx_non_food_user` ON `non_food_logs` (`user`)",
-    "CREATE INDEX `idx_non_food_category` ON `non_food_logs` (`category`)",
-    "CREATE INDEX `idx_non_food_mealId` ON `non_food_logs` (`mealId`)"
-  ];
-
-  return dao.saveCollection(collection);
-}, (db) => {
-  const dao = new Dao(db);
-  const collection = dao.findCollectionByNameOrId("pbc_non_food_logs");
-  return dao.deleteCollection(collection);
+  return txApp.save(collection);
+}, (txApp) => {
+  const collection = txApp.findCollectionByNameOrId("pbc_non_food_logs");
+  return txApp.delete(collection);
 });
