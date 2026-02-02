@@ -249,40 +249,51 @@ class MealStore: ObservableObject {
     
     /// Delete local meal images older than the retention period
     /// Call this periodically (e.g., on app launch or daily)
+    /// Only deletes if the image is confirmed to exist on PocketBase
     func cleanupOldLocalImages(retentionDays: Int = 14) {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let cutoffDate = Calendar.current.date(byAdding: .day, value: -retentionDays, to: Date())!
         
         var deletedCount = 0
         var keptCount = 0
+        var skippedNotOnServer = 0
         
         for meal in meals {
-            guard let photoName = meal.photo,
-                  photoName.hasPrefix("meal-"),  // Only delete local files, not PB filenames
-                  meal.pbId != nil else {        // Only if successfully synced to server
+            // Only process meals that have been synced to server
+            guard meal.pbId != nil else { continue }
+            
+            // Check if meal is older than retention period
+            guard meal.timestamp < cutoffDate else {
+                keptCount += 1
                 continue
             }
             
-            // Check if meal is older than retention period
-            if meal.timestamp < cutoffDate {
-                let imgURL = docs.appendingPathComponent(photoName)
-                if FileManager.default.fileExists(atPath: imgURL.path) {
-                    do {
-                        try FileManager.default.removeItem(at: imgURL)
-                        deletedCount += 1
-                        print("🗑️ Cleaned up old image: \(photoName)")
-                    } catch {
-                        print("⚠️ Failed to delete \(photoName): \(error)")
-                    }
+            // Look for local image file (format: meal-{localId}.jpg)
+            let localFilename = "meal-\(meal.localId).jpg"
+            let imgURL = docs.appendingPathComponent(localFilename)
+            
+            guard FileManager.default.fileExists(atPath: imgURL.path) else { continue }
+            
+            // SAFETY CHECK: Only delete if image is confirmed on PocketBase
+            // After successful upload, meal.photo is updated to PB filename (not "meal-" prefix)
+            // If meal.photo still starts with "meal-", upload may have failed
+            let imageConfirmedOnServer = meal.photo != nil && !meal.photo!.hasPrefix("meal-")
+            
+            if imageConfirmedOnServer {
+                do {
+                    try FileManager.default.removeItem(at: imgURL)
+                    deletedCount += 1
+                    print("🗑️ Cleaned up old image (confirmed on server): \(localFilename)")
+                } catch {
+                    print("⚠️ Failed to delete \(localFilename): \(error)")
                 }
             } else {
-                keptCount += 1
+                skippedNotOnServer += 1
+                print("⚠️ Keeping local image (not confirmed on server): \(localFilename)")
             }
         }
         
-        if deletedCount > 0 || keptCount > 0 {
-            print("🧹 Image cleanup: deleted \(deletedCount), kept \(keptCount) (within \(retentionDays) days)")
-        }
+        print("🧹 Image cleanup: deleted \(deletedCount), kept \(keptCount) recent, skipped \(skippedNotOnServer) (not on server)")
     }
     
     /// Get local image data if available (for re-upload after server loss)
