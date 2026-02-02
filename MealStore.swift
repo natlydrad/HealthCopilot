@@ -236,14 +236,63 @@ class MealStore: ObservableObject {
         Task {
             do {
                 try await SyncManager.shared.uploadMealWithImage(meal: newMeal, imageData: compressed)
-
-                // On success → optionally delete cached file
-                try? FileManager.default.removeItem(at: imgURL)
+                // Keep local file as backup - cleanup happens separately
+                print("✅ Upload succeeded, keeping local backup: \(imgName)")
             } catch {
                 print("❌ uploadMealWithImage error:", error.localizedDescription)
                 // Leave local file; SyncManager.pushDirty() will retry later
             }
         }
+    }
+    
+    // MARK: - Local Image Cleanup (2 week retention)
+    
+    /// Delete local meal images older than the retention period
+    /// Call this periodically (e.g., on app launch or daily)
+    func cleanupOldLocalImages(retentionDays: Int = 14) {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let cutoffDate = Calendar.current.date(byAdding: .day, value: -retentionDays, to: Date())!
+        
+        var deletedCount = 0
+        var keptCount = 0
+        
+        for meal in meals {
+            guard let photoName = meal.photo,
+                  photoName.hasPrefix("meal-"),  // Only delete local files, not PB filenames
+                  meal.pbId != nil else {        // Only if successfully synced to server
+                continue
+            }
+            
+            // Check if meal is older than retention period
+            if meal.timestamp < cutoffDate {
+                let imgURL = docs.appendingPathComponent(photoName)
+                if FileManager.default.fileExists(atPath: imgURL.path) {
+                    do {
+                        try FileManager.default.removeItem(at: imgURL)
+                        deletedCount += 1
+                        print("🗑️ Cleaned up old image: \(photoName)")
+                    } catch {
+                        print("⚠️ Failed to delete \(photoName): \(error)")
+                    }
+                }
+            } else {
+                keptCount += 1
+            }
+        }
+        
+        if deletedCount > 0 || keptCount > 0 {
+            print("🧹 Image cleanup: deleted \(deletedCount), kept \(keptCount) (within \(retentionDays) days)")
+        }
+    }
+    
+    /// Get local image data if available (for re-upload after server loss)
+    func getLocalImageData(for meal: Meal) -> Data? {
+        guard let photoName = meal.photo, photoName.hasPrefix("meal-") else {
+            return nil
+        }
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let imgURL = docs.appendingPathComponent(photoName)
+        return try? Data(contentsOf: imgURL)
     }
 
     

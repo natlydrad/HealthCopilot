@@ -10,6 +10,10 @@ struct HealthCopilotApp: App {
 
     init() {
         print("🚀 APP INIT")
+        
+        // Cleanup old local images (keep 2 weeks as backup)
+        MealStore.shared.cleanupOldLocalImages(retentionDays: 14)
+        
         // Login to PocketBase on startup
         SyncManager.shared.login(email: "natradalie@gmail.com",
                                  password: "London303!") { success in
