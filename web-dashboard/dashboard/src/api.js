@@ -357,6 +357,54 @@ export async function clearMealIngredients(mealId) {
   return deleted;
 }
 
+// Check if meal was classified as non-food (has non_food_logs)
+export async function fetchHasNonFoodLogs(mealId) {
+  if (!authToken) return false;
+  const filter = encodeURIComponent(`mealId='${mealId}'`);
+  const res = await fetch(
+    `${PB_BASE}/api/collections/non_food_logs/records?filter=${filter}&perPage=1`,
+    { headers: { Authorization: `Bearer ${authToken}` }, cache: "no-store" }
+  );
+  if (!res.ok) return false;
+  const data = await res.json();
+  return (data.items?.length ?? 0) > 0;
+}
+
+// Clear non-food classification: delete non_food_logs for this meal, reset meal.isFood to null
+export async function clearNonFoodClassification(mealId) {
+  if (!authToken) throw new Error("Not logged in");
+
+  const filter = encodeURIComponent(`mealId='${mealId}'`);
+  const listRes = await fetch(
+    `${PB_BASE}/api/collections/non_food_logs/records?filter=${filter}&perPage=50`,
+    { headers: { Authorization: `Bearer ${authToken}` }, cache: "no-store" }
+  );
+  if (!listRes.ok) throw new Error("Failed to fetch non-food logs");
+  const { items } = await listRes.json();
+  for (const log of items || []) {
+    const delRes = await fetch(
+      `${PB_BASE}/api/collections/non_food_logs/records/${log.id}`,
+      { method: "DELETE", headers: { Authorization: `Bearer ${authToken}` } }
+    );
+    if (!delRes.ok) console.warn("Failed to delete non_food_log", log.id);
+  }
+
+  const patchRes = await fetch(
+    `${PB_BASE}/api/collections/meals/records/${mealId}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ isFood: null }),
+    }
+  );
+  if (!patchRes.ok) throw new Error("Failed to reset meal classification");
+  console.log(`✅ Cleared non-food classification for meal ${mealId}`);
+  return true;
+}
+
 // Create an ingredient record
 export async function createIngredient(ingredient) {
   if (!authToken) throw new Error("Not logged in");

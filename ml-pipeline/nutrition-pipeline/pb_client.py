@@ -88,6 +88,29 @@ def insert_ingredient(ingredient):
     return r.json()
 
 
+def delete_non_food_logs_for_meal(meal_id: str) -> int:
+    """Delete all non_food_logs for a meal. Returns count deleted. Prevents duplicates on re-parse."""
+    headers = {"Authorization": f"Bearer {get_token()}"}
+    import urllib.parse
+    filt = urllib.parse.quote(f"mealId='{meal_id}'")
+    url = f"{PB_URL}/api/collections/non_food_logs/records?filter={filt}&perPage=100"
+    r = requests.get(url, headers=headers)
+    if r.status_code != 200:
+        return 0
+    data = r.json()
+    items = data.get("items", [])
+    deleted = 0
+    for item in items:
+        rid = item.get("id")
+        if rid:
+            dr = requests.delete(f"{PB_URL}/api/collections/non_food_logs/records/{rid}", headers=headers)
+            if dr.status_code in (200, 204):
+                deleted += 1
+    if deleted:
+        print(f"   🗑️ Deleted {deleted} existing non_food_log(s) for meal {meal_id}")
+    return deleted
+
+
 def delete_corrections_for_ingredient(ingredient_id: str) -> int:
     """Delete ingredient_corrections that reference this ingredient (required before deleting ingredient)."""
     if not ingredient_id:

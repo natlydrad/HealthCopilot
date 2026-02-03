@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { fetchMealsForDateRange, fetchIngredients, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getLearningStats, removeLearnedPattern, parseAndSaveMeal, clearMealIngredients, sendCorrectionMessage, saveCorrection, getParseApiUrl } from "./api";
+import { fetchMealsForDateRange, fetchIngredients, fetchHasNonFoodLogs, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getLearningStats, removeLearnedPattern, parseAndSaveMeal, clearMealIngredients, clearNonFoodClassification, sendCorrectionMessage, saveCorrection, getParseApiUrl } from "./api";
 
 // Determine if an ingredient is low confidence (needs review)
 function isLowConfidence(ing) {
@@ -85,7 +85,13 @@ export default function DayDetail() {
       </div>
 
       {meals.map((meal) => (
-        <MealCard key={meal.id} meal={meal} />
+        <MealCard
+          key={meal.id}
+          meal={meal}
+          onMealUpdated={(mid, updates) =>
+            setMeals((prev) => prev.map((m) => (m.id === mid ? { ...m, ...updates } : m)))
+          }
+        />
       ))}
 
       {/* Learning Panel */}
@@ -96,13 +102,16 @@ export default function DayDetail() {
   );
 }
 
-function MealCard({ meal }) {
+function MealCard({ meal, onMealUpdated }) {
   const [ingredients, setIngredients] = useState([]);
   const [correcting, setCorrecting] = useState(null);
   const [parsing, setParsing] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [clearingNonFood, setClearingNonFood] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [expandedNutrientId, setExpandedNutrientId] = useState(null);
+
+  const [hasNonFoodLogs, setHasNonFoodLogs] = useState(false);
 
   useEffect(() => {
     async function loadIngredients() {
@@ -111,9 +120,16 @@ function MealCard({ meal }) {
       console.log("✅ Ingredients response:", ings);
       setIngredients(ings);
       setLoaded(true);
+      // If no ingredients and has content, check if it was classified as non-food (persisted)
+      if (ings.length === 0 && (meal.text?.trim() || meal.image)) {
+        const hasLogs = await fetchHasNonFoodLogs(meal.id);
+        setHasNonFoodLogs(hasLogs);
+      } else {
+        setHasNonFoodLogs(false);
+      }
     }
     loadIngredients();
-  }, [meal.id]);
+  }, [meal.id, meal.text, meal.image]);
 
   // Parse meal on demand (works with text OR images via backend API)
   const [parseError, setParseError] = useState(null);
@@ -136,6 +152,10 @@ function MealCard({ meal }) {
       const ingredientsList = Array.isArray(data.ingredients) ? data.ingredients : [];
       setIngredients(ingredientsList);
       setClassificationResult(data.classificationResult || null);
+      if (data.classificationResult === "not_food" || data.isFood === false) {
+        setHasNonFoodLogs(true);
+        onMealUpdated?.(meal.id, { isFood: false });
+      }
       if (ingredientsList.length === 0 && data.classificationResult !== "not_food") {
         let msg = result?.message || "No ingredients detected. Add a caption or try a clearer photo.";
         if (result?.source === "gpt_image" && msg.includes("No ingredients detected")) {
@@ -170,9 +190,30 @@ function MealCard({ meal }) {
     }
   };
 
+  // Clear non-food classification (allows re-parsing as food)
+  const handleClearNonFood = async () => {
+    if (!confirm("Remove non-food classification? You can parse again as food.")) return;
+    setClearingNonFood(true);
+    try {
+      await clearNonFoodClassification(meal.id);
+      setClassificationResult(null);
+      setHasNonFoodLogs(false);
+      onMealUpdated?.(meal.id, { isFood: null });
+    } catch (err) {
+      console.error("Clear non-food failed:", err);
+      alert(`Clear failed: ${err.message}`);
+    } finally {
+      setClearingNonFood(false);
+    }
+  };
+
   // Check if this meal needs parsing (either text or image)
   const hasContent = meal.text?.trim() || meal.image;
-  const needsParsing = loaded && ingredients.length === 0 && hasContent;
+  // Non-food: from current parse session OR non_food_logs OR meal metadata (isFood=false + categories set)
+  // Use meal.isFood+categories as fallback when PocketBase listRules hide non_food_logs from user
+  const fromMealMeta = meal.isFood === false && Array.isArray(meal.categories) && meal.categories.length > 0;
+  const isNonFood = classificationResult === "not_food" || hasNonFoodLogs || fromMealMeta;
+  const needsParsing = loaded && ingredients.length === 0 && hasContent && !isNonFood;
 
   // Build image URL if meal has an image
   const imageUrl = meal.image ? 
@@ -303,18 +344,21 @@ function MealCard({ meal }) {
         </div>
       )}
 
-      {/* Not food (classification result) */}
-      {classificationResult === "not_food" && !parsing && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
-          <p className="text-amber-800 text-sm font-medium">Not food</p>
+      {/* Non-food item (parsed, no ingredients) — show Clear like ingredients */}
+      {isNonFood && ingredients.length === 0 && !parsing && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+          <div className="flex justify-between items-center">
+            <p className="text-amber-800 text-sm font-medium">Non-food item</p>
+            <button
+              type="button"
+              onClick={handleClearNonFood}
+              disabled={clearingNonFood}
+              className="text-xs text-amber-600 hover:text-amber-800 hover:underline disabled:opacity-50"
+            >
+              {clearingNonFood ? "Clearing..." : "🗑️ Clear"}
+            </button>
+          </div>
           <p className="text-amber-700 text-xs mt-1">Classified as non-food — no ingredients added.</p>
-          <button
-            type="button"
-            onClick={() => setClassificationResult(null)}
-            className="mt-2 text-xs text-amber-600 hover:underline"
-          >
-            Dismiss
-          </button>
         </div>
       )}
 
