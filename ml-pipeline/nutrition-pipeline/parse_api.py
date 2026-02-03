@@ -11,7 +11,7 @@ Flow:
 import json
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from pb_client import get_token, insert_ingredient, delete_ingredient, build_user_context_prompt, add_learned_confusion, add_common_food, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date, fetch_ingredients_by_meal_id
+from pb_client import get_token, insert_ingredient, delete_ingredient, build_user_context_prompt, add_learned_confusion, add_common_food, add_portion_preference, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date, fetch_ingredients_by_meal_id
 from parser_gpt import parse_ingredients, parse_ingredients_from_image, correction_chat, get_image_base64, gpt_estimate_nutrition
 from lookup_usda import usda_lookup, scale_nutrition, get_piece_grams, validate_scaled_calories
 from log_classifier import classify_log, classify_log_with_image
@@ -999,6 +999,21 @@ def save_correction(ingredient_id):
                     print(f"   ⚠️ Could not update user food profile: {e}")
         elif learned:
             print(f"📝 Correction logged but NOT learning (reason: {correction_reason})")
+
+        # Learn portion preferences when quantity/unit changed (same food, different amount)
+        quantity_changed = correction.get("quantity") is not None and correction.get("quantity") != original.get("quantity")
+        unit_changed = correction.get("unit") is not None and correction.get("unit") != original.get("unit")
+        name_unchanged = (correction.get("name") or original.get("name") or "").strip().lower() == (original.get("name") or "").strip().lower()
+        if user_id and name_unchanged and (quantity_changed or unit_changed):
+            food_name = original.get("name") or correction.get("name")
+            new_qty = correction.get("quantity") if correction.get("quantity") is not None else original.get("quantity")
+            new_unit = correction.get("unit") or original.get("unit") or "serving"
+            if food_name and new_qty is not None and new_qty > 0:
+                try:
+                    add_portion_preference(user_id, food_name, new_qty, new_unit)
+                    print(f"   📐 Learned portion: {food_name} → {new_qty} {new_unit}")
+                except Exception as e:
+                    print(f"   ⚠️ Could not save portion preference: {e}")
         
         # Always save to ingredient_corrections for history/audit trail
         correction_record = {

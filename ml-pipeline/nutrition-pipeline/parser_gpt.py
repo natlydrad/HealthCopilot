@@ -53,6 +53,10 @@ def parse_ingredients(text: str, user_context: str = ""):
     - category (string) - "food", "drink", "supplement", or "other"
     - reasoning (string) - brief explanation of why you identified this item and estimated this portion
       e.g., "standard coffee cup size" or "typical chicken breast portion"
+    - foodGroupServings (object, optional) - serving equivalents for food-group counting.
+      Format: {{ "grains": 0, "protein": 0, "vegetables": 0, "fruits": 0, "dairy": 0, "fats": 0 }}.
+      One serving ≈ 1 slice bread, 1 oz meat, 1/2 cup veg, 1 piece fruit, 1 cup milk, 1 tsp oil.
+      E.g. broccoli 1 cup → {{ "vegetables": 1, ... }}; chicken breast 4 oz → {{ "protein": 1, ... }}; 1 egg → {{ "protein": 1, ... }}.
     
     Return empty array [] if no food/drinks/supplements found.
     """

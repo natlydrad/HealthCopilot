@@ -848,6 +848,35 @@ def add_learned_confusion(user_id: str, mistaken: str, actual: str, visual_conte
     return update_user_food_profile(profile["id"], {"confusionPairs": confusion_pairs})
 
 
+def add_portion_preference(user_id: str, food_name: str, quantity: float, unit: str) -> bool:
+    """
+    Learn that user typically has this quantity/unit for this food.
+    E.g. "egg" -> 2 eggs (user always corrects to 2)
+    """
+    if not food_name or not isinstance(quantity, (int, float)) or quantity <= 0:
+        return False
+    profile = get_or_create_user_food_profile(user_id)
+    if not profile:
+        return False
+
+    prefs = profile.get("portionPreferences", []) or []
+    food_lower = food_name.lower().strip()
+    unit_norm = (unit or "serving").strip()
+
+    found = False
+    for p in prefs:
+        if (p.get("food") or "").lower() == food_lower and (p.get("unit") or "").lower() == unit_norm.lower():
+            p["quantity"] = quantity
+            p["count"] = p.get("count", 0) + 1
+            p["unit"] = unit_norm
+            found = True
+            break
+    if not found:
+        prefs.append({"food": food_name, "quantity": quantity, "unit": unit_norm, "count": 1})
+
+    return update_user_food_profile(profile["id"], {"portionPreferences": prefs}) is not None
+
+
 def add_common_food(user_id: str, food_name: str, default_portion: str = None, aliases: list = None):
     """
     Add a food to user's common foods list.
@@ -941,6 +970,22 @@ def build_user_context_prompt(user_id: str) -> str:
         if pending_items:
             context_parts.append(f"(Learning: user has also mentioned eating {', '.join(pending_items[:3])})")
     
+    # Portion preferences (learned from corrections, e.g. "user always has 2 eggs")
+    portion_prefs = profile.get("portionPreferences", []) or []
+    if portion_prefs:
+        prefs_by_count = sorted([p for p in portion_prefs if p.get("quantity") and p.get("food")],
+                                key=lambda x: x.get("count", 0), reverse=True)
+        if prefs_by_count:
+            context_parts.append("")
+            context_parts.append("PORTION PREFERENCES (user has corrected these before - prefer these amounts):")
+            for p in prefs_by_count[:6]:
+                food = p.get("food", "")
+                qty = p.get("quantity")
+                unit = p.get("unit", "serving")
+                count = p.get("count", 0)
+                if food and qty:
+                    context_parts.append(f"- {food}: {qty} {unit} (corrected {count}x)")
+
     # Portion bias
     portion_bias = profile.get("portionBias", 1.0)
     if portion_bias and abs(portion_bias - 1.0) > 0.1:
