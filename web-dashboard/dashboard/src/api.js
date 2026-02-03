@@ -567,7 +567,7 @@ export async function previewCorrection(ingredientId, correction, learned = null
   return saveCorrection(ingredientId, correction, learned, correctionReason, shouldLearn, conversation, true);
 }
 
-// Save a finalized correction
+// Save a finalized correction (correction may include chosenUsdaOption)
 export async function saveCorrection(ingredientId, correction, learned = null, correctionReason = null, shouldLearn = false, conversation = [], preview = false) {
   console.log(preview ? "👁️ Previewing correction:" : "💾 Saving correction:", correction, "reason:", correctionReason);
   

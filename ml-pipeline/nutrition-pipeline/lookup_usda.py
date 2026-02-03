@@ -435,6 +435,98 @@ def _alternative_usda_queries(ingredient_name: str) -> list[str]:
     return queries
 
 
+def _is_product_type_mismatch(query_lower: str, matched_name: str) -> bool:
+    """Return True if match is wrong product type (e.g. yogurt when user asked for milk)."""
+    q = query_lower
+    m = matched_name.lower()
+    if "milk" in q and "soy" in q:
+        if "yogurt" in m or "creamer" in m or "cream" in m:
+            return True
+    if "milk" in q and ("oat" in q or "almond" in q):
+        if "yogurt" in m or "creamer" in m:
+            return True
+    return False
+
+
+def usda_search_options(
+    query: str, quantity: float, unit: str, max_options: int = 8
+) -> tuple[list[dict], bool]:
+    """
+    Search USDA and return multiple options with scaled nutrition for the user to choose.
+    Returns (options, has_exact_brand_match).
+    Excludes product type mismatches (yogurt/creamer when user asked for milk).
+    """
+    if not USDA_KEY:
+        return [], False
+    query_lower = (query or "").lower()
+    all_candidates = []
+    seen_fdc = set()
+    for q in [query] + _alternative_usda_queries(query):
+        try:
+            r = requests.get(USDA_URL, params={"query": q, "api_key": USDA_KEY, "pageSize": 20})
+            if r.status_code != 200:
+                continue
+            foods = r.json().get("foods", [])
+            for f in foods:
+                fdc_id = f.get("fdcId")
+                if fdc_id in seen_fdc:
+                    continue
+                raw_nutrients = f.get("foodNutrients", [])
+                macros = extract_macros(raw_nutrients)
+                matched_name = f.get("description", "")
+                if not validate_usda_match(query, matched_name, macros)[0]:
+                    continue
+                if _is_product_type_mismatch(query_lower, matched_name):
+                    continue
+                seen_fdc.add(fdc_id)
+                serving_size = f.get("servingSize", 100) or 100
+                unit_lower = (unit or "").lower()
+                if unit_lower in ("piece", "pieces"):
+                    piece_g = get_piece_grams(query)
+                    if piece_g is not None:
+                        serving_size = piece_g
+                scaled = scale_nutrition(raw_nutrients, quantity, unit, serving_size)
+                cal = next((n.get("value", 0) for n in scaled if n.get("nutrientName") == "Energy" and n.get("unitName") == "KCAL"), 0)
+                prot = next((n.get("value", 0) for n in scaled if n.get("nutrientName") == "Protein"), 0)
+                carbs = next((n.get("value", 0) for n in scaled if "carbohydrate" in (n.get("nutrientName") or "").lower()), 0)
+                fat = next((n.get("value", 0) for n in scaled if "lipid" in (n.get("nutrientName") or "").lower() or n.get("nutrientName") == "Total lipid (fat)"), 0)
+                all_candidates.append({
+                    "usdaCode": fdc_id,
+                    "name": matched_name,
+                    "nutrition": scaled,
+                    "serving_size_g": serving_size,
+                    "calories": round(cal, 0) if cal else None,
+                    "protein": round(prot, 1) if prot is not None else None,
+                    "carbs": round(carbs, 1) if carbs is not None else None,
+                    "fat": round(fat, 1) if fat is not None else None,
+                })
+        except Exception as e:
+            print(f"   ⚠️ usda_search_options error for '{q}': {e}")
+    # Rank by calorie fit (per 100g)
+    expected = get_expected_cal_range(query)
+    for c in all_candidates:
+        grams = convert_to_grams(quantity or 1, unit or "serving", c.get("serving_size_g", 100))
+        cal_100 = (c["calories"] or 0) * 100 / grams if grams > 0 else 0
+        c["_score"] = score_calorie_fit(cal_100, expected[0], expected[1]) if expected else 0
+    all_candidates.sort(key=lambda x: x["_score"])
+    for c in all_candidates:
+        del c["_score"]
+    options = all_candidates[:max_options]
+    # Exact branded match: query appears in matched name (e.g. "silk original" in "SILK Original, soymilk")
+    q_words = set(w for w in query_lower.split() if len(w) > 2)
+    has_exact = False
+    for opt in options:
+        m_lower = opt["name"].replace(",", " ").lower()
+        mw = set(m_lower.split())
+        if q_words and q_words <= mw:
+            has_exact = True
+            break
+        if query_lower in m_lower:
+            has_exact = True
+            break
+    return options, has_exact
+
+
 def usda_lookup_valid_for_portion(
     ingredient_name: str, quantity: float, unit: str
 ) -> dict | None:

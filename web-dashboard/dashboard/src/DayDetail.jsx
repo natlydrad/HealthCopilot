@@ -544,7 +544,7 @@ function CorrectionChat({ ingredient, meal, onClose, onSave }) {
   const [pendingReason, setPendingReason] = useState(null);
   const [pendingShouldLearn, setPendingShouldLearn] = useState(false);
   const [conversationHistory, setConversationHistory] = useState([]);
-  const [pendingPreview, setPendingPreview] = useState(null); // { preview result, correction, learned, reason, shouldLearn, conversation }
+  const [pendingPreview, setPendingPreview] = useState(null); // { previewResult, correction, learned, reason, shouldLearn, conversation, selectedUsdaOption? }
   const messagesEndRef = useRef(null);
 
   // Build the meal image URL
@@ -638,10 +638,15 @@ What would you like to change? You can tell me naturally, like "that's actually 
           });
           const toShow = previewResult.addedIngredient || previewResult.ingredient;
           const nutText = formatNutritionSummary(toShow?.nutrition);
-          const previewMsg = previewResult.addedIngredient
+          const opts = previewResult.usdaOptions || [];
+          const hasExact = previewResult.hasExactUsdaMatch;
+          let previewMsg = previewResult.addedIngredient
             ? `Here's what I'll add:\n\n**${toShow.name}** — ${toShow.quantity ?? 1} ${toShow.unit || "serving"}${nutText ? "\n" + nutText : ""}\n\nConfirm to save, or cancel to edit.`
             : `Here's what I'll change it to:\n\n**${toShow.name}** — ${toShow.quantity ?? 1} ${toShow.unit || "serving"}${nutText ? "\n" + nutText : ""}\n\nConfirm to save, or cancel to edit.`;
-          setMessages(prev => [...prev, { from: "bot", text: previewMsg, isPreview: true }]);
+          if (opts.length > 0) {
+            previewMsg += `\n\n${!hasExact ? "No exact USDA match for \"" + (result.correction?.name || ingredient.name) + "\". " : ""}Choose an option below or confirm to use the default.`;
+          }
+          setMessages(prev => [...prev, { from: "bot", text: previewMsg, isPreview: true, usdaOptions: opts }]);
         } catch (err) {
           setMessages(prev => [...prev, { from: "bot", text: `Could not preview: ${err.message}. You can try again.` }]);
         }
@@ -669,9 +674,13 @@ What would you like to change? You can tell me naturally, like "that's actually 
 
   const handleConfirmPreview = async () => {
     if (!pendingPreview) return;
-    const { correction, learned, reason, shouldLearn, conversation } = pendingPreview;
+    const { correction, learned, reason, shouldLearn, conversation, selectedUsdaOption } = pendingPreview;
+    const toSave = { ...correction };
+    if (selectedUsdaOption) {
+      toSave.chosenUsdaOption = selectedUsdaOption;
+    }
     setPendingPreview(null);
-    await handleSave(correction, learned, reason, shouldLearn, conversation);
+    await handleSave(toSave, learned, reason, shouldLearn, conversation);
   };
 
   const handleCancelPreview = () => {
@@ -792,6 +801,29 @@ What would you like to change? You can tell me naturally, like "that's actually 
 
         {/* Quick actions + Input */}
         <div className="p-4 border-t bg-gray-50 space-y-3">
+          {/* USDA options when preview has them */}
+          {pendingPreview?.previewResult?.usdaOptions?.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-gray-600">Pick a USDA match:</p>
+              <div className="max-h-32 overflow-y-auto flex flex-col gap-1">
+                {pendingPreview.previewResult.usdaOptions.map((opt) => {
+                  const isSelected = pendingPreview.selectedUsdaOption?.usdaCode === opt.usdaCode;
+                  const nut = [opt.calories != null && `${opt.calories} cal`, opt.protein != null && `${opt.protein}g protein`, opt.carbs != null && `${opt.carbs}g carbs`].filter(Boolean).join(", ");
+                  return (
+                    <button
+                      key={opt.usdaCode}
+                      type="button"
+                      onClick={() => setPendingPreview((p) => p ? { ...p, selectedUsdaOption: isSelected ? null : opt } : null)}
+                      className={`text-left px-3 py-2 rounded-lg border text-sm truncate ${isSelected ? "border-green-500 bg-green-50" : "border-gray-200 hover:bg-gray-50"}`}
+                    >
+                      <span className="font-medium">{opt.name}</span>
+                      {nut && <span className="text-gray-500 ml-1">— {nut}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {/* Confirm/Cancel when preview is pending */}
           {pendingPreview && (
             <div className="flex gap-2">

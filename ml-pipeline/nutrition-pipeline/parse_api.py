@@ -13,7 +13,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pb_client import get_token, insert_ingredient, delete_ingredient, delete_non_food_logs_for_meal, build_user_context_prompt, add_learned_confusion, add_common_food, add_portion_preference, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date, fetch_ingredients_by_meal_id
 from parser_gpt import parse_ingredients, parse_ingredients_from_image, correction_chat, get_image_base64, gpt_estimate_nutrition
-from lookup_usda import usda_lookup, usda_lookup_valid_for_portion, scale_nutrition, get_piece_grams, validate_scaled_calories
+from lookup_usda import usda_lookup, usda_lookup_valid_for_portion, usda_search_options, scale_nutrition, get_piece_grams, validate_scaled_calories
 from log_classifier import classify_log, classify_log_with_image
 import requests
 import os
@@ -763,6 +763,27 @@ def correct_ingredient_chat(ingredient_id):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/usda-options", methods=["POST"])
+def fetch_usda_options():
+    """
+    Search USDA and return options for user to choose.
+    POST body: { query: str, quantity: float, unit: str }
+    Returns: { options: [...], hasExactMatch: bool }
+    """
+    try:
+        data = request.get_json() or {}
+        q = (data.get("query") or "").strip()
+        quantity = float(data.get("quantity", 1))
+        unit = data.get("unit") or "serving"
+        if not q:
+            return jsonify({"error": "query required"}), 400
+        opts, has_exact = usda_search_options(q, quantity, unit, max_options=8)
+        return jsonify({"options": opts, "hasExactMatch": has_exact})
+    except Exception as e:
+        print(f"❌ usda-options error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/correct/<ingredient_id>/save", methods=["POST"])
 def save_correction(ingredient_id):
     """
@@ -952,43 +973,55 @@ def save_correction(ingredient_id):
         elif name_changed or force_recalc:
             # Name changed or force recalc - do fresh USDA lookup
             corrected_name = correction.get("name", original.get("name"))
-            if name_changed:
-                print(f"📝 Name changed: {original.get('name')} → {corrected_name}")
-            else:
-                print(f"🔄 Force recalculating nutrition for: {corrected_name}")
-            usda = usda_lookup(corrected_name)
-            if usda:
-                quantity = correction.get("quantity", original.get("quantity", 1))
-                unit = correction.get("unit", original.get("unit", "serving"))
-                scaled_nutrition = scale_nutrition(
-                    usda.get("nutrition", []),
-                    quantity,
-                    unit,
-                    usda.get("serving_size_g", 100.0)
-                )
-                update["nutrition"] = scaled_nutrition
-                update["usdaCode"] = usda.get("usdaCode")
+            quantity = correction.get("quantity", original.get("quantity", 1))
+            unit = correction.get("unit", original.get("unit", "serving"))
+            chosen = correction.get("chosenUsdaOption")
+
+            if chosen and chosen.get("usdaCode") and chosen.get("nutrition"):
+                usda = {
+                    "usdaCode": chosen["usdaCode"],
+                    "name": chosen.get("name", corrected_name),
+                    "nutrition": chosen["nutrition"],
+                    "serving_size_g": chosen.get("serving_size_g", 100),
+                }
+                update["nutrition"] = chosen["nutrition"]
+                update["usdaCode"] = chosen["usdaCode"]
                 update["source"] = "usda"
-                
-                # Check if USDA match is exact or a fallback
-                usda_name = usda.get("name", "").lower()
-                corrected_lower = corrected_name.lower()
-                is_exact_match = corrected_lower in usda_name or usda_name in corrected_lower
-                
-                usda_match_info = {
-                    "found": True,
-                    "matchedName": usda.get("name"),
-                    "isExactMatch": is_exact_match,
-                    "searchedFor": corrected_name
-                }
-                print(f"   ✅ Found USDA match: {usda.get('name')} (exact: {is_exact_match})")
-            else:
-                update["source"] = "corrected"
-                usda_match_info = {
-                    "found": False,
-                    "searchedFor": corrected_name
-                }
-                print(f"   ⚠️ No USDA match for corrected name")
+                usda_match_info = {"found": True, "matchedName": chosen.get("name"), "userChose": True, "searchedFor": corrected_name}
+                print(f"   ✅ Using user-chosen USDA: {chosen.get('name')}")
+            elif name_changed or force_recalc:
+                if name_changed:
+                    print(f"📝 Name changed: {original.get('name')} → {corrected_name}")
+                else:
+                    print(f"🔄 Force recalculating nutrition for: {corrected_name}")
+                usda = usda_lookup(corrected_name)
+                if usda:
+                    scaled_nutrition = scale_nutrition(
+                        usda.get("nutrition", []),
+                        quantity,
+                        unit,
+                        usda.get("serving_size_g", 100.0)
+                    )
+                    update["nutrition"] = scaled_nutrition
+                    update["usdaCode"] = usda.get("usdaCode")
+                    update["source"] = "usda"
+                    usda_name = usda.get("name", "").lower()
+                    corrected_lower = corrected_name.lower()
+                    is_exact_match = corrected_lower in usda_name or usda_name in corrected_lower
+                    usda_match_info = {
+                        "found": True,
+                        "matchedName": usda.get("name"),
+                        "isExactMatch": is_exact_match,
+                        "searchedFor": corrected_name
+                    }
+                    print(f"   ✅ Found USDA match: {usda.get('name')} (exact: {is_exact_match})")
+                else:
+                    update["source"] = "corrected"
+                    usda_match_info = {
+                        "found": False,
+                        "searchedFor": corrected_name
+                    }
+                    print(f"   ⚠️ No USDA match for corrected name")
         
         elif quantity_changed or unit_changed:
             # Quantity/unit changed but name same - re-scale existing nutrition
@@ -1026,13 +1059,25 @@ def save_correction(ingredient_id):
         # Preview: return what would be saved without persisting
         if preview:
             merged = {**original, **update}
-            return jsonify({
+            payload = {
                 "success": True, "preview": True,
                 "ingredient": merged,
                 "addedIngredient": None,
                 "correctionReason": correction_reason,
                 "usdaMatch": usda_match_info,
-            })
+            }
+            # When name changed, fetch USDA options so user can choose
+            if name_changed and not correction.get("chosenUsdaOption"):
+                corrected_name = correction.get("name", original.get("name"))
+                qty = correction.get("quantity", original.get("quantity", 1))
+                u = correction.get("unit", original.get("unit", "serving"))
+                try:
+                    opts, has_exact = usda_search_options(corrected_name, qty, u, max_options=8)
+                    payload["usdaOptions"] = opts
+                    payload["hasExactUsdaMatch"] = has_exact
+                except Exception as e:
+                    print(f"   ⚠️ Could not fetch USDA options: {e}")
+            return jsonify(payload)
 
         # Update the ingredient
         update_resp = requests.patch(
