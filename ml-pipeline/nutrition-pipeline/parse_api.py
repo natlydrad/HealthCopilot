@@ -780,13 +780,14 @@ def save_correction(ingredient_id):
         token = get_token()
         headers = {"Authorization": f"Bearer {token}"}
         
-        data = request.get_json()
+        data = request.get_json() or {}
         correction = data.get("correction", {})
         learned = data.get("learned")
         correction_reason = data.get("correctionReason", "unknown")
         should_learn = data.get("shouldLearn", False)
         conversation = data.get("conversation", [])  # Chat history for reference
-        
+        preview = data.get("preview", False)  # If true, return what would be saved without persisting
+
         if not correction:
             return jsonify({"error": "No correction provided"}), 400
         
@@ -860,24 +861,27 @@ def save_correction(ingredient_id):
                     "reasoning": f"User added missing item: {new_name}",
                 }
             }
-            new_ing = insert_ingredient(payload)
-            if not new_ing:
-                return jsonify({"error": "Failed to create new ingredient"}), 500
-            print(f"   ✅ Added missing item as new ingredient: {new_name} (kept original unchanged)")
             usda_match_info = {"found": bool(usda), "searchedFor": new_name}
             if usda:
                 usda_match_info["matchedName"] = usda.get("name")
                 usda_match_info["isExactMatch"] = new_name.lower() in (usda.get("name") or "").lower()
-            # Save correction record for audit (add_missing)
+            if preview:
+                return jsonify({
+                    "success": True, "preview": True,
+                    "ingredient": original,
+                    "addedIngredient": payload,  # Would-be new ingredient
+                    "correctionReason": correction_reason,
+                    "usdaMatch": usda_match_info,
+                })
+            new_ing = insert_ingredient(payload)
+            if not new_ing:
+                return jsonify({"error": "Failed to create new ingredient"}), 500
+            print(f"   ✅ Added missing item as new ingredient: {new_name} (kept original unchanged)")
             correction_record = {
-                "ingredientId": ingredient_id,
-                "user": original.get("user"),
+                "ingredientId": ingredient_id, "user": original.get("user"),
                 "originalParse": {"name": original.get("name"), "quantity": original.get("quantity"), "unit": original.get("unit")},
-                "userCorrection": correction,
-                "correctionType": "add_missing",
-                "correctionReason": correction_reason,
-                "shouldLearn": False,
-                "context": {"via": "correction_chat", "addedIngredientId": new_ing.get("id"), "conversation": conversation}
+                "userCorrection": correction, "correctionType": "add_missing", "correctionReason": correction_reason,
+                "shouldLearn": False, "context": {"via": "correction_chat", "addedIngredientId": new_ing.get("id"), "conversation": conversation}
             }
             try:
                 requests.post(f"{PB_URL}/api/collections/ingredient_corrections/records", headers=headers, json=correction_record)
@@ -1018,7 +1022,18 @@ def save_correction(ingredient_id):
                         scaled_nutrition.append(scaled)
                     
                     update["nutrition"] = scaled_nutrition
-        
+
+        # Preview: return what would be saved without persisting
+        if preview:
+            merged = {**original, **update}
+            return jsonify({
+                "success": True, "preview": True,
+                "ingredient": merged,
+                "addedIngredient": None,
+                "correctionReason": correction_reason,
+                "usdaMatch": usda_match_info,
+            })
+
         # Update the ingredient
         update_resp = requests.patch(
             f"{PB_URL}/api/collections/ingredients/records/{ingredient_id}",

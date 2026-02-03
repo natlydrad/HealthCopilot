@@ -1,6 +1,27 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { fetchMealsForDateRange, fetchIngredients, fetchHasNonFoodLogs, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getLearningStats, removeLearnedPattern, parseAndSaveMeal, clearMealIngredients, clearNonFoodClassification, sendCorrectionMessage, saveCorrection, getParseApiUrl } from "./api";
+import { fetchMealsForDateRange, fetchIngredients, fetchHasNonFoodLogs, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getLearningStats, removeLearnedPattern, parseAndSaveMeal, clearMealIngredients, clearNonFoodClassification, sendCorrectionMessage, previewCorrection, saveCorrection, getParseApiUrl } from "./api";
+
+// Format nutrition array for display (cal, protein, carbs, fat)
+function formatNutritionSummary(nutrition) {
+  if (!Array.isArray(nutrition) || nutrition.length === 0) return "";
+  const getVal = (name) => {
+    const n = nutrition.find((x) =>
+      (x.nutrientName || "").toLowerCase().includes(name.toLowerCase())
+    );
+    return n?.value != null ? Math.round(n.value) : null;
+  };
+  const cal = getVal("energy") ?? getVal("Energy");
+  const protein = getVal("protein");
+  const carbs = getVal("carbohydrate") ?? getVal("Carbohydrate");
+  const fat = getVal("lipid") ?? getVal("fat") ?? getVal("Total lipid");
+  const parts = [];
+  if (cal != null) parts.push(`${cal} cal`);
+  if (protein != null) parts.push(`${protein}g protein`);
+  if (carbs != null) parts.push(`${carbs}g carbs`);
+  if (fat != null) parts.push(`${fat}g fat`);
+  return parts.length ? parts.join(", ") : "";
+}
 
 // Determine if an ingredient is low confidence (needs review)
 function isLowConfidence(ing) {
@@ -523,6 +544,7 @@ function CorrectionChat({ ingredient, meal, onClose, onSave }) {
   const [pendingReason, setPendingReason] = useState(null);
   const [pendingShouldLearn, setPendingShouldLearn] = useState(false);
   const [conversationHistory, setConversationHistory] = useState([]);
+  const [pendingPreview, setPendingPreview] = useState(null); // { preview result, correction, learned, reason, shouldLearn, conversation }
   const messagesEndRef = useRef(null);
 
   // Build the meal image URL
@@ -590,16 +612,39 @@ What would you like to change? You can tell me naturally, like "that's actually 
       }
       setPendingShouldLearn(result.shouldLearn || false);
 
-      // If complete, show save button
+      // If complete, preview first — show what would change, user confirms before save
       if (result.complete && result.correction) {
         const updatedConversation = [
           ...conversationHistory,
           { role: "user", content: msg },
           { role: "assistant", content: result.reply }
         ];
-        setTimeout(async () => {
-          await handleSave(result.correction, result.learned, result.correctionReason, result.shouldLearn, updatedConversation);
-        }, 500);
+        try {
+          const previewResult = await previewCorrection(
+            ingredient.id,
+            result.correction,
+            result.learned,
+            result.correctionReason,
+            result.shouldLearn,
+            updatedConversation
+          );
+          setPendingPreview({
+            previewResult,
+            correction: result.correction,
+            learned: result.learned,
+            reason: result.correctionReason,
+            shouldLearn: result.shouldLearn,
+            conversation: updatedConversation,
+          });
+          const toShow = previewResult.addedIngredient || previewResult.ingredient;
+          const nutText = formatNutritionSummary(toShow?.nutrition);
+          const previewMsg = previewResult.addedIngredient
+            ? `Here's what I'll add:\n\n**${toShow.name}** — ${toShow.quantity ?? 1} ${toShow.unit || "serving"}${nutText ? "\n" + nutText : ""}\n\nConfirm to save, or cancel to edit.`
+            : `Here's what I'll change it to:\n\n**${toShow.name}** — ${toShow.quantity ?? 1} ${toShow.unit || "serving"}${nutText ? "\n" + nutText : ""}\n\nConfirm to save, or cancel to edit.`;
+          setMessages(prev => [...prev, { from: "bot", text: previewMsg, isPreview: true }]);
+        } catch (err) {
+          setMessages(prev => [...prev, { from: "bot", text: `Could not preview: ${err.message}. You can try again.` }]);
+        }
       }
 
     } catch (err) {
@@ -620,6 +665,18 @@ What would you like to change? You can tell me naturally, like "that's actually 
       setInputValue("");
       sendMessage(msg);
     }
+  };
+
+  const handleConfirmPreview = async () => {
+    if (!pendingPreview) return;
+    const { correction, learned, reason, shouldLearn, conversation } = pendingPreview;
+    setPendingPreview(null);
+    await handleSave(correction, learned, reason, shouldLearn, conversation);
+  };
+
+  const handleCancelPreview = () => {
+    setPendingPreview(null);
+    setMessages(prev => [...prev, { from: "bot", text: "Cancelled. You can correct again or close when ready." }]);
   };
 
   const handleSave = async (correction = pendingCorrection, learned = pendingLearned, reason = pendingReason, shouldLearn = pendingShouldLearn, conversationOverride = null) => {
@@ -735,6 +792,25 @@ What would you like to change? You can tell me naturally, like "that's actually 
 
         {/* Quick actions + Input */}
         <div className="p-4 border-t bg-gray-50 space-y-3">
+          {/* Confirm/Cancel when preview is pending */}
+          {pendingPreview && (
+            <div className="flex gap-2">
+              <button
+                onClick={handleConfirmPreview}
+                disabled={loading}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50"
+              >
+                ✓ Confirm & save
+              </button>
+              <button
+                onClick={handleCancelPreview}
+                disabled={loading}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
           {/* Quick action buttons - above text input, send directly (no autofill) */}
           <div className="flex flex-wrap gap-2">
             <button
