@@ -61,14 +61,16 @@ def nutrition_from_label_to_array(label: dict, quantity: float, serving_size_g: 
         out.append({"nutrientName": "Energy", "unitName": "KCAL", "value": round((label["calories"] or 0) * scale, 2)})
     if label.get("protein") is not None:
         out.append({"nutrientName": "Protein", "unitName": "G", "value": round((label["protein"] or 0) * scale, 2)})
-    if label.get("totalCarb") is not None:
-        out.append({"nutrientName": "Carbohydrate, by difference", "unitName": "G", "value": round((label["totalCarb"] or 0) * scale, 2)})
+    carbs_val = label.get("totalCarb") if label.get("totalCarb") is not None else label.get("carbs")
+    if carbs_val is not None:
+        out.append({"nutrientName": "Carbohydrate, by difference", "unitName": "G", "value": round((carbs_val or 0) * scale, 2)})
     if label.get("dietaryFiber") is not None:
         out.append({"nutrientName": "Fiber, total dietary", "unitName": "G", "value": round((label["dietaryFiber"] or 0) * scale, 2)})
     if label.get("totalSugars") is not None:
         out.append({"nutrientName": "Total Sugars", "unitName": "G", "value": round((label["totalSugars"] or 0) * scale, 2)})
-    if label.get("totalFat") is not None:
-        out.append({"nutrientName": "Total lipid (fat)", "unitName": "G", "value": round((label["totalFat"] or 0) * scale, 2)})
+    fat_val = label.get("totalFat") if label.get("totalFat") is not None else label.get("fat")
+    if fat_val is not None:
+        out.append({"nutrientName": "Total lipid (fat)", "unitName": "G", "value": round((fat_val or 0) * scale, 2)})
     if label.get("saturatedFat") is not None:
         out.append({"nutrientName": "Fatty acids, total saturated", "unitName": "G", "value": round((label["saturatedFat"] or 0) * scale, 2)})
     if label.get("sodium") is not None:
@@ -113,13 +115,25 @@ def clear_meal_ingredients(meal_id):
         return jsonify({"error": "Authorization required"}), 401
     try:
         total_deleted = 0
-        while True:
+        max_rounds = 20  # prevent infinite loop if deletes fail
+        for _ in range(max_rounds):
             ingredients = fetch_ingredients_by_meal_id(meal_id)
             if not ingredients:
                 break
+            deleted_this_round = 0
             for ing in ingredients:
-                if delete_ingredient(ing.get("id")):
-                    total_deleted += 1
+                ing_id = ing.get("id")
+                if not ing_id:
+                    print(f"   ⚠️ Ingredient missing id: {ing.get('name', '?')}")
+                    continue
+                if delete_ingredient(ing_id):
+                    deleted_this_round += 1
+                else:
+                    print(f"   ⚠️ Could not delete id={ing_id} name={ing.get('name', '?')}")
+            total_deleted += deleted_this_round
+            if deleted_this_round == 0 and ingredients:
+                print(f"   ⚠️ No deletes succeeded for {len(ingredients)} ingredients (403?)")
+                break
         print(f"   🗑️ Cleared {total_deleted} ingredients for meal {meal_id}")
         return jsonify({"deleted": total_deleted}), 200
     except Exception as e:
@@ -524,18 +538,19 @@ def parse_meal(meal_id):
             if label_nutrition and isinstance(label_nutrition, dict):
                 serving_size_g = label_nutrition.get("servingSizeG") or 100.0
                 scaled_nutrition = nutrition_from_label_to_array(label_nutrition, quantity, serving_size_g)
-                # Require calories from label; if missing, treat as partial and use USDA (merge label onto USDA)
                 has_calories = any(n.get("nutrientName") == "Energy" and (n.get("value") or 0) > 0 for n in scaled_nutrition)
-                if scaled_nutrition and has_calories:
+                has_macros = len(scaled_nutrition) >= 3  # need calories + at least 2 of protein/carb/fat
+                if scaled_nutrition and has_calories and has_macros:
                     print(f"   📋 Using nutrition from label for: '{ing.get('name')}'")
                     source_ing = "label"
                     portion_grams = round(quantity * serving_size_g, 1) if serving_size_g else None
                     label_used = True
                 else:
-                    if scaled_nutrition and not has_calories:
+                    if scaled_nutrition:
                         partial_label = True
-                        partial_label_array = scaled_nutrition  # keep to overlay onto USDA
-                        print(f"   ⚠️ Label partial (no calories) for '{ing.get('name')}' — using USDA + label overlay")
+                        partial_label_array = scaled_nutrition
+                        reason = "no calories" if not has_calories else "incomplete macros (need protein/carb/fat)"
+                        print(f"   ⚠️ Label partial ({reason}) for '{ing.get('name')}' — using USDA/GPT + overlay")
                     label_nutrition = None
                     scaled_nutrition = []
                     label_used = False

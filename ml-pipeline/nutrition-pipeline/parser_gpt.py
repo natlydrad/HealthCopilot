@@ -424,8 +424,12 @@ Return ONLY a JSON object with these keys (numbers only, no units in values):
 - carbs (number, grams)
 - fat (number, grams)
 
-Use realistic values. Examples:
-- 6 small chicken wings (wingettes/drummettes) baked: ~280 cal, 25g protein, 18g fat, 0g carbs
+IMPORTANT: Include ALL four keys. Sandwiches, wraps, and bread-based items have carbs from bread.
+
+Examples:
+- 1 chicken salad sandwich: ~350 cal, 20g protein, 35g carbs, 15g fat
+- 1 serving chicken salad (no bread): ~200 cal, 15g protein, 5g carbs, 14g fat
+- 6 small chicken wings baked: ~280 cal, 25g protein, 0g carbs, 18g fat
 - 1 egg: ~70 cal, 6g protein, 0.5g carbs, 5g fat
 - 4 oz chicken breast: ~180 cal, 35g protein, 0g carbs, 4g fat
 

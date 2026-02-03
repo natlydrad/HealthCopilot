@@ -257,7 +257,7 @@ def usda_lookup(ingredient_name):
     params = {
         "query": ingredient_name,
         "api_key": USDA_KEY,
-        "pageSize": 1
+        "pageSize": 10,
     }
     
     try:
@@ -273,27 +273,42 @@ def usda_lookup(ingredient_name):
         print(f"   Results found: {len(foods)}")
         
         if foods:
-            f = foods[0]
-            raw_nutrients = f.get("foodNutrients", [])
-            macros = extract_macros(raw_nutrients)
-            matched_name = f["description"]
+            ingredient_lower = ingredient_name.lower()
+            # Composite foods (sandwich, salad, wrap, etc.) should have carbs — prefer matches that do
+            is_composite = any(w in ingredient_lower for w in [
+                "sandwich", "wrap", "burrito", "taco", "burger", "pizza",
+                "salad", "bowl", "plate", "combo", "meal"
+            ])
             
-            print(f"   ✅ Matched: '{matched_name}' (fdcId: {f['fdcId']})")
-            print(f"   Macros: {macros}")
+            best = None
+            for f in foods:
+                raw_nutrients = f.get("foodNutrients", [])
+                macros = extract_macros(raw_nutrients)
+                matched_name = f["description"]
+                is_valid, reason = validate_usda_match(ingredient_name, matched_name, macros)
+                if not is_valid:
+                    continue
+                if best is None:
+                    best = (f, macros, matched_name, raw_nutrients)
+                    continue
+                # Prefer composite matches with carbs when ingredient suggests composite
+                if is_composite and macros.get("carbs", 0) > 0 and best[1].get("carbs", 0) == 0:
+                    best = (f, macros, matched_name, raw_nutrients)
+                    break
+                if is_composite and macros.get("carbs", 0) > best[1].get("carbs", 0):
+                    best = (f, macros, matched_name, raw_nutrients)
             
-            # Validate the match
-            is_valid, reason = validate_usda_match(ingredient_name, matched_name, macros)
-            if not is_valid:
-                print(f"   ⚠️ Rejected USDA match: {reason}")
-                return None
-            
-            return {
-                "usdaCode": f["fdcId"],
-                "name": matched_name,
-                "nutrition": raw_nutrients,
-                "macros_per_100g": macros,
-                "serving_size_g": f.get("servingSize", 100),
-            }
+            if best:
+                f, macros, matched_name, raw_nutrients = best
+                print(f"   ✅ Matched: '{matched_name}' (fdcId: {f['fdcId']})")
+                print(f"   Macros: {macros}")
+                return {
+                    "usdaCode": f["fdcId"],
+                    "name": matched_name,
+                    "nutrition": raw_nutrients,
+                    "macros_per_100g": macros,
+                    "serving_size_g": f.get("servingSize", 100),
+                }
         else:
             print(f"   ⚠️ No USDA results for '{ingredient_name}'")
             return None

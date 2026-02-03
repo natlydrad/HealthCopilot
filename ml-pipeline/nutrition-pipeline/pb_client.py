@@ -45,23 +45,32 @@ def fetch_meals():
     return all_items
 
 
-def fetch_ingredients_by_meal_id(meal_id: str):
-    """Fetch all ingredients for a meal (for copy-from-previous when 'same as before')."""
+def fetch_ingredients_by_meal_id(meal_id: str, per_page: int = 500):
+    """Fetch all ingredients for a meal. Paginates to get everything."""
     if not meal_id:
         return []
     import urllib.parse
     filter_str = f"mealId='{meal_id}'"
     encoded = urllib.parse.quote(filter_str)
-    url = f"{PB_URL}/api/collections/ingredients/records?filter={encoded}&perPage=100"
     headers = {"Authorization": f"Bearer {get_token()}"}
+    all_items = []
+    page = 1
     try:
-        r = requests.get(url, headers=headers)
-        if r.status_code != 200:
-            return []
-        return r.json().get("items", [])
+        while True:
+            url = f"{PB_URL}/api/collections/ingredients/records?filter={encoded}&perPage={per_page}&page={page}"
+            r = requests.get(url, headers=headers)
+            if r.status_code != 200:
+                return all_items
+            data = r.json()
+            items = data.get("items", [])
+            all_items.extend(items)
+            if len(items) < per_page:
+                break
+            page += 1
+        return all_items
     except Exception as e:
         print(f"⚠️ fetch_ingredients_by_meal_id failed: {e}")
-        return []
+        return all_items
 
 
 def insert_ingredient(ingredient):
@@ -79,14 +88,50 @@ def insert_ingredient(ingredient):
     return r.json()
 
 
+def delete_corrections_for_ingredient(ingredient_id: str) -> int:
+    """Delete ingredient_corrections that reference this ingredient (required before deleting ingredient)."""
+    if not ingredient_id:
+        return 0
+    import urllib.parse
+    filt = f"ingredientId='{ingredient_id}'"
+    encoded = urllib.parse.quote(filt)
+    headers = {"Authorization": f"Bearer {get_token()}"}
+    deleted = 0
+    while True:
+        url = f"{PB_URL}/api/collections/ingredient_corrections/records?filter={encoded}&perPage=100"
+        r = requests.get(url, headers=headers)
+        if r.status_code != 200:
+            break
+        items = r.json().get("items", [])
+        if not items:
+            break
+        for rec in items:
+            rid = rec.get("id")
+            if rid:
+                dr = requests.delete(f"{PB_URL}/api/collections/ingredient_corrections/records/{rid}", headers=headers)
+                if dr.status_code in (200, 204):
+                    deleted += 1
+    return deleted
+
+
 def delete_ingredient(ingredient_id: str) -> bool:
     """Delete an ingredient by ID. Uses service token (bypasses API rules)."""
-    if not ingredient_id:
+    lid = (ingredient_id or "").strip() if isinstance(ingredient_id, str) else None
+    if not lid and isinstance(ingredient_id, dict):
+        lid = (ingredient_id.get("id") or "").strip()
+    if not lid:
         return False
-    url = f"{PB_URL}/api/collections/ingredients/records/{ingredient_id}"
     headers = {"Authorization": f"Bearer {get_token()}"}
+    # Must delete ingredient_corrections first (they have required relation to ingredient)
+    n = delete_corrections_for_ingredient(lid)
+    if n:
+        print(f"   📎 Deleted {n} correction(s) for ingredient {lid}")
+    url = f"{PB_URL}/api/collections/ingredients/records/{lid}"
     r = requests.delete(url, headers=headers)
-    return r.status_code in (200, 204)
+    ok = r.status_code in (200, 204)
+    if not ok:
+        print(f"   ⚠️ Delete {lid} failed: {r.status_code} {r.text[:150]}")
+    return ok
 
 
 def fetch_records(collection_name, per_page=200):

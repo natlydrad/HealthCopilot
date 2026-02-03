@@ -335,11 +335,18 @@ export async function deleteIngredient(ingredientId) {
 export async function clearMealIngredients(mealId) {
   if (!authToken) throw new Error("Not logged in");
 
+  // In dev without VITE_PARSE_API_URL: use Vite proxy /parse-api → localhost:5001 (avoids CORS)
   const parseUrl = import.meta.env.VITE_PARSE_API_URL || "http://localhost:5001";
-  const res = await fetch(`${parseUrl}/clear/${mealId}`, {
+  const useProxy = import.meta.env.DEV && !import.meta.env.VITE_PARSE_API_URL;
+  const url = useProxy ? `/parse-api/clear/${mealId}` : `${parseUrl}/clear/${mealId}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${authToken}` },
+    signal: controller.signal,
   });
+  clearTimeout(timeout);
   if (!res.ok) {
     const err = await res.text();
     throw new Error(err || `Clear failed (${res.status})`);
@@ -602,6 +609,7 @@ export async function getCorrections(limit = 50) {
   
   const res = await fetch(url, {
     headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+    cache: "no-store",
   });
 
   if (!res.ok) return [];
@@ -609,11 +617,52 @@ export async function getCorrections(limit = 50) {
   return data.items || [];
 }
 
-// Get learned patterns (aggregated from corrections)
+// Get learned patterns from user_food_profile (source of truth for what affects future parses)
+// Falls back to corrections if profile is empty - fixes blank Learning tab when corrections API rules differ
 export async function getLearnedPatterns() {
+  const userId = getCurrentUserId();
+  const patternsFromProfile = [];
+
+  if (userId && authToken) {
+    try {
+      const filter = encodeURIComponent(`user="${userId}"`);
+      const res = await fetch(
+        `${PB_BASE}/api/collections/user_food_profile/records?filter=${filter}&perPage=5`,
+        { headers: { Authorization: `Bearer ${authToken}` }, cache: "no-store" }
+      );
+      if (res.ok) {
+        const { items } = await res.json();
+        const profile = items?.[0];
+        const pairs = profile?.confusionPairs || [];
+        for (const c of pairs) {
+          const mistaken = (c.mistaken || "").trim();
+          const actual = (c.actual || "").trim();
+          if (mistaken && actual && mistaken.toLowerCase() !== actual.toLowerCase()) {
+            patternsFromProfile.push({
+              original: mistaken.toLowerCase(),
+              learned: actual,
+              count: c.count ?? 1,
+              correctionIds: [],
+              status: (c.count ?? 1) >= 3 ? "confident" : "learning",
+              confidence: Math.min(0.5 + ((c.count ?? 1) * 0.15), 0.99),
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to load user_food_profile for learning:", e);
+    }
+  }
+
+  if (patternsFromProfile.length > 0) {
+    patternsFromProfile.sort((a, b) => b.count - a.count);
+    return patternsFromProfile;
+  }
+
+  // Fallback: aggregate from corrections (name changes only).
+  // Quantity-only corrections (e.g. 5 pieces → 6 pieces) are NOT learned as patterns:
+  // they’re stored in ingredient_corrections for audit, but don’t become confusionPairs.
   const corrections = await getCorrections(200);
-  
-  // Group by original → corrected (exclude add_missing - those are new items, not name corrections)
   const patterns = {};
   for (const c of corrections) {
     if (c.correctionType === "add_missing") continue;
@@ -634,20 +683,17 @@ export async function getLearnedPatterns() {
       }
       patterns[key].count++;
       patterns[key].correctionIds.push(c.id);
-      // Track first correction
       if (c.created < patterns[key].firstCorrected) {
         patterns[key].firstCorrected = c.created;
       }
     }
   }
   
-  // Convert to array, add confidence, sort
   const result = Object.values(patterns).map(p => ({
     ...p,
     confidence: Math.min(0.5 + (p.count * 0.15), 0.99),
     status: p.count >= 3 ? "confident" : p.count >= 1 ? "learning" : "new",
   }));
-  
   result.sort((a, b) => b.count - a.count);
   return result;
 }
