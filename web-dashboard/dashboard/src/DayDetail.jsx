@@ -496,18 +496,15 @@ function MealCard({ meal, onMealUpdated }) {
           meal={meal}
           onClose={() => setCorrecting(null)}
           onSave={(result) => {
-            // missing_item: add new ingredient, keep current unchanged
             if (result.addedIngredient) {
               setIngredients(prev => [...prev, result.addedIngredient]);
-              // Refetch so list is in sync with server (ensures new item shows)
               fetchIngredients(meal.id).then((ings) => setIngredients(ings)).catch(() => {});
             } else if (result.ingredient) {
-              // Normal correction: update this ingredient
-              setIngredients(prev => prev.map(i => 
-                i.id === correcting.id ? { ...i, ...result.ingredient } : i
-              ));
+              const updated = { ...correcting, ...result.ingredient };
+              setIngredients(prev => prev.map(i => i.id === correcting.id ? updated : i));
+              setCorrecting(updated); // Keep modal showing updated ingredient
             }
-            setCorrecting(null);
+            // Never auto-close; user exits on their own
           }}
         />
       )}
@@ -663,11 +660,11 @@ What would you like to change? You can tell me naturally, like "that's actually 
         
         const doneMsg = result.addedIngredient
           ? `Done! Added ${result.addedIngredient.name} (${result.addedIngredient.quantity || 1} ${result.addedIngredient.unit || "serving"}) as a new ingredient. ${ingredient.name} was left unchanged.${learnedMsg}${usdaMsg}`
-          : `Done! Updated to ${correction.name || ingredient.name} (${correction.quantity || ingredient.quantity} ${correction.unit || ingredient.unit}).${learnedMsg}${usdaMsg}`;
+          : `Done! Updated to **${result.ingredient?.name || correction.name || ingredient.name}** (${result.ingredient?.quantity ?? correction.quantity ?? ingredient.quantity} ${result.ingredient?.unit || correction.unit || ingredient.unit}).${learnedMsg}${usdaMsg}\n\nYou can close when ready or correct something else.`;
         setMessages(prev => [...prev, { from: "bot", text: doneMsg }]);
 
-        // Close after brief delay; pass full result so parent can add new ingredient or update existing
-        setTimeout(() => onSave(result), 1500);
+        // Sync parent state (ingredients list) — modal stays open; user closes when ready
+        onSave(result);
       }
     } catch (err) {
       console.error("Save error:", err);
@@ -735,8 +732,7 @@ What would you like to change? You can tell me naturally, like "that's actually 
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => {
-                setMessages(prev => [...prev, { from: "bot", text: "No changes needed. Closing..." }]);
-                setTimeout(onClose, 1000);
+                setMessages(prev => [...prev, { from: "bot", text: "No changes needed. You can close whenever you're ready." }]);
               }}
               className="text-xs px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-green-700 hover:bg-green-100 font-medium flex items-center gap-1.5"
             >
@@ -757,11 +753,18 @@ What would you like to change? You can tell me naturally, like "that's actually 
               <span>🔍</span> You identified correctly, but the nutrition looks off
             </button>
             <button
-              onClick={() => sendMessage("I need to add something")}
+              onClick={() => sendMessage("I want to add or clarify information about this item (e.g. brand, specific type)")}
               disabled={loading}
               className="text-xs px-3 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 font-medium flex items-center gap-1.5 disabled:opacity-50"
             >
-              <span>🙋</span> I need to add something
+              <span>📝</span> Add information to this item
+            </button>
+            <button
+              onClick={() => sendMessage("I need to add a completely new ingredient that you missed")}
+              disabled={loading}
+              className="text-xs px-3 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 font-medium flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <span>➕</span> Add a new ingredient to this meal
             </button>
           </div>
 

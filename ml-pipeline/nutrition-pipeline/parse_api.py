@@ -804,13 +804,14 @@ def save_correction(ingredient_id):
         current_name = (original.get("name") or "").strip().lower()
         new_name_from_correction = (correction.get("name") or "").strip().lower()
         
-        # Fallback: if user said "add X" anywhere in conversation but GPT returned wrong reason, treat as missing_item
-        add_phrases = ("add ", "also ", "you missed ", "don't forget ", "there was also ", "and also ", "plus ", "include ", "add it", "yes add")
+        # Fallback: only treat as missing_item when user clearly said they're adding a NEW item to the meal
+        # NOT when they're adding info/clarifying the current item (e.g. "it's soy milk", "oat milk")
+        add_new_phrases = ("add a new", "add new", "you missed ", "don't forget ", "there was also ", "you forgot ", "add it as", "add another")
         all_user_text = " ".join((m.get("content") or "").lower() for m in (conversation or []) if m.get("role") == "user")
-        looks_like_add = any(p in all_user_text for p in add_phrases)
-        if correction_reason != "missing_item" and new_name_from_correction and new_name_from_correction != current_name and looks_like_add:
+        looks_like_add_new = any(p in all_user_text for p in add_new_phrases)
+        if correction_reason != "missing_item" and new_name_from_correction and new_name_from_correction != current_name and looks_like_add_new:
             correction_reason = "missing_item"
-            print(f"   📌 Treating as missing_item (user said add; correction name differs from current)")
+            print(f"   📌 Treating as missing_item (user said add new item)")
         
         # missing_item = ADD a new ingredient (the correction), do NOT change the current one
         if correction_reason == "missing_item":

@@ -315,10 +315,11 @@ Your job is to:
    - "added_after": User added more food after the photo was taken → DON'T LEARN
    - "portion_estimate": The portion size looked different than it was → DON'T LEARN  
    - "brand_specific": User is specifying a particular brand → MAYBE LEARN (only if visually distinguishable)
-   - "missing_item": User is ADDING something you missed (e.g. "add Frank's Red Hot Sauce") → the "correction" is the NEW item to add as a SEPARATE ingredient; we will NOT change the current ingredient. DON'T LEARN.
+   - "missing_item": User is ADDING a WHOLE NEW item you missed (e.g. "there was also a banana", "you missed the coffee") → the "correction" is the NEW item to add as a SEPARATE ingredient; we will NOT change the current ingredient. Only use this when they explicitly say they're adding something that was NOT the item you're correcting. DON'T LEARN.
+   - "brand_specific" or similar: User is adding INFO to the current item (brand, type, e.g. "it's oat milk" or "unsweetened soy milk") → UPDATE the current ingredient with the new name/info. NOT missing_item.
    - "poor_usda_match": The USDA nutrition data is wrong (e.g. "450 cal for 1 orange is crazy", "that's way too many calories", "USDA match is off") → use GPT estimate instead. Set correction with "forceUseGptEstimate": true. DON'T LEARN.
 3. Have a natural conversation - if unclear, ask: "Just to make sure I learn the right thing - did I misidentify this, or are you adding something I missed?"
-4. When the user says they are ADDING a missed item (e.g. "add X", "you missed X", "there was also X"), use correctionReason "missing_item" and put the NEW item in "correction" (name, quantity, unit). We will add it as a separate ingredient and leave the current one as-is.
+4. "Add info" vs "add new ingredient": If user is clarifying/adding info TO the current item (brand, type: "it's soy milk", "oat milk", "unsweetened") → use "brand_specific", correction updates the CURRENT ingredient name. If user says they're adding something ELSE you missed ("there was also X", "you forgot the banana") → use "missing_item", correction is the NEW separate ingredient.
 
 IMPORTANT: Always end your response with a JSON block:
 ```json
