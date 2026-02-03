@@ -554,22 +554,19 @@ What would you like to change? You can tell me naturally, like "that's actually 
     setMessages([{ from: "bot", text: greeting }]);
   }, [ingredient, reasoning]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!inputValue.trim() || loading) return;
+  const sendMessage = async (userMessage) => {
+    const msg = (userMessage || "").trim();
+    if (!msg || loading) return;
 
-    const userMessage = inputValue.trim();
-    setInputValue("");
-    
     // Add user message to UI
-    setMessages(prev => [...prev, { from: "user", text: userMessage }]);
+    setMessages(prev => [...prev, { from: "user", text: msg }]);
     setLoading(true);
 
     try {
       // Send to correction API
       const result = await sendCorrectionMessage(
         ingredient.id,
-        userMessage,
+        msg,
         conversationHistory
       );
 
@@ -579,7 +576,7 @@ What would you like to change? You can tell me naturally, like "that's actually 
       // Update conversation history for context
       setConversationHistory(prev => [
         ...prev,
-        { role: "user", content: userMessage },
+        { role: "user", content: msg },
         { role: "assistant", content: result.reply }
       ]);
 
@@ -599,7 +596,7 @@ What would you like to change? You can tell me naturally, like "that's actually 
       if (result.complete && result.correction) {
         const updatedConversation = [
           ...conversationHistory,
-          { role: "user", content: userMessage },
+          { role: "user", content: msg },
           { role: "assistant", content: result.reply }
         ];
         setTimeout(async () => {
@@ -615,6 +612,15 @@ What would you like to change? You can tell me naturally, like "that's actually 
       }]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e?.preventDefault?.();
+    const msg = inputValue.trim();
+    if (msg) {
+      setInputValue("");
+      sendMessage(msg);
     }
   };
 
@@ -723,8 +729,43 @@ What would you like to change? You can tell me naturally, like "that's actually 
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
-        <div className="p-4 border-t bg-gray-50">
+        {/* Quick actions + Input */}
+        <div className="p-4 border-t bg-gray-50 space-y-3">
+          {/* Quick action buttons - above text input, send directly (no autofill) */}
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => {
+                setMessages(prev => [...prev, { from: "bot", text: "No changes needed. Closing..." }]);
+                setTimeout(onClose, 1000);
+              }}
+              className="text-xs px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-green-700 hover:bg-green-100 font-medium flex items-center gap-1.5"
+            >
+              <span>✓</span> Looks great!
+            </button>
+            <button
+              onClick={() => sendMessage("You misidentified something in the image")}
+              disabled={loading}
+              className="text-xs px-3 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 font-medium flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <span>🤖</span> You misidentified something in the image
+            </button>
+            <button
+              onClick={() => sendMessage("You identified correctly, but the nutrition looks off")}
+              disabled={loading}
+              className="text-xs px-3 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 font-medium flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <span>🔍</span> You identified correctly, but the nutrition looks off
+            </button>
+            <button
+              onClick={() => sendMessage("I need to add something")}
+              disabled={loading}
+              className="text-xs px-3 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 font-medium flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <span>🙋</span> I need to add something
+            </button>
+          </div>
+
+          {/* Text input - always available */}
           <form onSubmit={handleSubmit} className="flex gap-2">
             <input
               type="text"
@@ -743,31 +784,6 @@ What would you like to change? You can tell me naturally, like "that's actually 
               Send
             </button>
           </form>
-          
-          {/* Quick suggestions */}
-          <div className="flex flex-wrap gap-2 mt-2">
-            <button
-              onClick={() => setInputValue("That's not what this is")}
-              className="text-xs px-3 py-1 bg-white border rounded-full hover:bg-gray-50"
-            >
-              Wrong item
-            </button>
-            <button
-              onClick={() => setInputValue("The amount is wrong")}
-              className="text-xs px-3 py-1 bg-white border rounded-full hover:bg-gray-50"
-            >
-              Wrong amount
-            </button>
-            <button
-              onClick={() => {
-                setMessages(prev => [...prev, { from: "bot", text: "No changes needed. Closing..." }]);
-                setTimeout(onClose, 1000);
-              }}
-              className="text-xs px-3 py-1 bg-green-50 border-green-200 border rounded-full text-green-700 hover:bg-green-100"
-            >
-              Looks correct
-            </button>
-          </div>
         </div>
       </div>
     </div>
