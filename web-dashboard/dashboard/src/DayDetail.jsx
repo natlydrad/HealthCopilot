@@ -450,11 +450,16 @@ function MealCard({ meal }) {
           ingredient={correcting} 
           meal={meal}
           onClose={() => setCorrecting(null)}
-          onSave={(correction) => {
-            // Update local state optimistically
-            setIngredients(prev => prev.map(i => 
-              i.id === correcting.id ? { ...i, ...correction } : i
-            ));
+          onSave={(result) => {
+            // missing_item: add new ingredient, keep current unchanged
+            if (result.addedIngredient) {
+              setIngredients(prev => [...prev, result.addedIngredient]);
+            } else if (result.ingredient) {
+              // Normal correction: update this ingredient
+              setIngredients(prev => prev.map(i => 
+                i.id === correcting.id ? { ...i, ...result.ingredient } : i
+              ));
+            }
             setCorrecting(null);
           }}
         />
@@ -541,7 +546,7 @@ What would you like to change? You can tell me naturally, like "that's actually 
 
       // If complete, show save button
       if (result.complete && result.correction) {
-        // Auto-save after a brief delay
+        // Auto-save after a brief delay (handleSave calls API and passes full result to onSave)
         setTimeout(async () => {
           await handleSave(result.correction, result.learned, result.correctionReason, result.shouldLearn);
         }, 500);
@@ -593,13 +598,13 @@ What would you like to change? You can tell me naturally, like "that's actually 
           }
         }
         
-        setMessages(prev => [...prev, { 
-          from: "bot", 
-          text: `Done! Updated to ${correction.name || ingredient.name} (${correction.quantity || ingredient.quantity} ${correction.unit || ingredient.unit}).${learnedMsg}${usdaMsg}` 
-        }]);
+        const doneMsg = result.addedIngredient
+          ? `Done! Added ${result.addedIngredient.name} (${result.addedIngredient.quantity || 1} ${result.addedIngredient.unit || "serving"}) as a new ingredient. ${ingredient.name} was left unchanged.${learnedMsg}${usdaMsg}`
+          : `Done! Updated to ${correction.name || ingredient.name} (${correction.quantity || ingredient.quantity} ${correction.unit || ingredient.unit}).${learnedMsg}${usdaMsg}`;
+        setMessages(prev => [...prev, { from: "bot", text: doneMsg }]);
 
-        // Close after brief delay
-        setTimeout(() => onSave(result.ingredient), 1500);
+        // Close after brief delay; pass full result so parent can add new ingredient or update existing
+        setTimeout(() => onSave(result), 1500);
       }
     } catch (err) {
       console.error("Save error:", err);

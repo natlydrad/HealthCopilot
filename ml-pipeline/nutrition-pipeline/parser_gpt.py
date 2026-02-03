@@ -107,10 +107,45 @@ def get_image_base64(meal: dict, pb_url: str, token: str | None = None) -> str |
         if len(resp.content) < 100:
             print(f"Failed to get image: response too small ({len(resp.content)} bytes)")
             return None
-        return base64.b64encode(resp.content).decode("utf-8")
+        b64 = base64.b64encode(resp.content).decode("utf-8")
+        print(f"   Image loaded: {len(resp.content)} bytes → base64 len {len(b64)}")
+        return b64
     except Exception as e:
         print(f"Failed to get image: {e}")
         return None
+
+
+def _parse_image_simple_fallback(image_b64: str, user_context: str = "") -> list:
+    """Retry with a simpler prompt when main image parse returns [] or fails. Reduces false negatives."""
+    prompt = """What food or drink is in this image? Return a JSON array of objects. Each object must have: "name" (string), "quantity" (number), "unit" (string, e.g. serving, cup, oz), "category" (string: food, drink, or supplement), "reasoning" (string, brief).
+If you see any food, drink, or packaged product with a nutrition label, return at least one item. Return [] only if nothing edible is visible (e.g. empty plate, non-food photo).
+Return ONLY the JSON array, no markdown or explanation."""
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}},
+                    ],
+                }
+            ],
+        )
+        raw = (resp.choices[0].message.content or "").strip()
+        if raw.startswith("```"):
+            raw = raw.strip("`")
+            if raw.lower().startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+        out = json.loads(raw)
+        if out:
+            print(f"   Simple fallback got {len(out)} item(s)")
+        return out if isinstance(out, list) else []
+    except Exception as e:
+        print(f"   Simple fallback failed: {e}")
+        return []
 
 
 def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = None, user_context: str = "", image_b64: str | None = None):
@@ -192,7 +227,7 @@ def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = No
         )
 
         raw = (resp.choices[0].message.content or "").strip()
-        print(f"   GPT Vision raw length={len(raw)}, preview={repr(raw[:150])}")
+        print(f"   GPT Vision raw length={len(raw)}, preview={repr(raw[:200])}")
 
         if raw.startswith("```"):
             raw = raw.strip("`")
@@ -202,13 +237,20 @@ def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = No
 
         out = json.loads(raw)
         if not out:
-            print("Parser image returned [] (GPT said no edible items)")
+            print("   GPT returned empty array [] — retrying with simpler prompt...")
+            return _parse_image_simple_fallback(image_b64, user_context)
         return out
     except Exception as e:
         import traceback
         print("Parser image error:", e)
         print(traceback.format_exc())
-        print("RAW:", (raw[:300] if raw else "(empty)"))
+        print("RAW:", (raw[:500] if raw else "(empty)"))
+        # Retry with simpler prompt in case GPT returned non-JSON (e.g. explanation)
+        if raw and ("[" in raw or "ingredient" in raw.lower()):
+            try:
+                return _parse_image_simple_fallback(image_b64, user_context)
+            except Exception:
+                pass
         return []
 
 
@@ -256,9 +298,9 @@ Your job is to:
    - "added_after": User added more food after the photo was taken → DON'T LEARN
    - "portion_estimate": The portion size looked different than it was → DON'T LEARN  
    - "brand_specific": User is specifying a particular brand → MAYBE LEARN (only if visually distinguishable)
-   - "missing_item": User is adding something you didn't see → DON'T LEARN
-3. Have a natural conversation - if unclear, ask: "Just to make sure I learn the right thing - did I misidentify this, or is this something that changed after the photo?"
-4. When you understand the correction, acknowledge it and explain whether you'll remember this for next time
+   - "missing_item": User is ADDING something you missed (e.g. "add Frank's Red Hot Sauce") → the "correction" is the NEW item to add as a SEPARATE ingredient; we will NOT change the current ingredient. DON'T LEARN.
+3. Have a natural conversation - if unclear, ask: "Just to make sure I learn the right thing - did I misidentify this, or are you adding something I missed?"
+4. When the user says they are ADDING a missed item (e.g. "add X", "you missed X", "there was also X"), use correctionReason "missing_item" and put the NEW item in "correction" (name, quantity, unit). We will add it as a separate ingredient and leave the current one as-is.
 
 IMPORTANT: Always end your response with a JSON block:
 ```json

@@ -702,7 +702,72 @@ def save_correction(ingredient_id):
         
         original = ing_resp.json()
         
-        # Build update payload
+        # missing_item = ADD a new ingredient (the correction), do NOT change the current one
+        if correction_reason == "missing_item":
+            meal_id = original.get("mealId")
+            if not meal_id:
+                return jsonify({"error": "Ingredient has no mealId"}), 400
+            new_name = correction.get("name") or "unknown"
+            new_qty = correction.get("quantity", 1)
+            new_unit = correction.get("unit", "serving")
+            usda = usda_lookup(new_name)
+            scaled_nutrition = []
+            if usda:
+                scaled_nutrition = scale_nutrition(
+                    usda.get("nutrition", []),
+                    new_qty,
+                    new_unit,
+                    usda.get("serving_size_g", 100.0)
+                )
+            payload = {
+                "mealId": meal_id,
+                "name": new_name,
+                "quantity": new_qty,
+                "unit": new_unit,
+                "category": "food",
+                "nutrition": scaled_nutrition,
+                "usdaCode": usda.get("usdaCode") if usda else None,
+                "source": "usda" if usda else "gpt",
+                "parsingStrategy": "gpt",
+                "parsingMetadata": {
+                    "source": "corrected_missing",
+                    "addedVia": "correction_chat",
+                    "reasoning": f"User added missing item: {new_name}",
+                }
+            }
+            new_ing = insert_ingredient(payload)
+            if not new_ing:
+                return jsonify({"error": "Failed to create new ingredient"}), 500
+            print(f"   ✅ Added missing item as new ingredient: {new_name} (kept original unchanged)")
+            usda_match_info = {"found": bool(usda), "searchedFor": new_name}
+            if usda:
+                usda_match_info["matchedName"] = usda.get("name")
+                usda_match_info["isExactMatch"] = new_name.lower() in (usda.get("name") or "").lower()
+            # Save correction record for audit (add_missing)
+            correction_record = {
+                "ingredientId": ingredient_id,
+                "user": original.get("user"),
+                "originalParse": {"name": original.get("name"), "quantity": original.get("quantity"), "unit": original.get("unit")},
+                "userCorrection": correction,
+                "correctionType": "add_missing",
+                "correctionReason": correction_reason,
+                "shouldLearn": False,
+                "context": {"via": "correction_chat", "addedIngredientId": new_ing.get("id"), "conversation": conversation}
+            }
+            try:
+                requests.post(f"{PB_URL}/api/collections/ingredient_corrections/records", headers=headers, json=correction_record)
+            except Exception:
+                pass
+            return jsonify({
+                "success": True,
+                "ingredient": original,
+                "addedIngredient": new_ing,
+                "correctionReason": correction_reason,
+                "usdaMatch": usda_match_info,
+                "message": f"Added {new_name} as a new ingredient (kept {original.get('name')} unchanged)"
+            })
+        
+        # Build update payload (for non–missing_item corrections)
         update = {}
         if correction.get("name"):
             update["name"] = correction["name"]
