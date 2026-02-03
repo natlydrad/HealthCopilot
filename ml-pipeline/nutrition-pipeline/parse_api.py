@@ -12,8 +12,8 @@ import json
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pb_client import get_token, insert_ingredient, build_user_context_prompt, add_learned_confusion, add_common_food, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date, fetch_ingredients_by_meal_id
-from parser_gpt import parse_ingredients, parse_ingredients_from_image, correction_chat, get_image_base64
-from lookup_usda import usda_lookup, scale_nutrition
+from parser_gpt import parse_ingredients, parse_ingredients_from_image, correction_chat, get_image_base64, gpt_estimate_nutrition
+from lookup_usda import usda_lookup, scale_nutrition, get_piece_grams, validate_scaled_calories
 from log_classifier import classify_log, classify_log_with_image
 import requests
 import os
@@ -521,29 +521,52 @@ def parse_meal(meal_id):
                 print(f"🔎 Looking up USDA nutrition for: '{name}'")
                 usda = usda_lookup(name)
                 if usda:
-                    print(f"   ✅ USDA match found: {usda.get('name')}")
+                    # Use food-specific piece weight when unit is piece/pieces (fixes chicken wings etc.)
                     serving_size = usda.get("serving_size_g", 100.0)
+                    unit_lower = (unit or "").lower()
+                    if unit_lower in ("piece", "pieces"):
+                        piece_g = get_piece_grams(name)
+                        if piece_g is not None:
+                            serving_size = piece_g
+                            print(f"   📐 Using {serving_size}g per piece for '{name}'")
                     scaled_nutrition = scale_nutrition(
                         usda.get("nutrition", []),
                         quantity,
                         unit,
                         serving_size
                     )
-                    # If we had partial label, overlay label values onto USDA (label overrides where present)
-                    if partial_label and partial_label_array:
-                        scaled_nutrition = merge_label_onto_usda(scaled_nutrition, partial_label_array)
-                        print(f"   📋 Overlaid {len(partial_label_array)} label values onto USDA")
-                    source_ing = "usda"
-                    portion_grams = round(quantity * (usda.get("serving_size_g", 100) if unit in ("serving", "piece") else
-                                          28.35 if unit == "oz" else
-                                          240 if unit == "cup" else
-                                          15 if unit == "tbsp" else 100), 1)
-                else:
-                    print(f"   ⚠️ No USDA match for '{name}'")
-                    scaled_nutrition = []
-                    usda = None
-                    source_ing = "gpt"
-                    portion_grams = None
+                    # Calorie sanity check - reject absurd values (e.g. 6 wings = 1500 cal)
+                    cal_val = next((n.get("value", 0) for n in scaled_nutrition if n.get("nutrientName") == "Energy"), 0)
+                    is_valid, reason = validate_scaled_calories(name, quantity, unit, cal_val)
+                    if not is_valid:
+                        print(f"   ⚠️ Rejected USDA (calorie sanity): {reason}")
+                        usda = None
+                        scaled_nutrition = []
+                    else:
+                        print(f"   ✅ USDA match found: {usda.get('name')}")
+                        # If we had partial label, overlay label values onto USDA (label overrides where present)
+                        if partial_label and partial_label_array:
+                            scaled_nutrition = merge_label_onto_usda(scaled_nutrition, partial_label_array)
+                            print(f"   📋 Overlaid {len(partial_label_array)} label values onto USDA")
+                        source_ing = "usda"
+                        portion_grams = round(quantity * (serving_size if unit_lower in ("serving", "piece", "pieces") else
+                                              28.35 if unit == "oz" else
+                                              240 if unit == "cup" else
+                                              15 if unit == "tbsp" else 100), 1)
+                if not scaled_nutrition:
+                    # USDA failed or rejected - fall back to GPT estimate
+                    print(f"   🤖 GPT fallback: estimating nutrition for '{name}' ({quantity} {unit})")
+                    gpt_nutrition = gpt_estimate_nutrition(name, quantity, unit)
+                    if gpt_nutrition:
+                        scaled_nutrition = gpt_nutrition
+                        source_ing = "gpt"
+                        usda = None
+                        portion_grams = None
+                        print(f"   ✅ GPT estimate: {next((n.get('value') for n in scaled_nutrition if n.get('nutrientName') == 'Energy'), 0):.0f} cal")
+                    else:
+                        print(f"   ⚠️ GPT estimate failed for '{name}'")
+                        usda = None
+                        portion_grams = None
             
             # Prepare payload — only send fields that exist on ingredients collection
             # (no parsingSource; use parsingMetadata.parsingSource and parsingStrategy instead)
@@ -701,6 +724,16 @@ def save_correction(ingredient_id):
             return jsonify({"error": f"Ingredient not found: {ingredient_id}"}), 404
         
         original = ing_resp.json()
+        current_name = (original.get("name") or "").strip().lower()
+        new_name_from_correction = (correction.get("name") or "").strip().lower()
+        
+        # Fallback: if user said "add X" anywhere in conversation but GPT returned wrong reason, treat as missing_item
+        add_phrases = ("add ", "also ", "you missed ", "don't forget ", "there was also ", "and also ", "plus ", "include ", "add it", "yes add")
+        all_user_text = " ".join((m.get("content") or "").lower() for m in (conversation or []) if m.get("role") == "user")
+        looks_like_add = any(p in all_user_text for p in add_phrases)
+        if correction_reason != "missing_item" and new_name_from_correction and new_name_from_correction != current_name and looks_like_add:
+            correction_reason = "missing_item"
+            print(f"   📌 Treating as missing_item (user said add; correction name differs from current)")
         
         # missing_item = ADD a new ingredient (the correction), do NOT change the current one
         if correction_reason == "missing_item":
@@ -713,12 +746,26 @@ def save_correction(ingredient_id):
             usda = usda_lookup(new_name)
             scaled_nutrition = []
             if usda:
+                serving_size = usda.get("serving_size_g", 100.0)
+                if (new_unit or "").lower() in ("piece", "pieces"):
+                    piece_g = get_piece_grams(new_name)
+                    if piece_g is not None:
+                        serving_size = piece_g
                 scaled_nutrition = scale_nutrition(
                     usda.get("nutrition", []),
                     new_qty,
                     new_unit,
-                    usda.get("serving_size_g", 100.0)
+                    serving_size
                 )
+                cal_val = next((n.get("value", 0) for n in scaled_nutrition if n.get("nutrientName") == "Energy"), 0)
+                is_valid, _ = validate_scaled_calories(new_name, new_qty, new_unit, cal_val)
+                if not is_valid:
+                    usda = None
+                    scaled_nutrition = []
+            if not scaled_nutrition:
+                gpt_nutrition = gpt_estimate_nutrition(new_name, new_qty, new_unit)
+                if gpt_nutrition:
+                    scaled_nutrition = gpt_nutrition
             payload = {
                 "mealId": meal_id,
                 "name": new_name,
@@ -727,7 +774,7 @@ def save_correction(ingredient_id):
                 "category": "food",
                 "nutrition": scaled_nutrition,
                 "usdaCode": usda.get("usdaCode") if usda else None,
-                "source": "usda" if usda else "gpt",
+                "source": "usda" if usda and scaled_nutrition else "gpt",
                 "parsingStrategy": "gpt",
                 "parsingMetadata": {
                     "source": "corrected_missing",

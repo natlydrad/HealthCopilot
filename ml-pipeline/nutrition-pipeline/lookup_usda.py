@@ -36,9 +36,9 @@ UNIT_TO_GRAMS = {
     "fl oz": 30.0,
     "fluid ounce": 30.0,
     
-    # Count units - these need context, use reasonable defaults
-    "piece": 100.0,  # default, will be overridden by serving_size if available
-    "pieces": 100.0,
+    # Count units - food-specific defaults when ingredient name is known (see get_piece_grams)
+    "piece": 50.0,   # generic fallback
+    "pieces": 50.0,
     "slice": 30.0,   # bread slice ~30g
     "slices": 30.0,
     "egg": 50.0,
@@ -50,6 +50,31 @@ UNIT_TO_GRAMS = {
     "serving": 100.0,  # default to 100g if no other info
     "servings": 100.0,
 }
+
+
+# Food-specific grams per piece (when unit is "piece"/"pieces")
+# USDA often returns 100g as "serving" which inflates piece counts 2-3x
+PIECE_GRAMS_BY_FOOD = {
+    "chicken wing": 30, "chicken wings": 30, "wing": 30, "wings": 30,
+    "wingette": 25, "drummette": 25, "wingettes": 25, "drummettes": 25,
+    "egg": 50, "eggs": 50,
+    "bread slice": 30, "slice of bread": 30, "slice": 30,
+    "nugget": 20, "nuggets": 20, "chicken nugget": 20, "chicken nuggets": 20,
+    "meatball": 30, "meatballs": 30,
+    "cookie": 15, "cookies": 15,
+    "apple": 180, "apples": 180,
+    "banana": 120, "bananas": 120,
+    "orange": 130, "oranges": 130,
+}
+
+
+def get_piece_grams(ingredient_name: str) -> float | None:
+    """Return food-specific grams per piece, or None for generic default."""
+    name_lower = (ingredient_name or "").lower().strip()
+    for key, grams in PIECE_GRAMS_BY_FOOD.items():
+        if key in name_lower:
+            return float(grams)
+    return None
 
 
 def convert_to_grams(quantity: float, unit: str, serving_size_g: float = 100.0) -> float:
@@ -122,6 +147,43 @@ def extract_macros(nutrients: list) -> dict:
             macros["fat"] = value
     
     return macros
+
+
+def validate_scaled_calories(
+    ingredient_name: str, quantity: float, unit: str, scaled_calories: float
+) -> tuple[bool, str]:
+    """
+    Sanity check: reject scaled calories that are absurd for this portion.
+    Returns (is_valid, reason_if_invalid).
+    E.g. 6 small chicken wings should be ~200-400 cal, not 1500.
+    """
+    if scaled_calories <= 0:
+        return True, ""
+    name_lower = ingredient_name.lower()
+
+    # Per-piece/per-unit upper bounds (calories) - generous but catch 3x+ overestimates
+    piece_bounds = {
+        "chicken wing": (35, 80),   # wingette/drummette: ~48 cal each
+        "wing": (35, 80),
+        "egg": (60, 120),
+        "nugget": (40, 100),
+        "meatball": (50, 150),
+        "cookie": (30, 120),
+    }
+    unit_lower = (unit or "").lower()
+    if unit_lower in ("piece", "pieces") and quantity > 0:
+        for key, (lo, hi) in piece_bounds.items():
+            if key in name_lower:
+                per_piece = scaled_calories / quantity
+                if per_piece > hi:
+                    return False, f"Scaled {scaled_calories:.0f} cal for {quantity} {key} = {per_piece:.0f} cal/piece (expected <{hi})"
+                break
+
+    # Whole-meal sanity: single ingredient >1200 cal is suspect (unless bulk)
+    if quantity <= 10 and unit_lower in ("piece", "pieces", "oz", "g", "cup", "cups"):
+        if scaled_calories > 1200:
+            return False, f"Scaled {scaled_calories:.0f} cal seems too high for {quantity} {unit} of {ingredient_name[:40]}"
+    return True, ""
 
 
 def validate_usda_match(ingredient_name: str, matched_name: str, macros: dict) -> tuple[bool, str]:

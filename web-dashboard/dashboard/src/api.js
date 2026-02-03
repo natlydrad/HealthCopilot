@@ -612,9 +612,10 @@ export async function getCorrections(limit = 50) {
 export async function getLearnedPatterns() {
   const corrections = await getCorrections(200);
   
-  // Group by original → corrected
+  // Group by original → corrected (exclude add_missing - those are new items, not name corrections)
   const patterns = {};
   for (const c of corrections) {
+    if (c.correctionType === "add_missing") continue;
     const orig = c.originalParse?.name?.toLowerCase();
     const corr = c.userCorrection?.name;
     

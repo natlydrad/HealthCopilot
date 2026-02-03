@@ -714,6 +714,28 @@ def update_user_food_profile(profile_id: str, updates: dict):
     return None
 
 
+# Unit words - reject if string is JUST these or "number + unit"
+UNIT_WORDS = {"piece", "pieces", "oz", "gram", "grams", "cup", "cups",
+              "tbsp", "tablespoon", "tablespoons", "tsp", "teaspoon",
+              "serving", "servings", "slice", "slices", "lb", "pound", "mg", "ml"}
+
+
+def _looks_like_unit_or_quantity(s: str) -> bool:
+    """Reject strings that are units or quantities, not food names (e.g. '6 pieces', '2 tbsp')."""
+    if not s or not isinstance(s, str):
+        return True
+    low = s.lower().strip()
+    parts = [p for p in low.split() if p]
+    # "2 tbsp", "6 pieces" - number followed by unit
+    if len(parts) <= 2 and parts:
+        first = parts[0].replace(".", "")
+        if first.isdigit() and len(parts) == 2 and parts[1] in UNIT_WORDS:
+            return True
+        if len(parts) == 1 and parts[0] in UNIT_WORDS:
+            return True
+    return False
+
+
 def add_learned_confusion(user_id: str, mistaken: str, actual: str, visual_context: str = None, meal_context: str = None):
     """
     Add a confusion pair to user's profile (mistaken -> actual).
@@ -726,6 +748,10 @@ def add_learned_confusion(user_id: str, mistaken: str, actual: str, visual_conte
         visual_context: Description of what it looked like (e.g., "sliced rings on hot dog")
         meal_context: What meal this was part of (e.g., "hot dog")
     """
+    # Reject unit/quantity mixups (e.g. "6 pieces" -> "2 tbsp" from wrong parsing)
+    if _looks_like_unit_or_quantity(mistaken) or _looks_like_unit_or_quantity(actual):
+        print(f"   ⚠️ Skipping learned confusion (looks like unit/quantity): '{mistaken}' -> '{actual}'")
+        return None
     profile = get_or_create_user_food_profile(user_id)
     if not profile:
         return None
@@ -770,6 +796,10 @@ def add_common_food(user_id: str, food_name: str, default_portion: str = None, a
     """
     Add a food to user's common foods list.
     """
+    # Reject units/quantities mistakenly added as foods (e.g. "2 tbsp")
+    if _looks_like_unit_or_quantity(food_name):
+        print(f"   ⚠️ Skipping add_common_food (looks like unit/quantity): '{food_name}'")
+        return None
     profile = get_or_create_user_food_profile(user_id)
     if not profile:
         return None

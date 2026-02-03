@@ -454,6 +454,8 @@ function MealCard({ meal }) {
             // missing_item: add new ingredient, keep current unchanged
             if (result.addedIngredient) {
               setIngredients(prev => [...prev, result.addedIngredient]);
+              // Refetch so list is in sync with server (ensures new item shows)
+              fetchIngredients(meal.id).then((ings) => setIngredients(ings)).catch(() => {});
             } else if (result.ingredient) {
               // Normal correction: update this ingredient
               setIngredients(prev => prev.map(i => 
@@ -546,9 +548,13 @@ What would you like to change? You can tell me naturally, like "that's actually 
 
       // If complete, show save button
       if (result.complete && result.correction) {
-        // Auto-save after a brief delay (handleSave calls API and passes full result to onSave)
+        const updatedConversation = [
+          ...conversationHistory,
+          { role: "user", content: userMessage },
+          { role: "assistant", content: result.reply }
+        ];
         setTimeout(async () => {
-          await handleSave(result.correction, result.learned, result.correctionReason, result.shouldLearn);
+          await handleSave(result.correction, result.learned, result.correctionReason, result.shouldLearn, updatedConversation);
         }, 500);
       }
 
@@ -563,13 +569,14 @@ What would you like to change? You can tell me naturally, like "that's actually 
     }
   };
 
-  const handleSave = async (correction = pendingCorrection, learned = pendingLearned, reason = pendingReason, shouldLearn = pendingShouldLearn) => {
+  const handleSave = async (correction = pendingCorrection, learned = pendingLearned, reason = pendingReason, shouldLearn = pendingShouldLearn, conversationOverride = null) => {
     if (!correction) return;
 
     setMessages(prev => [...prev, { from: "bot", text: "Saving your correction..." }]);
 
     try {
-      const result = await saveCorrection(ingredient.id, correction, learned, reason, shouldLearn, conversationHistory);
+      const conversationToSend = conversationOverride ?? conversationHistory;
+      const result = await saveCorrection(ingredient.id, correction, learned, reason, shouldLearn, conversationToSend);
       
       if (result.success) {
         let learnedMsg = "";

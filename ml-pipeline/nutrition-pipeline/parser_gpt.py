@@ -403,3 +403,54 @@ RULES:
             "shouldLearn": False,
             "complete": False,
         }
+
+
+def gpt_estimate_nutrition(ingredient_name: str, quantity: float, unit: str) -> list | None:
+    """
+    Fallback when USDA lookup fails or returns unreasonable values.
+    GPT estimates macros for the given portion.
+    Returns nutrition array in USDA-style format: [{nutrientName, unitName, value}, ...]
+    or None on error.
+    """
+    try:
+        prompt = f"""Estimate nutrition for this food portion. Be conservative and realistic.
+
+Food: {ingredient_name}
+Quantity: {quantity} {unit}
+
+Return ONLY a JSON object with these keys (numbers only, no units in values):
+- calories (number, kcal)
+- protein (number, grams)
+- carbs (number, grams)
+- fat (number, grams)
+
+Use realistic values. Examples:
+- 6 small chicken wings (wingettes/drummettes) baked: ~280 cal, 25g protein, 18g fat, 0g carbs
+- 1 egg: ~70 cal, 6g protein, 0.5g carbs, 5g fat
+- 4 oz chicken breast: ~180 cal, 35g protein, 0g carbs, 4g fat
+
+Return ONLY valid JSON, no markdown."""
+
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2
+        )
+        raw = resp.choices[0].message.content.strip().strip("`").strip()
+        if raw.lower().startswith("json"):
+            raw = raw[4:].strip()
+        data = json.loads(raw)
+        cal = data.get("calories") or 0
+        prot = data.get("protein") or 0
+        carbs = data.get("carbs") or 0
+        fat = data.get("fat") or 0
+        # Convert to USDA-style nutrient array
+        return [
+            {"nutrientName": "Energy", "unitName": "KCAL", "value": round(cal, 2)},
+            {"nutrientName": "Protein", "unitName": "G", "value": round(prot, 2)},
+            {"nutrientName": "Carbohydrate, by difference", "unitName": "G", "value": round(carbs, 2)},
+            {"nutrientName": "Total lipid (fat)", "unitName": "G", "value": round(fat, 2)},
+        ]
+    except Exception as e:
+        print(f"GPT nutrition estimate error: {e}")
+        return None
