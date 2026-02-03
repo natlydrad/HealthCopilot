@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { fetchMealsForDateRange, fetchIngredients, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getLearningStats, parseAndSaveMeal, clearMealIngredients, sendCorrectionMessage, saveCorrection } from "./api";
+import { fetchMealsForDateRange, fetchIngredients, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getLearningStats, parseAndSaveMeal, clearMealIngredients, sendCorrectionMessage, saveCorrection, getParseApiUrl } from "./api";
 
 // Determine if an ingredient is low confidence (needs review)
 function isLowConfidence(ing) {
@@ -118,17 +118,32 @@ function MealCard({ meal }) {
   // Parse meal on demand (works with text OR images via backend API)
   const [parseError, setParseError] = useState(null);
   const [classificationResult, setClassificationResult] = useState(null); // "not_food" when classified as non-food
+  const [emptyParseMessage, setEmptyParseMessage] = useState(null); // when parse returns 0 ingredients (so user isn't stuck in a loop)
+  const [emptyParseReason, setEmptyParseReason] = useState(null);   // API reason/debug (e.g. "from text: 0, from image: 0")
   const handleParse = async () => {
-    if (!meal.text?.trim() && !meal.image) return;
+    if (!meal.text?.trim() && !meal.image) {
+      setParseError("Add a caption or photo first.");
+      return;
+    }
     setParsing(true);
     setParseError(null);
     setClassificationResult(null);
+    setEmptyParseMessage(null);
+    setEmptyParseReason(null);
     try {
       const result = await parseAndSaveMeal(meal);
       const data = result?.ingredients !== undefined ? result : { ingredients: result, classificationResult: null };
       const ingredientsList = Array.isArray(data.ingredients) ? data.ingredients : [];
       setIngredients(ingredientsList);
       setClassificationResult(data.classificationResult || null);
+      if (ingredientsList.length === 0 && data.classificationResult !== "not_food") {
+        let msg = result?.message || "No ingredients detected. Add a caption or try a clearer photo.";
+        if (result?.source === "gpt_image" && msg.includes("No ingredients detected")) {
+          msg += " If this meal has a photo, the image may not have loaded — restart or redeploy the Parse API, or add a short caption and parse again.";
+        }
+        setEmptyParseMessage(msg);
+        setEmptyParseReason(result?.reason || null);
+      }
     } catch (err) {
       const message = err?.message || String(err);
       console.error("Parse failed:", message);
@@ -142,6 +157,8 @@ function MealCard({ meal }) {
   const handleClear = async () => {
     if (!confirm("Delete all parsed ingredients for this meal?")) return;
     setClearing(true);
+    setEmptyParseMessage(null);
+    setEmptyParseReason(null);
     try {
       await clearMealIngredients(meal.id);
       setIngredients([]);
@@ -227,8 +244,31 @@ function MealCard({ meal }) {
         </div>
       </div>
 
-      {/* Needs parsing state (hide when we already got "not food") */}
-      {needsParsing && !parsing && classificationResult !== "not_food" && (
+      {/* Empty parse result (0 ingredients) — so user knows why and can try again */}
+      {emptyParseMessage && !parsing && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
+          <p className="text-amber-800 text-sm font-medium">Parse result</p>
+          <p className="text-amber-700 text-xs mt-1">{emptyParseMessage}</p>
+          {emptyParseReason && (
+            <p className="text-amber-600 text-xs mt-1.5 font-mono" title="Why the parse returned no ingredients">
+              Why: {emptyParseReason}
+            </p>
+          )}
+          <p className="text-amber-600 text-xs mt-2 font-mono" title="Parse API this dashboard is calling">
+            Parse API: {getParseApiUrl()}
+          </p>
+          <button
+            type="button"
+            onClick={() => { setEmptyParseMessage(null); setEmptyParseReason(null); }}
+            className="mt-2 text-xs text-amber-600 hover:underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Needs parsing state (hide when we already got "not food" or showing empty-parse message) */}
+      {needsParsing && !parsing && classificationResult !== "not_food" && !emptyParseMessage && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
           <p className="text-blue-700 text-sm mb-2">Not parsed yet</p>
           <button

@@ -10,8 +10,8 @@ Flow:
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from pb_client import get_token, insert_ingredient, build_user_context_prompt, add_learned_confusion, add_common_food
-from parser_gpt import parse_ingredients, parse_ingredients_from_image, correction_chat
+from pb_client import get_token, insert_ingredient, build_user_context_prompt, add_learned_confusion, add_common_food, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date
+from parser_gpt import parse_ingredients, parse_ingredients_from_image, correction_chat, get_image_base64
 from lookup_usda import usda_lookup, scale_nutrition
 from log_classifier import classify_log, classify_log_with_image
 import requests
@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)  # Allow frontend requests
+CORS(app, allow_headers=["Authorization", "Content-Type"])  # So dashboard can send user token
 
 PB_URL = os.getenv("PB_URL", "https://pocketbase-1j2x.onrender.com")
 
@@ -181,6 +181,7 @@ def parse_meal(meal_id):
     3. If food → GPT parse → USDA → save ingredients
     """
     try:
+        # Use service token (PB_EMAIL/PB_PASSWORD) so meal + image fetch are consistent with original working behavior
         token = get_token()
         
         # Fetch the meal
@@ -200,18 +201,41 @@ def parse_meal(meal_id):
             return jsonify({"error": "Meal has no text or image to parse"}), 400
         
         print(f"🍽️ Parsing meal: {meal_id}")
-        print(f"   Text: {text or '[none]'}")
+        print(f"   Text: {repr((text or '')[:80])}")
         print(f"   Image: {image_field or '[none]'}")
+        
+        # Recent meals *today* (user's local calendar day when timezone sent; else UTC day)
+        body = request.get_json(silent=True) or {}
+        timezone_iana = (body.get("timezone") or "").strip()
+        recent_meals_context = ""
+        try:
+            ts = (timestamp or "").strip()
+            if ts and user_id:
+                if timezone_iana:
+                    recent_meals = fetch_meals_for_user_on_local_date(user_id, ts, timezone_iana, exclude_meal_id=meal_id, limit=15)
+                    if recent_meals:
+                        print(f"   📅 Recent meals (local day in {timezone_iana}): {len(recent_meals)}")
+                else:
+                    date_iso = (ts[:10] if len(ts) >= 10 else "").strip()
+                    recent_meals = fetch_meals_for_user_on_date(user_id, date_iso, exclude_meal_id=meal_id, limit=15) if (date_iso and len(date_iso) == 10) else []
+                    if recent_meals:
+                        print(f"   📅 Recent meals (UTC day): {len(recent_meals)}")
+                if recent_meals:
+                    parts = [str(m.get("text", "") or "").strip() or "(image only)" for m in recent_meals]
+                    if parts:
+                        recent_meals_context = "Other meals logged today (most recent first): " + "; ".join(parts[:10])
+        except Exception as e:
+            print(f"   ⚠️ Recent meals context failed: {e}")
         
         # ============================================================
         # STEP 1: CLASSIFY (food vs non-food) — use text + image when both present
         # ============================================================
         if image_field:
             print("🏷️ Classifying (text + image)...")
-            classification = classify_log_with_image(text or "", meal, PB_URL, token)
+            classification = classify_log_with_image(text or "", meal, PB_URL, token, recent_meals_context=recent_meals_context)
         elif text:
             print("🏷️ Classifying (text only)...")
-            classification = classify_log(text)
+            classification = classify_log(text, recent_meals_context=recent_meals_context)
         else:
             classification = {"categories": ["other"], "food_portion": None, "non_food_portions": {}}
 
@@ -270,6 +294,10 @@ def parse_meal(meal_id):
         if food_portion and len(categories) > 1:
             print(f"   🔀 Mixed entry, parsing food portion: {food_portion}")
             text = food_portion
+        # If classifier inferred food from context (e.g. "second serving" -> "chicken salad, 1 serving"), use it for parsing
+        elif is_food and food_portion and food_portion.strip():
+            print(f"   🔀 Using classifier food_portion for parsing: {food_portion}")
+            text = food_portion
         
         # ============================================================
         # STEP 2: PARSE FOOD (only runs if isFood=True)
@@ -282,18 +310,49 @@ def parse_meal(meal_id):
             if user_context:
                 print(f"👤 User context loaded:\n{user_context}")
         
+        # When we have an image, load it once and reuse (avoids second fetch failing inside parse_ingredients_from_image)
+        image_b64 = None
+        if image_field:
+            image_b64 = get_image_base64(meal, PB_URL, token)
+            if not image_b64:
+                print("⚠️ Could not load meal image (check file access / token)")
+                return jsonify({
+                    "ingredients": [],
+                    "count": 0,
+                    "source": "gpt_image",
+                    "message": "Could not load image (check file access). Add a caption to parse by text, or try again."
+                }), 200
+        
         # Parse with GPT
         parsed = []
+        no_parse_reason = None  # for "No ingredients detected" response so dashboard can show why
         
-        if text and image_field:
+        # Caption "1 serving" etc. is not a food name — parse image only so we don't get [] from text and waste a call
+        generic_caption = (text or "").strip().lower() in ("1 serving", "serving", "one serving", "")
+        if text and image_field and not generic_caption:
             print("🧠 GPT: Parsing both text + image...")
             ingredients_text = parse_ingredients(text, user_context)
-            ingredients_image = parse_ingredients_from_image(meal, PB_URL, token, user_context)
+            ingredients_image = parse_ingredients_from_image(meal, PB_URL, token, user_context, image_b64=image_b64)
+            print(f"   from text: {len(ingredients_text)}, from image: {len(ingredients_image)}")
             parsed = ingredients_text + ingredients_image
             source = "gpt_both"
+            if not parsed:
+                no_parse_reason = f"from text: {len(ingredients_text)}, from image: {len(ingredients_image)}"
+            # Fallback: if both returned 0, retry text-only once (in case image path failed)
+            if not parsed and text:
+                print("   gpt_both returned 0, retrying text-only...")
+                parsed = parse_ingredients(text, user_context)
+                if parsed:
+                    source = "gpt_text"
+                    no_parse_reason = None
+                    print(f"   text-only fallback got {len(parsed)} ingredients")
+        elif image_field and (generic_caption or not text):
+            print("🧠 GPT: Parsing image only (caption generic or empty)...")
+            parsed = parse_ingredients_from_image(meal, PB_URL, token, user_context, image_b64=image_b64)
+            source = "gpt_image"
         elif image_field:
             print("🧠 GPT: Parsing image...")
-            parsed = parse_ingredients_from_image(meal, PB_URL, token, user_context)
+            parsed = parse_ingredients_from_image(meal, PB_URL, token, user_context, image_b64=image_b64)
             source = "gpt_image"
         else:
             print("🧠 GPT: Parsing text...")
@@ -301,11 +360,23 @@ def parse_meal(meal_id):
             source = "gpt_text"
         
         if not parsed:
+            print(f"⚠️ No ingredients detected: had_text={bool(text)}, had_image={bool(image_field)}, source={source}")
+            msg = "No ingredients detected"
+            if source == "gpt_image":
+                msg = "No ingredients detected from the image. Add a caption (e.g. 'chicken salad') or check the Parse API terminal for errors."
+            elif source == "gpt_both":
+                msg = "No ingredients from text or image. Check the Parse API terminal for errors, or try a clearer caption (e.g. 'chicken salad')."
+            reason = no_parse_reason or f"source: {source}"
+            if recent_meals_context:
+                reason += "; had recent_meals context"
+            else:
+                reason += "; no recent_meals today (or fetch failed)"
             return jsonify({
                 "ingredients": [],
                 "count": 0,
                 "source": source,
-                "message": "No ingredients detected"
+                "message": msg,
+                "reason": reason
             }), 200
         
         # Process and save ingredients

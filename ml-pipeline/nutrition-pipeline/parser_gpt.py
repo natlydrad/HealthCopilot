@@ -72,9 +72,12 @@ def parse_ingredients(text: str, user_context: str = ""):
         raw = raw.strip()
 
     try:
-        return json.loads(raw)
+        out = json.loads(raw)
+        if not out:
+            print("Parser text returned [] for input:", repr(text[:60]) if text else "")
+        return out
     except Exception as e:
-        print("Parser error:", e, "RAW:", raw)
+        print("Parser error:", e, "RAW:", raw[:200] if raw else "")
         return []
 
 import base64
@@ -97,14 +100,20 @@ def get_image_base64(meal: dict, pb_url: str, token: str | None = None) -> str |
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         resp = requests.get(image_url, headers=headers)
         resp.raise_for_status()
-        
+        content_type = (resp.headers.get("Content-Type") or "").lower()
+        if not content_type.startswith("image/"):
+            print(f"Failed to get image: response is not an image (Content-Type: {content_type}, len={len(resp.content)})")
+            return None
+        if len(resp.content) < 100:
+            print(f"Failed to get image: response too small ({len(resp.content)} bytes)")
+            return None
         return base64.b64encode(resp.content).decode("utf-8")
     except Exception as e:
         print(f"Failed to get image: {e}")
         return None
 
 
-def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = None, user_context: str = ""):
+def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = None, user_context: str = "", image_b64: str | None = None):
     """
     Parses ingredients from a PocketBase image record by downloading the file locally
     and sending it to GPT-4o-mini Vision as base64.
@@ -114,11 +123,14 @@ def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = No
         pb_url: PocketBase URL
         token: Auth token
         user_context: Optional personal food profile context to inject
+        image_b64: Optional pre-fetched base64 image (avoids double fetch; pass from parse_api when already loaded)
     """
     raw = ""
     try:
-        image_b64 = get_image_base64(meal, pb_url, token)
+        if image_b64 is None:
+            image_b64 = get_image_base64(meal, pb_url, token)
         if not image_b64:
+            print("Parser image: get_image_base64 failed (no image data)")
             return []
 
         context_section = ""
@@ -157,11 +169,12 @@ def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = No
         - category (string) - "food", "drink", or "supplement"
         - reasoning (string) - brief explanation
         - nutritionFromLabel (object, optional) - only when a Nutrition Facts label is visible for this item
-        - foodGroupServings (object, optional) - estimated serving equivalents for food-group counting. Use when you can infer composition (e.g. sandwich = bread + protein + veg). Format: { "grains": 1, "protein": 1, "vegetables": 0.25, "fruits": 0, "dairy": 0, "fats": 0.5 }. Use 0 for missing groups. One serving ≈ 1 slice bread, 1 oz meat, 1/2 cup veg, 1 piece fruit, 1 cup milk, 1 tsp oil.
+        - foodGroupServings (object, optional) - estimated serving equivalents for food-group counting. Use when you can infer composition (e.g. sandwich = bread + protein + veg). Format: {{ "grains": 1, "protein": 1, "vegetables": 0.25, "fruits": 0, "dairy": 0, "fats": 0.5 }}. Use 0 for missing groups. One serving ≈ 1 slice bread, 1 oz meat, 1/2 cup veg, 1 piece fruit, 1 cup milk, 1 tsp oil.
         
         If no edible items are visible, return an empty array [].
         """
 
+        print(f"   Calling GPT Vision with image (len={len(image_b64)})...")
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -178,7 +191,8 @@ def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = No
             ],
         )
 
-        raw = resp.choices[0].message.content.strip()
+        raw = (resp.choices[0].message.content or "").strip()
+        print(f"   GPT Vision raw length={len(raw)}, preview={repr(raw[:150])}")
 
         if raw.startswith("```"):
             raw = raw.strip("`")
@@ -186,9 +200,15 @@ def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = No
                 raw = raw[4:]
             raw = raw.strip()
 
-        return json.loads(raw)
+        out = json.loads(raw)
+        if not out:
+            print("Parser image returned [] (GPT said no edible items)")
+        return out
     except Exception as e:
-        print("Parser image error:", e, "RAW:", raw)
+        import traceback
+        print("Parser image error:", e)
+        print(traceback.format_exc())
+        print("RAW:", (raw[:300] if raw else "(empty)"))
         return []
 
 

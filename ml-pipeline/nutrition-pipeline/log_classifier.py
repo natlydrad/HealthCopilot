@@ -68,6 +68,11 @@ Return JSON with:
 
 If it's ONLY food, non_food_portions should be empty {}.
 If it's ONLY non-food, food_portion should be null.
+
+When you are given RECENT MEALS CONTEXT (other meals logged today), use it:
+- The list is in order: MOST RECENT FIRST. The first meal listed is the one they just logged before this entry.
+- If the entry clearly refers to a repeat/second serving of something already logged (e.g. "second serving", "same as before", "another one", "same", "repeat"), classify as food and set food_portion to the FIRST (most recent) meal from context (e.g. "chicken salad, 1 serving"). Do NOT use a later meal in the list (e.g. kiwi, Thai curry) unless the user clearly refers to an earlier one.
+- Do not classify such entries as "other" or non-food just because the text alone is vague.
 """
 
 CLASSIFICATION_WITH_IMAGE_PROMPT = """You are a health log classifier. Analyze the user's log entry.
@@ -102,12 +107,18 @@ Return the same JSON format:
   "confidence": 0.95,
   "reasoning": "Brief explanation using both image and text"
 }
+
+When you are given RECENT MEALS CONTEXT (other meals logged today), use it:
+- The list is MOST RECENT FIRST. The first meal listed is the one they just logged before this entry.
+- If the caption refers to a second serving / same as before (e.g. "second serving", "same as before", "another one"), classify as food and set food_portion to the FIRST (most recent) meal from context (e.g. "chicken salad, 1 serving"). Do NOT use a later meal in the list (e.g. kiwi, Thai curry).
+- If the image shows food and the caption is vague but context has recent meals, prefer the first (most recent) meal when it fits.
 """
 
 
-def classify_log(entry_text: str, verbose: bool = False) -> dict:
+def classify_log(entry_text: str, verbose: bool = False, recent_meals_context: str = "") -> dict:
     """
     Classify a raw log entry.
+    recent_meals_context: Optional "Other meals logged today: ..." for second-serving / same-as-before context.
     
     Returns:
         {
@@ -129,12 +140,16 @@ def classify_log(entry_text: str, verbose: bool = False) -> dict:
             "reasoning": "Empty entry"
         }
     
+    user_content = f"Classify this log entry:\n\n{entry_text}"
+    if recent_meals_context:
+        user_content = f"RECENT MEALS CONTEXT: {recent_meals_context}\n\n{user_content}"
+    
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": CLASSIFICATION_PROMPT},
-                {"role": "user", "content": f"Classify this log entry:\n\n{entry_text}"}
+                {"role": "user", "content": user_content}
             ],
             response_format={"type": "json_object"},
             temperature=0.1
@@ -162,10 +177,10 @@ def classify_log(entry_text: str, verbose: bool = False) -> dict:
         }
 
 
-def classify_log_with_image(entry_text: str, meal: dict, pb_url: str, token: str | None = None, verbose: bool = False) -> dict:
+def classify_log_with_image(entry_text: str, meal: dict, pb_url: str, token: str | None = None, verbose: bool = False, recent_meals_context: str = "") -> dict:
     """
     Classify a log entry using both optional text and image.
-    Use this when the meal has an image so classification considers the photo (e.g. food vs medication vs supplement).
+    recent_meals_context: Optional "Other meals logged today: ..." for second-serving / same-as-before context.
     Falls back to text-only classify_log when no image is available.
     Returns same shape as classify_log().
     """
@@ -174,11 +189,14 @@ def classify_log_with_image(entry_text: str, meal: dict, pb_url: str, token: str
     image_b64 = get_image_base64(meal, pb_url, token) if meal else None
 
     if not image_b64:
-        return classify_log(entry_text or "", verbose=verbose)
+        return classify_log(entry_text or "", verbose=verbose, recent_meals_context=recent_meals_context)
 
     text_part = (entry_text or "").strip()
+    text_msg = f"Classify this log entry. Caption/text: \"{text_part or '(none)'}\"\n\nUse the image to decide. Same JSON format as text-only classification."
+    if recent_meals_context:
+        text_msg = f"RECENT MEALS CONTEXT: {recent_meals_context}\n\n{text_msg}"
     user_content = [
-        {"type": "text", "text": f"Classify this log entry. Caption/text: \"{text_part or '(none)'}\"\n\nUse the image to decide. Same JSON format as text-only classification."},
+        {"type": "text", "text": text_msg},
         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}},
     ]
 

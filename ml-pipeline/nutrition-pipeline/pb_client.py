@@ -81,6 +81,96 @@ def fetch_records(collection_name, per_page=200):
     return all_items
 
 
+def fetch_meals_for_user_on_date(user_id: str, date_iso: str, exclude_meal_id: str = None, limit: int = 20):
+    """
+    Fetch meals for a user on a given UTC calendar day (for "recent meals" context).
+    date_iso: YYYY-MM-DD (UTC).
+    Returns list of meals (with id, text, timestamp) sorted by timestamp ascending (earliest first).
+    """
+    if not user_id or not date_iso or len(date_iso.strip()) < 10:
+        return []
+    import urllib.parse
+    date_iso = date_iso.strip()[:10]  # YYYY-MM-DD only
+    # PocketBase stores timestamp with space (e.g. "2026-02-02 18:05:21.123Z"); filter must match
+    start_ts = f"{date_iso} 00:00:00.000Z"
+    end_ts = f"{date_iso} 23:59:59.999Z"
+    filter_parts = [f"user='{user_id}'", f'timestamp >= "{start_ts}"', f'timestamp <= "{end_ts}"']
+    if exclude_meal_id:
+        filter_parts.append(f"id != '{exclude_meal_id}'")
+    filter_str = " && ".join(filter_parts)
+    encoded = urllib.parse.quote(filter_str)
+    url = f"{PB_URL}/api/collections/meals/records?filter={encoded}&sort=-timestamp&perPage={limit}&fields=id,text,timestamp"
+    headers = {"Authorization": f"Bearer {get_token()}"}
+    try:
+        r = requests.get(url, headers=headers)
+        if r.status_code != 200:
+            return []
+        items = r.json().get("items", [])
+        return items
+    except Exception as e:
+        print(f"⚠️ fetch_meals_for_user_on_date failed: {e}")
+        return []
+
+
+def fetch_meals_for_user_on_local_date(user_id: str, timestamp_iso: str, timezone_iana: str, exclude_meal_id: str = None, limit: int = 20):
+    """
+    Fetch meals for a user on the same *local* calendar day as the given timestamp.
+    Use this when the client sends timezone so "recent meals today" matches the user's day, not UTC.
+    timestamp_iso: meal timestamp (e.g. "2026-02-02 18:05:21.123Z" or "2026-02-02 18:05:21")
+    timezone_iana: IANA timezone (e.g. "America/Los_Angeles").
+    Returns list of meals (id, text, timestamp) sorted by timestamp ascending.
+    """
+    if not user_id or not timestamp_iso or not (timezone_iana or "").strip():
+        return []
+    try:
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        print("⚠️ zoneinfo not available, falling back to UTC day")
+        date_iso = (timestamp_iso.strip()[:10] if len((timestamp_iso or "").strip()) >= 10 else "").strip()
+        if date_iso and len(date_iso) == 10:
+            return fetch_meals_for_user_on_date(user_id, date_iso, exclude_meal_id=exclude_meal_id, limit=limit)
+        return []
+    ts = (timestamp_iso or "").strip().replace(" ", "T")
+    if ts.endswith("Z") and "+" not in ts[-2:] and "-" not in ts[-3:]:
+        ts = ts[:-1] + "+00:00"
+    try:
+        dt_utc = datetime.fromisoformat(ts)
+        if dt_utc.tzinfo is None:
+            dt_utc = dt_utc.replace(tzinfo=ZoneInfo("UTC"))
+        tz = ZoneInfo(timezone_iana.strip())
+        dt_local = dt_utc.astimezone(tz)
+        local_date = dt_local.strftime("%Y-%m-%d")
+        # UTC range for that local day: start and end of local_date in tz
+        start_local = datetime.strptime(local_date + " 00:00:00", "%Y-%m-%d %H:%M:%S").replace(tzinfo=tz)
+        end_local = datetime.strptime(local_date + " 23:59:59", "%Y-%m-%d %H:%M:%S").replace(tzinfo=tz)
+        start_utc = start_local.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S.%f")[:23] + "Z"
+        end_utc = end_local.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S.%f")[:23] + "Z"
+    except Exception as e:
+        print(f"⚠️ fetch_meals_for_user_on_local_date parse failed: {e}")
+        date_iso = (timestamp_iso.strip()[:10] if len((timestamp_iso or "").strip()) >= 10 else "").strip()
+        if date_iso and len(date_iso) == 10:
+            return fetch_meals_for_user_on_date(user_id, date_iso, exclude_meal_id=exclude_meal_id, limit=limit)
+        return []
+    import urllib.parse
+    filter_parts = [f"user='{user_id}'", f'timestamp >= "{start_utc}"', f'timestamp <= "{end_utc}"']
+    if exclude_meal_id:
+        filter_parts.append(f"id != '{exclude_meal_id}'")
+    filter_str = " && ".join(filter_parts)
+    encoded = urllib.parse.quote(filter_str)
+    url = f"{PB_URL}/api/collections/meals/records?filter={encoded}&sort=-timestamp&perPage={limit}&fields=id,text,timestamp"
+    headers = {"Authorization": f"Bearer {get_token()}"}
+    try:
+        r = requests.get(url, headers=headers)
+        if r.status_code != 200:
+            return []
+        items = r.json().get("items", [])
+        return items
+    except Exception as e:
+        print(f"⚠️ fetch_meals_for_user_on_local_date failed: {e}")
+        return []
+
+
 def get_parsed_meal_ids():
     """Get set of meal IDs that already have ingredients parsed."""
     headers = {"Authorization": f"Bearer {get_token()}"}

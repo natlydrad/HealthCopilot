@@ -373,6 +373,9 @@ export async function createIngredient(ingredient) {
 
 // Backend Parse API URL (for GPT Vision image parsing)
 const PARSE_API_URL = import.meta.env.VITE_PARSE_API_URL || "http://localhost:5001";
+export function getParseApiUrl() {
+  return PARSE_API_URL;
+}
 
 // Parse and save ingredients for a meal (parse-on-view)
 // Tries backend API first (supports images), falls back to simple text parsing
@@ -385,11 +388,17 @@ export async function parseAndSaveMeal(meal) {
   console.log("🧠 Parsing meal:", meal.id, hasText ? `"${meal.text}"` : "[image only]");
   
   // Try backend API first (supports images via GPT Vision)
+  // Send user's token so backend can load meal image (user-owned file)
   try {
     console.log("🔗 Trying Parse API...", `${PARSE_API_URL}/parse/${meal.id}`);
+    const timezone = typeof Intl !== "undefined" && Intl.DateTimeFormat ? Intl.DateTimeFormat().resolvedOptions().timeZone : "";
     const apiRes = await fetch(`${PARSE_API_URL}/parse/${meal.id}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      },
+      body: JSON.stringify(timezone ? { timezone } : {}),
     });
     
     if (apiRes.ok) {
@@ -400,6 +409,8 @@ export async function parseAndSaveMeal(meal) {
         classificationResult: data.classificationResult || null,
         isFood: data.isFood,
         message: data.message,
+        source: data.source,
+        reason: data.reason,
       };
     }
     
