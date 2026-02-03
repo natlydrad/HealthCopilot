@@ -106,6 +106,22 @@ def main():
         ing_data = fetch(f"/api/collections/ingredients/records?filter={ing_filt}&perPage=200", token)
         all_ings.extend(ing_data.get("items", []))
 
+    def overlay_partial_onto_full(full_nutrition: list, partial_nutrition: list) -> list:
+        """Preserve values from partial (e.g. label) where present; use full for the rest."""
+        if not partial_nutrition:
+            return full_nutrition
+        by_key = {}
+        for n in full_nutrition:
+            key = (n.get("nutrientName"), n.get("unitName"))
+            by_key[key] = dict(n)
+        for n in partial_nutrition:
+            key = (n.get("nutrientName"), n.get("unitName"))
+            if key in by_key:
+                by_key[key]["value"] = n.get("value")
+            else:
+                by_key[key] = dict(n)
+        return list(by_key.values())
+
     incomplete = [i for i in all_ings if not has_complete_macros(i.get("nutrition"))]
     print(f"Found {len(incomplete)} ingredients with incomplete nutrition (of {len(all_ings)} total)\n")
 
@@ -115,6 +131,13 @@ def main():
         ing_id = ing.get("id")
         qty = ing.get("quantity", 1)
         unit = ing.get("unit", "serving") or "serving"
+        existing = ing.get("nutrition")
+        if isinstance(existing, str):
+            try:
+                existing = json.loads(existing)
+            except json.JSONDecodeError:
+                existing = []
+        existing = existing if isinstance(existing, list) else []
 
         usda = usda_lookup(name)
         scaled = []
@@ -135,6 +158,13 @@ def main():
         if not scaled:
             print(f"   ⚠️ Skip {name}: no USDA/GPT result")
             continue
+
+        # Preserve existing partial values (e.g. calories from label) - label overrides USDA
+        if existing:
+            scaled = overlay_partial_onto_full(scaled, existing)
+            preserved = [n.get("nutrientName") for n in existing if n.get("value")]
+            if preserved:
+                print(f"   📋 Preserved from existing: {preserved}")
 
         cal = next((n.get("value", 0) for n in scaled if n.get("nutrientName") == "Energy"), 0)
         prot = next((n.get("value", 0) for n in scaled if n.get("nutrientName") == "Protein"), 0)
