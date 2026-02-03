@@ -91,13 +91,15 @@ export async function fetchMealsForDateRange(startDate, endDate) {
 export async function fetchIngredients(mealId) {
   // PocketBase filter for a relation field must use this format:
   // filter=(mealId='jmlpwbqrpq4etn8')
+  // perPage=500: default is 30 - we were only fetching/deleting first 30, leaving rest to "come back" on refresh
   const filter = encodeURIComponent(`(mealId='${mealId}')`);
 
-  const url = `${PB_BASE}/api/collections/ingredients/records?filter=${filter}`;
+  const url = `${PB_BASE}/api/collections/ingredients/records?filter=${filter}&perPage=500`;
 
   console.log("🛰 Fetching:", url);
   const res = await fetch(url, {
     headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+    cache: "no-store", // prevent stale cache after clear
   });
 
   if (!res.ok) {
@@ -331,22 +333,29 @@ export async function deleteIngredient(ingredientId) {
 export async function clearMealIngredients(mealId) {
   if (!authToken) throw new Error("Not logged in");
 
-  // First fetch all ingredients for this meal
-  const ingredients = await fetchIngredients(mealId);
-  console.log(`🗑️ Clearing ${ingredients.length} ingredients for meal ${mealId}`);
+  // Fetch and delete in a loop - PocketBase perPage max is 500, so if >500 we need multiple rounds
+  let totalDeleted = 0;
+  let ingredients;
+  do {
+    ingredients = await fetchIngredients(mealId);
+    if (ingredients.length === 0) break;
+    console.log(`🗑️ Clearing ${ingredients.length} ingredients for meal ${mealId}`);
+    const results = await Promise.all(
+      ingredients.map(ing => deleteIngredient(ing.id).catch(err => {
+        console.error(`Failed to delete ${ing.id}:`, err);
+        return false;
+      }))
+    );
+    const deleted = results.filter(Boolean).length;
+    totalDeleted += deleted;
+    // If we had ingredients but deleted 0, deletes are failing (e.g. 403 - need API rules)
+    if (deleted === 0 && ingredients.length > 0) {
+      throw new Error("Delete failed (403). You may need admin to run the ingredients API rules migration.");
+    }
+  } while (ingredients.length >= 500); // another page might exist
 
-  // Delete each one
-  const results = await Promise.all(
-    ingredients.map(ing => deleteIngredient(ing.id).catch(err => {
-      console.error(`Failed to delete ${ing.id}:`, err);
-      return false;
-    }))
-  );
-
-  const deleted = results.filter(Boolean).length;
-  console.log(`✅ Deleted ${deleted}/${ingredients.length} ingredients`);
-  
-  return deleted;
+  console.log(`✅ Deleted ${totalDeleted} ingredients`);
+  return totalDeleted;
 }
 
 // Create an ingredient record
