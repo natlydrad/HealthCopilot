@@ -29,4 +29,24 @@ Backlog of improvements we might do later. Not critical path.
 
 ---
 
+## Brand identification & clarification
+
+**What:** Resolve or clarify brand names when the user mentions a store or parent company but means a specific brand. Examples: "Costco" → "Kirkland" (Costco's store brand); "Trader Joe's" → "Trader Joe's" brand; "whole foods" → "365" or clarify. Or when a brand is mentioned but not identifiable—infer or ask.
+
+**Why nice-to-have:**
+- Improves nutrition lookup accuracy (store-brand vs national brand can differ).
+- Cleaner ingredient display ("Kirkland organic almond milk" vs "Costco almond milk").
+- Helps when parsing "green tea costco" or "chips from Costco"—we know which product line to look up.
+
+**Why not critical:**
+- Current flow still works with store names; USDA/GPT can often guess.
+- Requires a store→brand mapping and/or GPT logic to infer.
+
+**Rough implementation:**
+1. **Store/brand mapping:** Small map of common stores → primary brand (Costco→Kirkland, Trader Joe's→Trader Joe's, Whole Foods→365, etc.).
+2. **Parse/GPT:** When ingredient text contains a known store name, optionally expand to brand name before USDA lookup, or include in parsing metadata.
+3. **Ambiguous brands:** If GPT sees "X brand" but can't identify X, flag for clarification or use fuzzy matching against known brands.
+
+---
+
 *Add more nice-to-haves below as we go.*

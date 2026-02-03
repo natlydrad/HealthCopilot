@@ -169,6 +169,9 @@ def validate_scaled_calories(
         "nugget": (40, 100),
         "meatball": (50, 150),
         "cookie": (30, 120),
+        "orange": (35, 80),   # ~45-60 cal each
+        "apple": (50, 120),   # ~95 cal each
+        "banana": (70, 130),  # ~105 cal each
     }
     unit_lower = (unit or "").lower()
     if unit_lower in ("piece", "pieces") and quantity > 0:

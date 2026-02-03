@@ -24,6 +24,7 @@ def parse_ingredients(text: str, user_context: str = ""):
     prompt = f"""
     Extract foods, drinks, supplements from: "{text}".
     {context_section}
+    IMPORTANT: Also extract from portion descriptions. E.g. "ate 75%, only half the noodles" → noodles, quantity 0.5; "half the rice" → rice, quantity 0.5; "left a quarter" → scale quantity to 0.75. Always return at least one item if any food is mentioned.
     IMPORTANT: Decompose complex/composite foods into their base ingredients.
     Examples:
     - "burrito" → tortilla, rice, beans, cheese, salsa, sour cream
@@ -119,9 +120,11 @@ def get_image_base64(meal: dict, pb_url: str, token: str | None = None) -> str |
         return None
 
 
-def _parse_image_simple_fallback(image_b64: str, user_context: str = "") -> list:
+def _parse_image_simple_fallback(image_b64: str, user_context: str = "", caption: str = "") -> list:
     """Retry with a simpler prompt when main image parse returns [] or fails. Reduces false negatives."""
-    prompt = """What food or drink is in this image? Return a JSON array of objects. Each object must have: "name" (string), "quantity" (number), "unit" (string, e.g. serving, cup, oz), "category" (string: food, drink, or supplement), "reasoning" (string, brief).
+    cap = f' The user said: "{caption}". Use this to identify foods and estimate portions.' if caption and caption.strip() else ""
+    prompt = f"""What food or drink is in this image?{cap}
+Return a JSON array of objects. Each object must have: "name" (string), "quantity" (number), "unit" (string, e.g. serving, cup, oz), "category" (string: food, drink, or supplement), "reasoning" (string, brief).
 If you see any food, drink, or packaged product with a nutrition label, return at least one item. Return [] only if nothing edible is visible (e.g. empty plate, non-food photo).
 Return ONLY the JSON array, no markdown or explanation."""
     try:
@@ -152,7 +155,7 @@ Return ONLY the JSON array, no markdown or explanation."""
         return []
 
 
-def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = None, user_context: str = "", image_b64: str | None = None):
+def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = None, user_context: str = "", image_b64: str | None = None, caption: str = ""):
     """
     Parses ingredients from a PocketBase image record by downloading the file locally
     and sending it to GPT-4o-mini Vision as base64.
@@ -163,6 +166,7 @@ def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = No
         token: Auth token
         user_context: Optional personal food profile context to inject
         image_b64: Optional pre-fetched base64 image (avoids double fetch; pass from parse_api when already loaded)
+        caption: Optional user caption (e.g. "ate 75%, only half the noodles") — use to identify foods and estimate portions
     """
     raw = ""
     try:
@@ -180,13 +184,21 @@ def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = No
         
         """
 
+        caption_section = ""
+        if caption and caption.strip():
+            caption_section = f"""
+        USER CAPTION: "{caption.strip()}"
+        Use this to identify what's in the photo and to estimate portions. E.g. "only half the noodles" → noodles with quantity 0.5; "ate 75%" → scale portions down accordingly.
+        
+        """
+
         prompt = f"""
         STEP 1 — Decide what the user is logging:
         - If the image shows ONE packaged product (sandwich in a container, wrapped item, protein bar, bottle, etc.) with a visible Nutrition Facts label on the package → the user is logging THAT PRODUCT as one serving. Return exactly ONE item: the product name (e.g. "chicken salad sandwich" or the brand/product name). Do NOT list sub-ingredients like bread, chicken salad, etc. Read the label and fill nutritionFromLabel. Quantity = 1, unit = "serving".
         - If the image shows a homemade/composed meal (e.g. a plate with a burrito, a bowl of salad, multiple items on a plate) with NO single packaged product with a label → then decompose into ingredients (see below).
         
         DO NOT include: furniture, rugs, appliances, plates, mugs, utensils, or random items in the background. Do NOT add drinks just because a cup appears — only add a beverage if it is clearly what the user is logging.
-        {context_section}
+        {context_section}{caption_section}
         
         When you must decompose (only for non-packaged, composed meals):
         - A burrito on a plate → tortilla, rice, beans, cheese, salsa, meat
@@ -242,7 +254,7 @@ def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = No
         out = json.loads(raw)
         if not out:
             print("   GPT returned empty array [] — retrying with simpler prompt...")
-            return _parse_image_simple_fallback(image_b64, user_context)
+            return _parse_image_simple_fallback(image_b64, user_context, caption)
         return out
     except Exception as e:
         import traceback
@@ -252,7 +264,7 @@ def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = No
         # Retry with simpler prompt in case GPT returned non-JSON (e.g. explanation)
         if raw and ("[" in raw or "ingredient" in raw.lower()):
             try:
-                return _parse_image_simple_fallback(image_b64, user_context)
+                return _parse_image_simple_fallback(image_b64, user_context, caption)
             except Exception:
                 pass
         return []
@@ -293,6 +305,7 @@ def correction_chat(
 CURRENT INGREDIENT:
 - Name: {ingredient.get('name')}
 - Quantity: {ingredient.get('quantity')} {ingredient.get('unit')}
+- Source: {ingredient.get('source', 'unknown')}
 - Original reasoning: {ingredient.get('parsingMetadata', {}).get('reasoning', 'not recorded')}
 
 Your job is to:
@@ -303,14 +316,15 @@ Your job is to:
    - "portion_estimate": The portion size looked different than it was → DON'T LEARN  
    - "brand_specific": User is specifying a particular brand → MAYBE LEARN (only if visually distinguishable)
    - "missing_item": User is ADDING something you missed (e.g. "add Frank's Red Hot Sauce") → the "correction" is the NEW item to add as a SEPARATE ingredient; we will NOT change the current ingredient. DON'T LEARN.
+   - "poor_usda_match": The USDA nutrition data is wrong (e.g. "450 cal for 1 orange is crazy", "that's way too many calories", "USDA match is off") → use GPT estimate instead. Set correction with "forceUseGptEstimate": true. DON'T LEARN.
 3. Have a natural conversation - if unclear, ask: "Just to make sure I learn the right thing - did I misidentify this, or are you adding something I missed?"
 4. When the user says they are ADDING a missed item (e.g. "add X", "you missed X", "there was also X"), use correctionReason "missing_item" and put the NEW item in "correction" (name, quantity, unit). We will add it as a separate ingredient and leave the current one as-is.
 
 IMPORTANT: Always end your response with a JSON block:
 ```json
 {{
-  "correction": {{"name": "corrected name or null", "quantity": number or null, "unit": "unit or null"}},
-  "correctionReason": "misidentified" | "added_after" | "portion_estimate" | "brand_specific" | "missing_item",
+  "correction": {{"name": "corrected name or null", "quantity": number or null, "unit": "unit or null", "forceUseGptEstimate": true or omit}},
+  "correctionReason": "misidentified" | "added_after" | "portion_estimate" | "brand_specific" | "missing_item" | "poor_usda_match",
   "shouldLearn": true/false,
   "learned": {{"mistaken": "what you thought", "actual": "what it is"}} or null,
   "complete": true/false
@@ -322,6 +336,7 @@ RULES:
 - Set "learned" ONLY when shouldLearn is true
 - Set "complete": true when the correction is finalized
 - Set correction fields to null if they shouldn't change
+- When correctionReason is "poor_usda_match", set correction.forceUseGptEstimate = true (so we replace USDA nutrition with GPT estimate)
 - If unsure about the reason, ASK before setting complete=true"""
 
         # Build messages
@@ -436,6 +451,8 @@ Examples:
 - 6 small chicken wings baked: ~280 cal, 25g protein, 0g carbs, 18g fat
 - 1 egg: ~70 cal, 6g protein, 0.5g carbs, 5g fat
 - 4 oz chicken breast: ~180 cal, 35g protein, 0g carbs, 4g fat
+- 1 orange: ~50 cal, 1g protein, 12g carbs, 0g fat
+- 1 apple: ~95 cal, 0.5g protein, 25g carbs, 0.3g fat
 
 Return ONLY valid JSON, no markdown."""
 

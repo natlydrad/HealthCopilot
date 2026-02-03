@@ -26,6 +26,18 @@ CORS(app, allow_headers=["Authorization", "Content-Type"])  # So dashboard can s
 
 PB_URL = os.getenv("PB_URL", "https://pocketbase-1j2x.onrender.com")
 
+def _base_food_term(name: str) -> str | None:
+    """Extract base food term for broader portion matching. E.g. 'chicken breast' -> 'chicken'."""
+    if not name or len(name) < 3:
+        return None
+    words = name.lower().strip().split()
+    modifiers = {"grilled", "fried", "baked", "roasted", "steamed", "boiled", "raw", "cooked", "sautéed", "sauté", "braised", "broiled"}
+    for w in words:
+        if w not in modifiers and len(w) >= 3:
+            return w
+    return words[0] if words else None
+
+
 # Items to skip
 BANNED_INGREDIENTS = {
     "smoothie", "salad", "sandwich", "bowl", "dish", "meal", "food", "snack",
@@ -466,7 +478,7 @@ def parse_meal(meal_id):
         if text and image_field and not generic_caption:
             print("🧠 GPT: Parsing both text + image...")
             ingredients_text = parse_ingredients(text, user_context)
-            ingredients_image = parse_ingredients_from_image(meal, PB_URL, token, user_context, image_b64=image_b64)
+            ingredients_image = parse_ingredients_from_image(meal, PB_URL, token, user_context, image_b64=image_b64, caption=text)
             print(f"   from text: {len(ingredients_text)}, from image: {len(ingredients_image)}")
             parsed = ingredients_text + ingredients_image
             source = "gpt_both"
@@ -482,11 +494,11 @@ def parse_meal(meal_id):
                     print(f"   text-only fallback got {len(parsed)} ingredients")
         elif image_field and (generic_caption or not text):
             print("🧠 GPT: Parsing image only (caption generic or empty)...")
-            parsed = parse_ingredients_from_image(meal, PB_URL, token, user_context, image_b64=image_b64)
+            parsed = parse_ingredients_from_image(meal, PB_URL, token, user_context, image_b64=image_b64, caption=text or "")
             source = "gpt_image"
         elif image_field:
             print("🧠 GPT: Parsing image...")
-            parsed = parse_ingredients_from_image(meal, PB_URL, token, user_context, image_b64=image_b64)
+            parsed = parse_ingredients_from_image(meal, PB_URL, token, user_context, image_b64=image_b64, caption=text or "")
             source = "gpt_image"
         else:
             print("🧠 GPT: Parsing text...")
@@ -873,8 +885,25 @@ def save_correction(ingredient_id):
         quantity_changed = correction.get("quantity") is not None and correction["quantity"] != original.get("quantity")
         unit_changed = correction.get("unit") and correction["unit"] != original.get("unit")
         force_recalc = correction.get("forceRecalculate", False)
+        force_use_gpt = correction.get("forceUseGptEstimate", False)
         
-        if name_changed or force_recalc:
+        if force_use_gpt:
+            # User flagged poor USDA match (e.g. "450 cal for 1 orange is wrong") - use GPT estimate instead
+            corrected_name = correction.get("name", original.get("name"))
+            quantity = correction.get("quantity", original.get("quantity", 1))
+            unit = correction.get("unit", original.get("unit", "serving"))
+            print(f"📐 User flagged poor USDA match - using GPT estimate for: {corrected_name} ({quantity} {unit})")
+            gpt_nutrition = gpt_estimate_nutrition(corrected_name, quantity, unit)
+            if gpt_nutrition:
+                update["nutrition"] = gpt_nutrition
+                update["source"] = "gpt"
+                update["usdaCode"] = None
+                usda_match_info = {"found": False, "usedGptInstead": True, "searchedFor": corrected_name}
+                print(f"   ✅ GPT estimate: {next((n.get('value') for n in gpt_nutrition if n.get('nutrientName') == 'Energy'), 0):.0f} cal")
+            else:
+                print("   ⚠️ GPT estimate failed, keeping existing nutrition")
+        
+        elif name_changed or force_recalc:
             # Name changed or force recalc - do fresh USDA lookup
             corrected_name = correction.get("name", original.get("name"))
             if name_changed:
@@ -1006,7 +1035,10 @@ def save_correction(ingredient_id):
         # Learn portion preferences when quantity/unit changed (same food, different amount)
         quantity_changed = correction.get("quantity") is not None and correction.get("quantity") != original.get("quantity")
         unit_changed = correction.get("unit") is not None and correction.get("unit") != original.get("unit")
-        name_unchanged = (correction.get("name") or original.get("name") or "").strip().lower() == (original.get("name") or "").strip().lower()
+        orig_name = (original.get("name") or "").strip().lower()
+        corr_name = (correction.get("name") or orig_name or "").strip().lower()
+        # Same food: exact match, or one contains the other (e.g. "chicken" vs "chicken breast")
+        name_unchanged = orig_name == corr_name or (orig_name and corr_name and (orig_name in corr_name or corr_name in orig_name))
         if user_id and name_unchanged and (quantity_changed or unit_changed):
             food_name = original.get("name") or correction.get("name")
             new_qty = correction.get("quantity") if correction.get("quantity") is not None else original.get("quantity")
@@ -1015,6 +1047,11 @@ def save_correction(ingredient_id):
                 try:
                     add_portion_preference(user_id, food_name, new_qty, new_unit)
                     print(f"   📐 Learned portion: {food_name} → {new_qty} {new_unit}")
+                    # Also learn base term for broader matching (e.g. "chicken breast" → also "chicken")
+                    base = _base_food_term(food_name)
+                    if base and base != food_name.lower():
+                        add_portion_preference(user_id, base, new_qty, new_unit)
+                        print(f"   📐 Learned portion (base): {base} → {new_qty} {new_unit}")
                 except Exception as e:
                     print(f"   ⚠️ Could not save portion preference: {e}")
         

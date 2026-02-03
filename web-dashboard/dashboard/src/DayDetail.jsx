@@ -541,11 +541,15 @@ function CorrectionChat({ ingredient, meal, onClose, onSave }) {
 
   // Initial greeting with reasoning
   useEffect(() => {
+    const source = ingredient.source || "";
+    const usdaHint = source.toLowerCase() === "usda"
+      ? "\n\n_If the calories seem way off (e.g. 450 for one orange), say so and I'll use a better estimate._"
+      : "";
     const greeting = `I identified this as **${ingredient.name}** (${ingredient.quantity || '?'} ${ingredient.unit || 'serving'}).
 
 **My reasoning:** ${reasoning}
 
-What would you like to change? You can tell me naturally, like "that's actually banana peppers" or "it was more like 4 oz".`;
+What would you like to change? You can tell me naturally, like "that's actually banana peppers", "it was more like 4 oz", or "the calories are way too high".${usdaHint}`;
     
     setMessages([{ from: "bot", text: greeting }]);
   }, [ingredient, reasoning]);
@@ -634,6 +638,7 @@ What would you like to change? You can tell me naturally, like "that's actually 
             "portion_estimate": "Since this was a portion estimate issue, I won't generalize from this.",
             "brand_specific": "Noted the brand info for this meal.",
             "missing_item": "Added the missing item to this meal.",
+            "poor_usda_match": "Switched to a better estimate. The USDA match was off.",
           };
           learnedMsg = ` ${reasonExplanations[result.correctionReason] || ""}`;
         }
