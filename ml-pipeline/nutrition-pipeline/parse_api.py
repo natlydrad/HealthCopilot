@@ -8,9 +8,10 @@ Flow:
 3. If food → GPT parses → USDA lookup → save ingredients
 """
 
+import json
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from pb_client import get_token, insert_ingredient, build_user_context_prompt, add_learned_confusion, add_common_food, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date
+from pb_client import get_token, insert_ingredient, build_user_context_prompt, add_learned_confusion, add_common_food, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date, fetch_ingredients_by_meal_id
 from parser_gpt import parse_ingredients, parse_ingredients_from_image, correction_chat, get_image_base64
 from lookup_usda import usda_lookup, scale_nutrition
 from log_classifier import classify_log, classify_log_with_image
@@ -211,19 +212,38 @@ def parse_meal(meal_id):
         try:
             ts = (timestamp or "").strip()
             if ts and user_id:
+                # Only meals with timestamp < current meal so "first" = immediately previous
                 if timezone_iana:
-                    recent_meals = fetch_meals_for_user_on_local_date(user_id, ts, timezone_iana, exclude_meal_id=meal_id, limit=15)
+                    recent_meals = fetch_meals_for_user_on_local_date(user_id, ts, timezone_iana, exclude_meal_id=meal_id, before_timestamp=ts, limit=15)
                     if recent_meals:
-                        print(f"   📅 Recent meals (local day in {timezone_iana}): {len(recent_meals)}")
+                        print(f"   📅 Recent meals (local day, before this): {len(recent_meals)}")
                 else:
                     date_iso = (ts[:10] if len(ts) >= 10 else "").strip()
-                    recent_meals = fetch_meals_for_user_on_date(user_id, date_iso, exclude_meal_id=meal_id, limit=15) if (date_iso and len(date_iso) == 10) else []
+                    recent_meals = fetch_meals_for_user_on_date(user_id, date_iso, exclude_meal_id=meal_id, before_timestamp=ts, limit=15) if (date_iso and len(date_iso) == 10) else []
                     if recent_meals:
-                        print(f"   📅 Recent meals (UTC day): {len(recent_meals)}")
+                        print(f"   📅 Recent meals (UTC day, before this): {len(recent_meals)}")
                 if recent_meals:
+                    # Debug: log exact order we send (first = most recent by -timestamp)
+                    for i, m in enumerate(recent_meals):
+                        t = (m.get("text") or "").strip() or "(image only)"
+                        ts = m.get("timestamp") or ""
+                        print(f"      recent[{i}] ts={ts} | {t[:60]}")
                     parts = [str(m.get("text", "") or "").strip() or "(image only)" for m in recent_meals]
                     if parts:
                         recent_meals_context = "Other meals logged today (most recent first): " + "; ".join(parts[:10])
+                else:
+                    # before_timestamp may have filtered out all meals (e.g. same-second or order) — refetch same day without before filter so we have context
+                    if ts and user_id:
+                        if timezone_iana:
+                            recent_meals = fetch_meals_for_user_on_local_date(user_id, ts, timezone_iana, exclude_meal_id=meal_id, before_timestamp=None, limit=15)
+                        else:
+                            date_iso = (ts[:10] if len(ts) >= 10 else "").strip()
+                            recent_meals = fetch_meals_for_user_on_date(user_id, date_iso, exclude_meal_id=meal_id, before_timestamp=None, limit=15) if (date_iso and len(date_iso) == 10) else []
+                        if recent_meals:
+                            parts = [str(m.get("text", "") or "").strip() or "(image only)" for m in recent_meals]
+                            if parts:
+                                recent_meals_context = "Other meals logged today (most recent first): " + "; ".join(parts[:10])
+                                print(f"   📅 Recent meals (same day, no before filter): {len(recent_meals)}")
         except Exception as e:
             print(f"   ⚠️ Recent meals context failed: {e}")
         
@@ -246,6 +266,7 @@ def parse_meal(meal_id):
 
         print(f"   isFood: {is_food}")
         print(f"   Categories: {categories}")
+        print(f"   food_portion from classifier: {repr(food_portion)}")
 
         # Update meal with classification
         update_resp = requests.patch(
@@ -290,14 +311,80 @@ def parse_meal(meal_id):
                 "message": "Classified as not food — no ingredients added"
             })
 
+        # When we're using "first recent meal" (from classifier or fallback), we can copy that meal's ingredients instead of re-parsing
+        source_meal_id = None  # id of the meal we're referencing (same as before)
         # If mixed entry, use just the food portion for parsing
         if food_portion and len(categories) > 1:
             print(f"   🔀 Mixed entry, parsing food portion: {food_portion}")
             text = food_portion
+            if recent_meals and len(recent_meals) > 0:
+                source_meal_id = recent_meals[0].get("id")
         # If classifier inferred food from context (e.g. "second serving" -> "chicken salad, 1 serving"), use it for parsing
         elif is_food and food_portion and food_portion.strip():
             print(f"   🔀 Using classifier food_portion for parsing: {food_portion}")
             text = food_portion
+            if recent_meals and len(recent_meals) > 0:
+                source_meal_id = recent_meals[0].get("id")
+        # Fallback: generic caption ("second serving", "1 serving", etc.), classifier didn't set food_portion but we have recent_meals → use first real meal from context
+        elif is_food and recent_meals_context:
+            raw = (text or "").strip().lower()
+            generic = raw in ("second serving", "1 serving", "serving", "one serving", "same", "same as before", "another one", "another", "repeat", "same again", "") or (len(raw) <= 25 and not any(w in raw for w in ("chicken", "salad", "sandwich", "rice", "curry", "soup", "pasta", "bread", "egg", "fish", "beef", "toast", "oat", "yogurt", "fruit", "apple", "banana")))
+            if generic:
+                prefix = "Other meals logged today (most recent first): "
+                if recent_meals_context.startswith(prefix):
+                    rest = recent_meals_context[len(prefix):].strip()
+                    for part in rest.split(";"):
+                        first_meal = (part or "").strip()
+                        if first_meal and first_meal != "(image only)":
+                            text = f"{first_meal}, 1 serving"
+                            print(f"   🔀 Fallback: using first recent meal for parsing: {text}")
+                            if recent_meals and len(recent_meals) > 0:
+                                source_meal_id = recent_meals[0].get("id")
+                            break
+        
+        # Copy ingredients from source meal if we're "same as before" and that meal already has ingredients (no re-parse)
+        if source_meal_id and source_meal_id != meal_id:
+            existing = fetch_ingredients_by_meal_id(source_meal_id)
+            if existing:
+                print(f"   📋 Copying {len(existing)} ingredients from previous meal (no re-parse)")
+                saved = []
+                for ing in existing:
+                    meta = ing.get("parsingMetadata") or {}
+                    if isinstance(meta, str):
+                        try:
+                            meta = json.loads(meta) if meta else {}
+                        except Exception:
+                            meta = {}
+                    payload = {
+                        "mealId": meal_id,
+                        "name": ing.get("name"),
+                        "quantity": ing.get("quantity", 1),
+                        "unit": ing.get("unit", "serving"),
+                        "category": ing.get("category", ""),
+                        "nutrition": ing.get("nutrition") if isinstance(ing.get("nutrition"), list) else [],
+                        "usdaCode": ing.get("usdaCode"),
+                        "source": ing.get("source", "gpt"),
+                        "parsingStrategy": "history",  # schema allows: template, brand_db, history, gpt, manual, cached
+                        "parsingMetadata": {
+                            **meta,
+                            "parsingSource": "copied",
+                            "copiedFromMealId": source_meal_id,
+                            "parsedVia": "parse_api",
+                        }
+                    }
+                    result = insert_ingredient(payload)
+                    if result:
+                        saved.append(result)
+                        print(f"   ✅ Copied: {ing.get('name')}")
+                if saved:
+                    return jsonify({
+                        "ingredients": saved,
+                        "count": len(saved),
+                        "source": "copied",
+                        "isFood": True,
+                        "categories": categories,
+                        "message": f"Copied {len(saved)} ingredients from previous meal (no re-parse)"
+                    })
         
         # ============================================================
         # STEP 2: PARSE FOOD (only runs if isFood=True)
@@ -326,6 +413,7 @@ def parse_meal(meal_id):
         # Parse with GPT
         parsed = []
         no_parse_reason = None  # for "No ingredients detected" response so dashboard can show why
+        print(f"   📝 Text used for parse: {repr((text or '')[:100])}")
         
         # Caption "1 serving" etc. is not a food name — parse image only so we don't get [] from text and waste a call
         generic_caption = (text or "").strip().lower() in ("1 serving", "serving", "one serving", "")

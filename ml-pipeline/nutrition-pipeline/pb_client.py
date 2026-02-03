@@ -45,6 +45,25 @@ def fetch_meals():
     return all_items
 
 
+def fetch_ingredients_by_meal_id(meal_id: str):
+    """Fetch all ingredients for a meal (for copy-from-previous when 'same as before')."""
+    if not meal_id:
+        return []
+    import urllib.parse
+    filter_str = f"mealId='{meal_id}'"
+    encoded = urllib.parse.quote(filter_str)
+    url = f"{PB_URL}/api/collections/ingredients/records?filter={encoded}&perPage=100"
+    headers = {"Authorization": f"Bearer {get_token()}"}
+    try:
+        r = requests.get(url, headers=headers)
+        if r.status_code != 200:
+            return []
+        return r.json().get("items", [])
+    except Exception as e:
+        print(f"⚠️ fetch_ingredients_by_meal_id failed: {e}")
+        return []
+
+
 def insert_ingredient(ingredient):
     url = f"{PB_URL}/api/collections/ingredients/records"
     headers = {"Authorization": f"Bearer {get_token()}"}
@@ -81,11 +100,12 @@ def fetch_records(collection_name, per_page=200):
     return all_items
 
 
-def fetch_meals_for_user_on_date(user_id: str, date_iso: str, exclude_meal_id: str = None, limit: int = 20):
+def fetch_meals_for_user_on_date(user_id: str, date_iso: str, exclude_meal_id: str = None, before_timestamp: str = None, limit: int = 20):
     """
     Fetch meals for a user on a given UTC calendar day (for "recent meals" context).
     date_iso: YYYY-MM-DD (UTC).
-    Returns list of meals (with id, text, timestamp) sorted by timestamp ascending (earliest first).
+    before_timestamp: if set, only return meals with timestamp < this (so "most recent" = immediately before current).
+    Returns list of meals (id, text, timestamp) sorted by -timestamp (newest first).
     """
     if not user_id or not date_iso or len(date_iso.strip()) < 10:
         return []
@@ -95,6 +115,9 @@ def fetch_meals_for_user_on_date(user_id: str, date_iso: str, exclude_meal_id: s
     start_ts = f"{date_iso} 00:00:00.000Z"
     end_ts = f"{date_iso} 23:59:59.999Z"
     filter_parts = [f"user='{user_id}'", f'timestamp >= "{start_ts}"', f'timestamp <= "{end_ts}"']
+    if before_timestamp and (before_timestamp or "").strip():
+        # Only meals that happened BEFORE the current one → first in list = immediately previous
+        filter_parts.append(f'timestamp < "{before_timestamp.strip()}"')
     if exclude_meal_id:
         filter_parts.append(f"id != '{exclude_meal_id}'")
     filter_str = " && ".join(filter_parts)
@@ -112,13 +135,13 @@ def fetch_meals_for_user_on_date(user_id: str, date_iso: str, exclude_meal_id: s
         return []
 
 
-def fetch_meals_for_user_on_local_date(user_id: str, timestamp_iso: str, timezone_iana: str, exclude_meal_id: str = None, limit: int = 20):
+def fetch_meals_for_user_on_local_date(user_id: str, timestamp_iso: str, timezone_iana: str, exclude_meal_id: str = None, before_timestamp: str = None, limit: int = 20):
     """
     Fetch meals for a user on the same *local* calendar day as the given timestamp.
     Use this when the client sends timezone so "recent meals today" matches the user's day, not UTC.
-    timestamp_iso: meal timestamp (e.g. "2026-02-02 18:05:21.123Z" or "2026-02-02 18:05:21")
-    timezone_iana: IANA timezone (e.g. "America/Los_Angeles").
-    Returns list of meals (id, text, timestamp) sorted by timestamp ascending.
+    timestamp_iso: meal timestamp (used to get local date; also for before_timestamp when provided).
+    before_timestamp: if set, only return meals with timestamp < this (so first = immediately before current).
+    Returns list of meals (id, text, timestamp) sorted by -timestamp (newest first).
     """
     if not user_id or not timestamp_iso or not (timezone_iana or "").strip():
         return []
@@ -154,6 +177,10 @@ def fetch_meals_for_user_on_local_date(user_id: str, timestamp_iso: str, timezon
         return []
     import urllib.parse
     filter_parts = [f"user='{user_id}'", f'timestamp >= "{start_utc}"', f'timestamp <= "{end_utc}"']
+    # Only meals that happened BEFORE the current one → first in list = immediately previous
+    if before_timestamp and (before_timestamp or "").strip():
+        bt = before_timestamp.strip()  # keep same format as PB (e.g. "2026-02-02 18:05:21.123Z")
+        filter_parts.append(f'timestamp < "{bt}"')
     if exclude_meal_id:
         filter_parts.append(f"id != '{exclude_meal_id}'")
     filter_str = " && ".join(filter_parts)

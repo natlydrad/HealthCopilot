@@ -109,9 +109,10 @@ Return the same JSON format:
 }
 
 When you are given RECENT MEALS CONTEXT (other meals logged today), use it:
-- The list is MOST RECENT FIRST. The first meal listed is the one they just logged before this entry.
-- If the caption refers to a second serving / same as before (e.g. "second serving", "same as before", "another one"), classify as food and set food_portion to the FIRST (most recent) meal from context (e.g. "chicken salad, 1 serving"). Do NOT use a later meal in the list (e.g. kiwi, Thai curry).
-- If the image shows food and the caption is vague but context has recent meals, prefer the first (most recent) meal when it fits.
+- The list is MOST RECENT FIRST (first = last thing they logged before this entry).
+- If the caption is "second serving" / "same as before" / "another one" AND there is an image: use the IMAGE to decide which recent meal it is. Set food_portion to the meal from the list that MATCHES what is shown in the image (e.g. if the image shows chicken salad, use "chicken salad, 1 serving" even if kiwi or something else is first in the list). Do NOT default to the first in the list when the image clearly shows a different meal from the list.
+- If the caption is second serving etc. and there is NO image, or the image does not clearly match any listed meal, then use the first (most recent) meal.
+- If the caption is just vague (e.g. "1 serving") and the image shows food, pick the listed meal that best matches the image.
 """
 
 
