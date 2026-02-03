@@ -177,6 +177,21 @@ def validate_scaled_calories(
         "orange": (35, 80),   # ~45-60 cal each
         "apple": (50, 120),   # ~95 cal each
         "banana": (70, 130),  # ~105 cal each
+        "grape": (1, 15), "grapes": (1, 15),
+        "strawberry": (2, 15), "strawberries": (2, 15),
+        "blueberry": (1, 10), "blueberries": (1, 10),
+        "raspberry": (1, 10), "raspberries": (1, 10),
+        "blackberry": (1, 10), "blackberries": (1, 10),
+        "cherry": (2, 15), "cherries": (2, 15),
+        "peach": (40, 100), "peaches": (40, 100),
+        "pear": (60, 130), "pears": (60, 130),
+        "plum": (20, 60), "plums": (20, 60),
+        "mango": (70, 150), "mangoes": (70, 150), "mangos": (70, 150),
+        "kiwi": (25, 70), "kiwis": (25, 70),
+        "grapefruit": (35, 90), "grapefruits": (35, 90),
+        "watermelon": (30, 150), "melon": (30, 100), "melons": (30, 100),
+        "pineapple": (40, 120), "avocado": (150, 350), "avocados": (150, 350),
+        "lemon": (10, 40), "lemons": (10, 40), "lime": (10, 40), "limes": (10, 40),
     }
     unit_lower = (unit or "").lower()
     if unit_lower in ("piece", "pieces") and quantity > 0:
