@@ -13,7 +13,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pb_client import get_token, insert_ingredient, delete_ingredient, delete_non_food_logs_for_meal, build_user_context_prompt, add_learned_confusion, add_common_food, add_portion_preference, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date, fetch_ingredients_by_meal_id
 from parser_gpt import parse_ingredients, parse_ingredients_from_image, correction_chat, get_image_base64, gpt_estimate_nutrition
-from lookup_usda import usda_lookup, scale_nutrition, get_piece_grams, validate_scaled_calories
+from lookup_usda import usda_lookup, usda_lookup_valid_for_portion, scale_nutrition, get_piece_grams, validate_scaled_calories
 from log_classifier import classify_log, classify_log_with_image
 import requests
 import os
@@ -888,20 +888,40 @@ def save_correction(ingredient_id):
         force_use_gpt = correction.get("forceUseGptEstimate", False)
         
         if force_use_gpt:
-            # User flagged poor USDA match (e.g. "450 cal for 1 orange is wrong") - use GPT estimate instead
+            # User flagged poor USDA match - try better USDA first, then GPT
             corrected_name = correction.get("name", original.get("name"))
             quantity = correction.get("quantity", original.get("quantity", 1))
             unit = correction.get("unit", original.get("unit", "serving"))
-            print(f"📐 User flagged poor USDA match - using GPT estimate for: {corrected_name} ({quantity} {unit})")
-            gpt_nutrition = gpt_estimate_nutrition(corrected_name, quantity, unit)
-            if gpt_nutrition:
-                update["nutrition"] = gpt_nutrition
-                update["source"] = "gpt"
-                update["usdaCode"] = None
-                usda_match_info = {"found": False, "usedGptInstead": True, "searchedFor": corrected_name}
-                print(f"   ✅ GPT estimate: {next((n.get('value') for n in gpt_nutrition if n.get('nutrientName') == 'Energy'), 0):.0f} cal")
+            print(f"📐 User flagged poor USDA match - trying better USDA first for: {corrected_name} ({quantity} {unit})")
+            usda = usda_lookup_valid_for_portion(corrected_name, quantity, unit)
+            if usda:
+                scaled_nutrition = scale_nutrition(
+                    usda.get("nutrition", []),
+                    quantity,
+                    unit,
+                    usda.get("serving_size_g", 100.0),
+                )
+                update["nutrition"] = scaled_nutrition
+                update["usdaCode"] = usda.get("usdaCode")
+                update["source"] = "usda"
+                usda_match_info = {
+                    "found": True,
+                    "matchedName": usda.get("name"),
+                    "usedBetterMatch": True,
+                    "searchedFor": corrected_name,
+                }
+                print(f"   ✅ Better USDA match: {usda.get('name')}")
             else:
-                print("   ⚠️ GPT estimate failed, keeping existing nutrition")
+                print(f"   ⏭️ No valid USDA match - using GPT estimate")
+                gpt_nutrition = gpt_estimate_nutrition(corrected_name, quantity, unit)
+                if gpt_nutrition:
+                    update["nutrition"] = gpt_nutrition
+                    update["source"] = "gpt"
+                    update["usdaCode"] = None
+                    usda_match_info = {"found": False, "usedGptInstead": True, "searchedFor": corrected_name}
+                    print(f"   ✅ GPT estimate: {next((n.get('value') for n in gpt_nutrition if n.get('nutrientName') == 'Energy'), 0):.0f} cal")
+                else:
+                    print("   ⚠️ GPT estimate failed, keeping existing nutrition")
         
         elif name_changed or force_recalc:
             # Name changed or force recalc - do fresh USDA lookup

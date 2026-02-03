@@ -322,3 +322,63 @@ def usda_lookup(ingredient_name):
     except Exception as e:
         print(f"   ❌ USDA lookup error: {e}")
         return None
+
+
+def _alternative_usda_queries(ingredient_name: str) -> list[str]:
+    """
+    Generate alternative USDA search queries for when the first match fails validation.
+    E.g. "orange" may return juice or dried; "orange raw" returns the fruit.
+    """
+    name = (ingredient_name or "").strip()
+    if not name:
+        return []
+    queries = [name]
+    lower = name.lower()
+    # Fruits/veg: add "raw" to get whole fruit, not juice/dried/canned
+    raw_foods = ["orange", "oranges", "apple", "apples", "banana", "bananas", "grape", "grapes",
+                 "strawberry", "strawberries", "blueberry", "blueberries", "peach", "peaches",
+                 "carrot", "carrots", "broccoli", "celery", "cucumber", "tomato", "tomatoes",
+                 "lettuce", "spinach", "pepper", "peppers", "melon", "watermelon", "mango", "mangoes"]
+    if any(f in lower for f in raw_foods):
+        # Avoid duplicate: if name already has "raw", skip
+        if "raw" not in lower and "juice" not in lower and "dried" not in lower:
+            base = name.split(",")[0].strip()
+            queries.append(f"{base} raw")
+            if not base.endswith("s") and base.lower() not in ("grape", "mango", "peach", "melon"):
+                queries.append(f"{base}s raw")
+    return queries
+
+
+def usda_lookup_valid_for_portion(
+    ingredient_name: str, quantity: float, unit: str
+) -> dict | None:
+    """
+    Try USDA lookup with original + alternative queries; return first result that
+    passes validate_scaled_calories. Use when user flags poor USDA match - prefer
+    a better USDA result over GPT estimate.
+    """
+    queries = _alternative_usda_queries(ingredient_name)
+    seen_fdc = set()
+    for q in queries:
+        usda = usda_lookup(q)
+        if not usda:
+            continue
+        fdc_id = usda.get("usdaCode")
+        if fdc_id and fdc_id in seen_fdc:
+            continue
+        if fdc_id:
+            seen_fdc.add(fdc_id)
+        # Scale and validate
+        scaled = scale_nutrition(
+            usda.get("nutrition", []),
+            quantity,
+            unit,
+            usda.get("serving_size_g", 100.0),
+        )
+        cal_val = next((n.get("value", 0) for n in scaled if n.get("nutrientName") == "Energy"), 0)
+        is_valid, reason = validate_scaled_calories(ingredient_name, quantity, unit, cal_val)
+        if is_valid:
+            print(f"   ✅ Found valid USDA match for portion: '{usda.get('name')}' ({cal_val:.0f} cal)")
+            return usda
+        print(f"   ⏭️ USDA match '{usda.get('name')}' failed validation: {reason}")
+    return None

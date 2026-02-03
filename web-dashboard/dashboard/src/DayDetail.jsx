@@ -644,7 +644,7 @@ What would you like to change? You can tell me naturally, like "that's actually 
             "portion_estimate": "Since this was a portion estimate issue, I won't generalize from this.",
             "brand_specific": "Noted the brand info for this meal.",
             "missing_item": "Added the missing item to this meal.",
-            "poor_usda_match": "Switched to a better estimate. The USDA match was off.",
+            "poor_usda_match": "Found a better USDA match or switched to an estimate.",
           };
           learnedMsg = ` ${reasonExplanations[result.correctionReason] || ""}`;
         }
