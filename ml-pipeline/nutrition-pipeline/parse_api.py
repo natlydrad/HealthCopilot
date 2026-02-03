@@ -598,6 +598,27 @@ def parse_meal(meal_id):
                         print(f"   ⚠️ Rejected USDA (calorie sanity): {reason}")
                         usda = None
                         scaled_nutrition = []
+                        # Try alternative USDA queries (e.g. "orange raw") before GPT
+                        usda = usda_lookup_valid_for_portion(name, quantity, unit)
+                        if usda:
+                            serving_size = usda.get("serving_size_g", 100.0)
+                            unit_lower = (unit or "").lower()
+                            if unit_lower in ("piece", "pieces"):
+                                piece_g = get_piece_grams(name)
+                                if piece_g is not None:
+                                    serving_size = piece_g
+                            scaled_nutrition = scale_nutrition(
+                                usda.get("nutrition", []),
+                                quantity,
+                                unit,
+                                serving_size
+                            )
+                            source_ing = "usda"
+                            portion_grams = round(quantity * (serving_size if unit_lower in ("serving", "piece", "pieces") else
+                                                      28.35 if unit == "oz" else
+                                                      240 if unit == "cup" else
+                                                      15 if unit == "tbsp" else 100), 1)
+                            print(f"   ✅ Better USDA match: {usda.get('name')}")
                     else:
                         print(f"   ✅ USDA match found: {usda.get('name')}")
                         # If we had partial label, overlay label values onto USDA (label overrides where present)

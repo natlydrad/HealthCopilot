@@ -399,12 +399,18 @@ def usda_lookup_valid_for_portion(
             continue
         if fdc_id:
             seen_fdc.add(fdc_id)
-        # Scale and validate
+        # Scale and validate (use piece grams when unit is piece and we have a known food)
+        serving_size = usda.get("serving_size_g", 100.0)
+        unit_lower = (unit or "").lower()
+        if unit_lower in ("piece", "pieces"):
+            piece_g = get_piece_grams(ingredient_name)
+            if piece_g is not None:
+                serving_size = piece_g
         scaled = scale_nutrition(
             usda.get("nutrition", []),
             quantity,
             unit,
-            usda.get("serving_size_g", 100.0),
+            serving_size,
         )
         cal_val = next((n.get("value", 0) for n in scaled if n.get("nutrientName") == "Energy"), 0)
         is_valid, reason = validate_scaled_calories(ingredient_name, quantity, unit, cal_val)
