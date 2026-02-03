@@ -209,6 +209,44 @@ def validate_scaled_calories(
     return True, ""
 
 
+# Expected calories per 100g by food category — prefer USDA matches in this range
+# Format: (search_terms, (lo, hi)) — first match wins
+EXPECTED_CAL_PER_100G = [
+    (["soy milk", "oat milk", "almond milk", "coconut milk beverage", "cashew milk", "pea milk"], (25, 55)),
+    (["milk"], (40, 65)),  # dairy milk
+    (["orange juice", "apple juice", "grape juice", "cranberry juice"], (40, 55)),
+    (["orange", "oranges"], (40, 55)),
+    (["apple", "apples"], (45, 60)),
+    (["banana", "bananas"], (85, 105)),
+    (["chicken wing", "wing", "wings"], (150, 250)),  # per 100g raw
+    (["chicken breast", "chicken"], (100, 180)),
+    (["egg", "eggs"], (140, 160)),
+]
+
+
+def get_expected_cal_range(ingredient_name: str) -> tuple[float, float] | None:
+    """Return (lo, hi) expected cal/100g for this food, or None if unknown."""
+    lower = (ingredient_name or "").lower()
+    for terms, (lo, hi) in EXPECTED_CAL_PER_100G:
+        if any(t in lower for t in terms):
+            return (lo, hi)
+    return None
+
+
+def score_calorie_fit(cal_per_100g: float, expected_lo: float, expected_hi: float) -> float:
+    """
+    Lower score = better fit. 0 = inside range. Penalize distance outside.
+    """
+    if cal_per_100g <= 0:
+        return 999.0
+    mid = (expected_lo + expected_hi) / 2
+    if expected_lo <= cal_per_100g <= expected_hi:
+        return abs(cal_per_100g - mid)  # prefer closer to mid
+    if cal_per_100g < expected_lo:
+        return expected_lo - cal_per_100g + 100
+    return cal_per_100g - expected_hi + 100
+
+
 def validate_usda_match(ingredient_name: str, matched_name: str, macros: dict) -> tuple[bool, str]:
     """
     Validate if USDA match seems reasonable.
@@ -297,13 +335,13 @@ def usda_lookup(ingredient_name):
         
         if foods:
             ingredient_lower = ingredient_name.lower()
-            # Composite foods (sandwich, salad, wrap, etc.) should have carbs — prefer matches that do
             is_composite = any(w in ingredient_lower for w in [
                 "sandwich", "wrap", "burrito", "taco", "burger", "pizza",
                 "salad", "bowl", "plate", "combo", "meal"
             ])
-            
-            best = None
+            expected_range = get_expected_cal_range(ingredient_name)
+
+            valid = []
             for f in foods:
                 raw_nutrients = f.get("foodNutrients", [])
                 macros = extract_macros(raw_nutrients)
@@ -311,19 +349,28 @@ def usda_lookup(ingredient_name):
                 is_valid, reason = validate_usda_match(ingredient_name, matched_name, macros)
                 if not is_valid:
                     continue
-                if best is None:
-                    best = (f, macros, matched_name, raw_nutrients)
-                    continue
-                # Prefer composite matches with carbs when ingredient suggests composite
-                if is_composite and macros.get("carbs", 0) > 0 and best[1].get("carbs", 0) == 0:
-                    best = (f, macros, matched_name, raw_nutrients)
-                    break
-                if is_composite and macros.get("carbs", 0) > best[1].get("carbs", 0):
-                    best = (f, macros, matched_name, raw_nutrients)
-            
+                cal_100 = macros.get("calories", 0) or 0
+                cal_score = score_calorie_fit(cal_100, expected_range[0], expected_range[1]) if expected_range else 0
+                carbs = macros.get("carbs", 0) or 0
+                if is_composite and carbs == 0:
+                    cal_score += 500
+                valid.append((cal_score, carbs, f, macros, matched_name, raw_nutrients))
+
+            if not valid:
+                best = None
+            else:
+                best_carbs = max(v[1] for v in valid) if is_composite else 0
+                for i, v in enumerate(valid):
+                    s, carbs, *_ = v
+                    if is_composite and carbs < best_carbs:
+                        valid[i] = (s + 200, carbs, *v[2:])
+                valid.sort(key=lambda x: x[0])
+                best = valid[0]
+
             if best:
-                f, macros, matched_name, raw_nutrients = best
-                print(f"   ✅ Matched: '{matched_name}' (fdcId: {f['fdcId']})")
+                score, _, f, macros, matched_name, raw_nutrients = best
+                cal_100 = macros.get("calories", 0)
+                print(f"   ✅ Matched: '{matched_name}' (fdcId: {f['fdcId']}) — {cal_100:.0f} cal/100g, score={score:.0f}")
                 print(f"   Macros: {macros}")
                 return {
                     "usdaCode": f["fdcId"],
@@ -377,6 +424,14 @@ def _alternative_usda_queries(ingredient_name: str) -> list[str]:
             elif "chicken" in lower and "breast" not in lower:
                 queries.append("chicken breast raw")
             queries.append(f"{base} raw")
+    # Plant milks: branded search may return sweetened/creamer first; try base "soy milk" etc.
+    plant_milks = ["soy milk", "oat milk", "almond milk", "coconut milk", "cashew milk", "pea milk"]
+    if any(p in lower for p in plant_milks):
+        for p in plant_milks:
+            if p in lower:
+                queries.append(p)
+                queries.append(f"{p} unsweetened")
+                break
     return queries
 
 
