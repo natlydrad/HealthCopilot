@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { fetchMealsForDateRange, fetchIngredients, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getLearningStats, parseAndSaveMeal, clearMealIngredients, sendCorrectionMessage, saveCorrection, getParseApiUrl } from "./api";
+import { fetchMealsForDateRange, fetchIngredients, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getLearningStats, removeLearnedPattern, parseAndSaveMeal, clearMealIngredients, sendCorrectionMessage, saveCorrection, getParseApiUrl } from "./api";
 
 // Determine if an ingredient is low confidence (needs review)
 function isLowConfidence(ing) {
@@ -730,24 +730,40 @@ function LearningPanel({ onClose }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('patterns'); // patterns | timeline
+  const [unlearning, setUnlearning] = useState(null);
+
+  const load = async () => {
+    try {
+      const [p, s] = await Promise.all([
+        getLearnedPatterns(),
+        getLearningStats()
+      ]);
+      setPatterns(p);
+      setStats(s);
+    } catch (err) {
+      console.error("Failed to load learning data:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function load() {
-      try {
-        const [p, s] = await Promise.all([
-          getLearnedPatterns(),
-          getLearningStats()
-        ]);
-        setPatterns(p);
-        setStats(s);
-      } catch (err) {
-        console.error("Failed to load learning data:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
     load();
   }, []);
+
+  const handleUnlearn = async (p) => {
+    if (!confirm(`Unlearn "${p.original}" → "${p.learned}"? This will stop the app from suggesting this correction in future parses.`)) return;
+    setUnlearning(p.original + "→" + p.learned);
+    try {
+      await removeLearnedPattern(p.original, p.learned, p.correctionIds || []);
+      await load();
+    } catch (err) {
+      console.error("Unlearn failed:", err);
+      alert("Could not unlearn. Please try again.");
+    } finally {
+      setUnlearning(null);
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -813,8 +829,11 @@ function LearningPanel({ onClose }) {
                     <p className="text-gray-400 text-sm text-center py-8">No patterns yet. Correct some ingredients!</p>
                   ) : (
                     <div className="space-y-2">
+                      <p className="text-xs text-gray-500 mb-2">
+                        Tap ✕ to unlearn a pattern that was learned by mistake.
+                      </p>
                       {patterns.map((p, i) => (
-                        <div key={i} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                        <div key={i} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg group">
                           <div>
                             <span className="text-gray-500">"{p.original}"</span>
                             <span className="mx-2">→</span>
@@ -828,6 +847,15 @@ function LearningPanel({ onClose }) {
                             }`}>
                               {p.status === 'confident' ? '✓ Confident' : 'Learning'}
                             </span>
+                            <button
+                              type="button"
+                              onClick={() => handleUnlearn(p)}
+                              disabled={unlearning === p.original + "→" + p.learned}
+                              className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1 rounded text-sm transition-colors"
+                              title="Unlearn this pattern"
+                            >
+                              {unlearning === p.original + "→" + p.learned ? "…" : "✕"}
+                            </button>
                           </div>
                         </div>
                       ))}
