@@ -500,9 +500,10 @@ function MealCard({ meal, onMealUpdated }) {
               setIngredients(prev => [...prev, result.addedIngredient]);
               fetchIngredients(meal.id).then((ings) => setIngredients(ings)).catch(() => {});
             } else if (result.ingredient) {
-              const updated = { ...correcting, ...result.ingredient };
-              setIngredients(prev => prev.map(i => i.id === correcting.id ? updated : i));
-              setCorrecting(updated); // Keep modal showing updated ingredient
+              // Use server response as source of truth (it has the actual saved values)
+              const saved = result.ingredient;
+              setIngredients(prev => prev.map(i => i.id === correcting.id ? { ...i, ...saved } : i));
+              setCorrecting((prev) => ({ ...prev, ...saved })); // Update modal header with saved values
             }
             // Never auto-close; user exits on their own
           }}
@@ -658,12 +659,18 @@ What would you like to change? You can tell me naturally, like "that's actually 
           }
         }
         
+        // Use result.ingredient (server response) as source of truth for the confirmation message
+        const saved = result.ingredient || {};
+        const displayName = saved.name ?? correction.name ?? ingredient.name;
+        const displayQty = saved.quantity != null ? saved.quantity : (correction.quantity ?? ingredient.quantity);
+        const displayUnit = saved.unit || correction.unit || ingredient.unit || "serving";
+
         const doneMsg = result.addedIngredient
           ? `Done! Added ${result.addedIngredient.name} (${result.addedIngredient.quantity || 1} ${result.addedIngredient.unit || "serving"}) as a new ingredient. ${ingredient.name} was left unchanged.${learnedMsg}${usdaMsg}`
-          : `Done! Updated to **${result.ingredient?.name || correction.name || ingredient.name}** (${result.ingredient?.quantity ?? correction.quantity ?? ingredient.quantity} ${result.ingredient?.unit || correction.unit || ingredient.unit}).${learnedMsg}${usdaMsg}\n\nYou can close when ready or correct something else.`;
+          : `Done! Saved:\n\n**${displayName}** — ${displayQty} ${displayUnit}${learnedMsg}${usdaMsg}\n\nYou can close when ready or correct something else.`;
         setMessages(prev => [...prev, { from: "bot", text: doneMsg }]);
 
-        // Sync parent state (ingredients list) — modal stays open; user closes when ready
+        // Sync parent state; keep modal open
         onSave(result);
       }
     } catch (err) {
