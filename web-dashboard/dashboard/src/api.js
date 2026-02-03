@@ -699,17 +699,19 @@ export async function getLearnedPatterns() {
   const parseUrl = import.meta.env.VITE_PARSE_API_URL || "http://localhost:5001";
   const useProxy = import.meta.env.DEV && !import.meta.env.VITE_PARSE_API_URL;
   const url = useProxy ? `/parse-api/learning/patterns` : `${parseUrl}/learning/patterns`;
+  const userId = getCurrentUserId();
   if (authToken) {
     try {
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${authToken}` },
-        cache: "no-store",
-      });
+      const headers = { Authorization: `Bearer ${authToken}`, "Cache-Control": "no-store" };
+      if (userId) headers["X-User-Id"] = userId;
+      const res = await fetch(url, { headers });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data.patterns)) {
           return data.patterns;
         }
+      } else {
+        console.warn("Learning/patterns non-ok:", res.status, await res.text().catch(() => ""));
       }
     } catch (e) {
       console.warn("Parse API learning/patterns failed, falling back to PocketBase:", e);

@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, allow_headers=["Authorization", "Content-Type"])  # So dashboard can send user token
+CORS(app, allow_headers=["Authorization", "Content-Type", "X-User-Id"])  # Dashboard can send user token + id
 
 PB_URL = os.getenv("PB_URL", "https://pocketbase-1j2x.onrender.com")
 
@@ -123,6 +123,10 @@ def _user_id_from_bearer():
     token = auth[7:].strip()
     if not token:
         return None
+    # X-User-Id header (frontend can send it as fallback when JWT payload differs)
+    uid_header = request.headers.get("X-User-Id", "").strip()
+    if uid_header and len(uid_header) >= 10:
+        return uid_header
     try:
         import base64
         parts = token.split(".")
@@ -131,9 +135,16 @@ def _user_id_from_bearer():
         payload_b64 = parts[1]
         payload_b64 += "=" * (4 - len(payload_b64) % 4)
         payload = json.loads(base64.urlsafe_b64decode(payload_b64))
-        return payload.get("id")
+        # PocketBase and others may use "id", "userId", "sub", or nested "record.id"
+        uid = payload.get("id") or payload.get("userId") or payload.get("sub")
+        if uid:
+            return str(uid)
+        rec = payload.get("record") or payload.get("model")
+        if isinstance(rec, dict) and rec.get("id"):
+            return str(rec["id"])
     except Exception:
-        return None
+        pass
+    return None
 
 
 @app.route("/learning/patterns", methods=["GET"])
