@@ -693,49 +693,30 @@ export async function getCorrections(limit = 50) {
   return data.items || [];
 }
 
-// Get learned patterns from user_food_profile (source of truth for what affects future parses)
-// Falls back to corrections if profile is empty - fixes blank Learning tab when corrections API rules differ
+// Get learned patterns - uses Parse API (admin token) so Learning panel works
+// even when PocketBase API rules block direct access to user_food_profile
 export async function getLearnedPatterns() {
-  const userId = getCurrentUserId();
-  const patternsFromProfile = [];
-
-  if (userId && authToken) {
+  const parseUrl = import.meta.env.VITE_PARSE_API_URL || "http://localhost:5001";
+  const useProxy = import.meta.env.DEV && !import.meta.env.VITE_PARSE_API_URL;
+  const url = useProxy ? `/parse-api/learning/patterns` : `${parseUrl}/learning/patterns`;
+  if (authToken) {
     try {
-      const filter = encodeURIComponent(`user="${userId}"`);
-      const res = await fetch(
-        `${PB_BASE}/api/collections/user_food_profile/records?filter=${filter}&perPage=5`,
-        { headers: { Authorization: `Bearer ${authToken}` }, cache: "no-store" }
-      );
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${authToken}` },
+        cache: "no-store",
+      });
       if (res.ok) {
-        const { items } = await res.json();
-        const profile = items?.[0];
-        const pairs = profile?.confusionPairs || [];
-        for (const c of pairs) {
-          const mistaken = (c.mistaken || "").trim();
-          const actual = (c.actual || "").trim();
-          if (mistaken && actual && mistaken.toLowerCase() !== actual.toLowerCase()) {
-            patternsFromProfile.push({
-              original: mistaken.toLowerCase(),
-              learned: actual,
-              count: c.count ?? 1,
-              correctionIds: [],
-              status: (c.count ?? 1) >= 3 ? "confident" : "learning",
-              confidence: Math.min(0.5 + ((c.count ?? 1) * 0.15), 0.99),
-            });
-          }
+        const data = await res.json();
+        if (Array.isArray(data.patterns)) {
+          return data.patterns;
         }
       }
     } catch (e) {
-      console.warn("Failed to load user_food_profile for learning:", e);
+      console.warn("Parse API learning/patterns failed, falling back to PocketBase:", e);
     }
   }
 
-  if (patternsFromProfile.length > 0) {
-    patternsFromProfile.sort((a, b) => b.count - a.count);
-    return patternsFromProfile;
-  }
-
-  // Fallback: aggregate from corrections (name changes only).
+  // Fallback: direct PocketBase (may be empty if API rules block access)
   // Quantity-only corrections (e.g. 5 pieces → 6 pieces) are NOT learned as patterns:
   // they’re stored in ingredient_corrections for audit, but don’t become confusionPairs.
   const corrections = await getCorrections(200);
@@ -774,59 +755,28 @@ export async function getLearnedPatterns() {
   return result;
 }
 
-// Remove a learned pattern (unlearn a mistake) - user-facing fix for bad learning
+// Remove a learned pattern (unlearn a mistake) - uses Parse API so it works
+// even when PocketBase API rules block direct user updates to user_food_profile
 export async function removeLearnedPattern(original, learned, correctionIds = []) {
   if (!authToken) throw new Error("Not logged in");
-  const userId = getCurrentUserId();
-  if (!userId) throw new Error("User not found");
-
-  // 1. Remove from user_food_profile (stops affecting future parsing)
-  const filter = encodeURIComponent(`user="${userId}"`);
-  const listRes = await fetch(
-    `${PB_BASE}/api/collections/user_food_profile/records?filter=${filter}`,
-    { headers: { Authorization: `Bearer ${authToken}` } }
-  );
-  if (listRes.ok) {
-    const { items } = await listRes.json();
-    const profile = items?.[0];
-    if (profile) {
-      const orig = (original || "").toLowerCase().trim();
-      const learn = (learned || "").trim();
-      const confusions = (profile.confusionPairs || []).filter(
-        (c) => (c.mistaken || "").toLowerCase() !== orig || (c.actual || "").trim() !== learn
-      );
-      const foods = (profile.foods || []).filter(
-        (f) => (f.name || "").toLowerCase().trim() !== learn
-      );
-      const needsUpdate =
-        confusions.length !== (profile.confusionPairs || []).length ||
-        foods.length !== (profile.foods || []).length;
-      if (needsUpdate) {
-        const patch = { confusionPairs: confusions };
-        if (foods.length !== (profile.foods || []).length) patch.foods = foods;
-        const patchRes = await fetch(
-          `${PB_BASE}/api/collections/user_food_profile/records/${profile.id}`,
-          {
-            method: "PATCH",
-            headers: {
-              Authorization: `Bearer ${authToken}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(patch),
-          }
-        );
-        if (!patchRes.ok) throw new Error("Failed to update profile");
-      }
-    }
-  }
-
-  // 2. Delete correction records (removes from Learning Panel)
-  for (const id of correctionIds || []) {
-    try {
-      await deleteCorrection(id);
-    } catch {
-      // ignore per-record errors
-    }
+  const parseUrl = import.meta.env.VITE_PARSE_API_URL || "http://localhost:5001";
+  const useProxy = import.meta.env.DEV && !import.meta.env.VITE_PARSE_API_URL;
+  const url = useProxy ? "/parse-api/learning/unlearn" : `${parseUrl}/learning/unlearn`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${authToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      original: (original || "").trim(),
+      learned: (learned || "").trim(),
+      correctionIds: correctionIds || [],
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || `Unlearn failed (${res.status})`);
   }
 }
 

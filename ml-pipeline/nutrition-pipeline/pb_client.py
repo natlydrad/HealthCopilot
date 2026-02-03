@@ -541,6 +541,64 @@ def get_user_templates(user_id: str):
 # TIER 2: Learning from Corrections
 # ============================================================
 
+def get_learned_patterns_for_user(user_id: str):
+    """
+    Get learned patterns for the Learning panel. Uses admin token so it works
+    even when PocketBase API rules block direct user access.
+    Returns list of { original, learned, count, correctionIds, status, confidence }.
+    """
+    if not user_id:
+        return []
+    patterns_from_profile = []
+    profile = get_user_food_profile(user_id)
+    if profile:
+        pairs = profile.get("confusionPairs") or []
+        for c in pairs:
+            mistaken = (c.get("mistaken") or "").strip()
+            actual = (c.get("actual") or "").strip()
+            if mistaken and actual and mistaken.lower() != actual.lower():
+                patterns_from_profile.append({
+                    "original": mistaken.lower(),
+                    "learned": actual,
+                    "count": c.get("count", 1),
+                    "correctionIds": [],
+                    "status": "confident" if (c.get("count") or 1) >= 3 else "learning",
+                    "confidence": min(0.5 + ((c.get("count") or 1) * 0.15), 0.99),
+                })
+    if patterns_from_profile:
+        patterns_from_profile.sort(key=lambda x: -x["count"])
+        return patterns_from_profile
+    # Fallback: aggregate from corrections
+    corrections = get_user_corrections(user_id=user_id)
+    patterns = {}
+    for c in corrections:
+        if c.get("correctionType") == "add_missing":
+            continue
+        orig = (c.get("originalParse") or {}).get("name", "").lower()
+        corr = (c.get("userCorrection") or {}).get("name", "")
+        if orig and corr and orig != corr.lower():
+            key = f"{orig}→{corr}"
+            if key not in patterns:
+                patterns[key] = {
+                    "original": orig,
+                    "learned": corr,
+                    "count": 0,
+                    "correctionIds": [],
+                }
+            patterns[key]["count"] += 1
+            patterns[key]["correctionIds"].append(c.get("id", ""))
+    result = [
+        {
+            **p,
+            "status": "confident" if p["count"] >= 3 else "learning",
+            "confidence": min(0.5 + (p["count"] * 0.15), 0.99),
+        }
+        for p in patterns.values()
+    ]
+    result.sort(key=lambda x: -x["count"])
+    return result
+
+
 def get_user_corrections(user_id: str = None, original_name: str = None):
     """
     Get corrections from the database.
@@ -791,6 +849,33 @@ def update_user_food_profile(profile_id: str, updates: dict):
         print(f"⚠️ Failed to update user food profile: {e}")
     
     return None
+
+
+def remove_learned_pattern(user_id: str, original: str, learned: str, correction_ids: list = None):
+    """
+    Remove a learned pattern from user's profile. Uses admin token.
+    Also deletes the given correction records if provided.
+    Returns True on success.
+    """
+    profile = get_user_food_profile(user_id)
+    if not profile:
+        return True  # No profile to update
+    orig = (original or "").lower().strip()
+    learn = (learned or "").strip()
+    confusions = [c for c in (profile.get("confusionPairs") or [])
+                  if (c.get("mistaken") or "").lower().strip() != orig or (c.get("actual") or "").strip() != learn]
+    foods = [f for f in (profile.get("foods") or [])
+             if (f.get("name") or "").lower().strip() != learn]
+    if len(confusions) < len(profile.get("confusionPairs") or []) or len(foods) < len(profile.get("foods") or []):
+        update_user_food_profile(profile["id"], {"confusionPairs": confusions, "foods": foods})
+    for cid in (correction_ids or []):
+        if cid:
+            try:
+                headers = {"Authorization": f"Bearer {get_token()}"}
+                requests.delete(f"{PB_URL}/api/collections/ingredient_corrections/records/{cid}", headers=headers)
+            except Exception:
+                pass
+    return True
 
 
 # Unit words - reject if string is JUST these or "number + unit"

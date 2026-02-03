@@ -11,7 +11,7 @@ Flow:
 import json
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from pb_client import get_token, insert_ingredient, delete_ingredient, delete_non_food_logs_for_meal, build_user_context_prompt, add_learned_confusion, add_common_food, add_portion_preference, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date, fetch_ingredients_by_meal_id
+from pb_client import get_token, insert_ingredient, delete_ingredient, delete_non_food_logs_for_meal, build_user_context_prompt, add_learned_confusion, add_common_food, add_portion_preference, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date, fetch_ingredients_by_meal_id, get_learned_patterns_for_user, remove_learned_pattern
 from parser_gpt import parse_ingredients, parse_ingredients_from_image, correction_chat, get_image_base64, gpt_estimate_nutrition
 from lookup_usda import usda_lookup, usda_lookup_valid_for_portion, usda_search_options, scale_nutrition, get_piece_grams, validate_scaled_calories
 from log_classifier import classify_log, classify_log_with_image
@@ -113,6 +113,69 @@ def merge_label_onto_usda(usda_nutrition: list, label_nutrition: list) -> list:
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"})
+
+
+def _user_id_from_bearer():
+    """Extract user id from Authorization Bearer JWT. Returns None if invalid."""
+    auth = request.headers.get("Authorization")
+    if not auth or not auth.startswith("Bearer "):
+        return None
+    token = auth[7:].strip()
+    if not token:
+        return None
+    try:
+        import base64
+        parts = token.split(".")
+        if len(parts) != 3:
+            return None
+        payload_b64 = parts[1]
+        payload_b64 += "=" * (4 - len(payload_b64) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+        return payload.get("id")
+    except Exception:
+        return None
+
+
+@app.route("/learning/patterns", methods=["GET"])
+def learning_patterns():
+    """
+    Get learned patterns for the logged-in user. Uses admin token internally
+    so it works even when PocketBase API rules block direct access.
+    Requires Authorization: Bearer <user_jwt>.
+    """
+    user_id = _user_id_from_bearer()
+    if not user_id:
+        return jsonify({"error": "Authorization required"}), 401
+    try:
+        patterns = get_learned_patterns_for_user(user_id)
+        return jsonify({"patterns": patterns})
+    except Exception as e:
+        print(f"❌ Learning patterns error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/learning/unlearn", methods=["POST"])
+def learning_unlearn():
+    """
+    Remove a learned pattern. Uses admin token so it works even when
+    PocketBase API rules block direct user updates.
+    Body: { original, learned, correctionIds?: string[] }
+    """
+    user_id = _user_id_from_bearer()
+    if not user_id:
+        return jsonify({"error": "Authorization required"}), 401
+    data = request.get_json() or {}
+    original = data.get("original", "").strip()
+    learned = data.get("learned", "").strip()
+    correction_ids = data.get("correctionIds") or []
+    if not original or not learned:
+        return jsonify({"error": "original and learned required"}), 400
+    try:
+        remove_learned_pattern(user_id, original, learned, correction_ids)
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"❌ Learning unlearn error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/clear/<meal_id>", methods=["POST", "DELETE"])
