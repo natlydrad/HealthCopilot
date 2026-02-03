@@ -164,6 +164,7 @@ function MealCard({ meal }) {
       setIngredients([]);
     } catch (err) {
       console.error("Clear failed:", err);
+      alert(`Clear failed: ${err.message}`);
     } finally {
       setClearing(false);
     }

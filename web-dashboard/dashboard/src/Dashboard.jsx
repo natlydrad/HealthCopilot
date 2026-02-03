@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchMealsForDateRange, fetchAllIngredients } from "./api";
+import { fetchMealsForDateRange, fetchIngredients } from "./api";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -48,22 +48,24 @@ export default function Dashboard() {
       console.log(`🔄 Fetching meals for ${startDate} to ${endDate}...`);
       
       try {
-        // Fetch meals for this week and ingredients in parallel
-        const [mealItems, allIngredients] = await Promise.all([
-          fetchMealsForDateRange(startDate, endDate),
-          fetchAllIngredients()
-        ]);
-        
+        // Fetch meals first, then ingredients per meal (avoids bulk fetch + listRule edge cases)
+        const mealItems = await fetchMealsForDateRange(startDate, endDate);
         console.log(`✅ Got ${mealItems.length} meals`);
         setMeals(mealItems);
-        
-        // Group ingredients by mealId
+
         const ingMap = {};
-        for (const ing of allIngredients) {
-          const mealId = ing.mealId;
-          if (!mealId) continue;
-          if (!ingMap[mealId]) ingMap[mealId] = [];
-          ingMap[mealId].push(ing);
+        if (mealItems.length > 0) {
+          const results = await Promise.all(
+            mealItems.map((m) =>
+              fetchIngredients(m.id).catch((err) => {
+                console.warn("Failed ingredients for meal", m.id, err);
+                return [];
+              })
+            )
+          );
+          mealItems.forEach((m, i) => {
+            ingMap[m.id] = results[i] || [];
+          });
         }
         setIngredients(ingMap);
       } catch (e) {

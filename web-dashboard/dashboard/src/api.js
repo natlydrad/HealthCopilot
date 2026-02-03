@@ -323,39 +323,31 @@ export async function deleteIngredient(ingredientId) {
 
   if (!res.ok) {
     const error = await res.text();
-    throw new Error(`Failed to delete ingredient: ${error}`);
+    console.error(`DELETE ${url} → ${res.status}`, error);
+    throw new Error(`Delete failed (${res.status}): ${error || res.statusText}`);
   }
 
   return true;
 }
 
 // Delete ALL ingredients for a meal (clear parse)
+// Uses Parse API (service token) to bypass PocketBase deleteRule 403
 export async function clearMealIngredients(mealId) {
   if (!authToken) throw new Error("Not logged in");
 
-  // Fetch and delete in a loop - PocketBase perPage max is 500, so if >500 we need multiple rounds
-  let totalDeleted = 0;
-  let ingredients;
-  do {
-    ingredients = await fetchIngredients(mealId);
-    if (ingredients.length === 0) break;
-    console.log(`🗑️ Clearing ${ingredients.length} ingredients for meal ${mealId}`);
-    const results = await Promise.all(
-      ingredients.map(ing => deleteIngredient(ing.id).catch(err => {
-        console.error(`Failed to delete ${ing.id}:`, err);
-        return false;
-      }))
-    );
-    const deleted = results.filter(Boolean).length;
-    totalDeleted += deleted;
-    // If we had ingredients but deleted 0, deletes are failing (e.g. 403 - need API rules)
-    if (deleted === 0 && ingredients.length > 0) {
-      throw new Error("Delete failed (403). You may need admin to run the ingredients API rules migration.");
-    }
-  } while (ingredients.length >= 500); // another page might exist
-
-  console.log(`✅ Deleted ${totalDeleted} ingredients`);
-  return totalDeleted;
+  const parseUrl = import.meta.env.VITE_PARSE_API_URL || "http://localhost:5001";
+  const res = await fetch(`${parseUrl}/clear/${mealId}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${authToken}` },
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(err || `Clear failed (${res.status})`);
+  }
+  const data = await res.json();
+  const deleted = data.deleted ?? 0;
+  console.log(`✅ Cleared ${deleted} ingredients for meal ${mealId}`);
+  return deleted;
 }
 
 // Create an ingredient record

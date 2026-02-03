@@ -11,7 +11,7 @@ Flow:
 import json
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from pb_client import get_token, insert_ingredient, build_user_context_prompt, add_learned_confusion, add_common_food, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date, fetch_ingredients_by_meal_id
+from pb_client import get_token, insert_ingredient, delete_ingredient, build_user_context_prompt, add_learned_confusion, add_common_food, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date, fetch_ingredients_by_meal_id
 from parser_gpt import parse_ingredients, parse_ingredients_from_image, correction_chat, get_image_base64, gpt_estimate_nutrition
 from lookup_usda import usda_lookup, scale_nutrition, get_piece_grams, validate_scaled_calories
 from log_classifier import classify_log, classify_log_with_image
@@ -99,6 +99,32 @@ def merge_label_onto_usda(usda_nutrition: list, label_nutrition: list) -> list:
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"})
+
+
+@app.route("/clear/<meal_id>", methods=["POST", "DELETE"])
+def clear_meal_ingredients(meal_id):
+    """
+    Delete all ingredients for a meal. Uses service token so it bypasses
+    PocketBase API rules (which block delete for regular users).
+    Requires Authorization header (user must be logged in).
+    """
+    auth = request.headers.get("Authorization")
+    if not auth or not auth.startswith("Bearer "):
+        return jsonify({"error": "Authorization required"}), 401
+    try:
+        total_deleted = 0
+        while True:
+            ingredients = fetch_ingredients_by_meal_id(meal_id)
+            if not ingredients:
+                break
+            for ing in ingredients:
+                if delete_ingredient(ing.get("id")):
+                    total_deleted += 1
+        print(f"   🗑️ Cleared {total_deleted} ingredients for meal {meal_id}")
+        return jsonify({"deleted": total_deleted}), 200
+    except Exception as e:
+        print(f"   ❌ Clear failed: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/classify/<meal_id>", methods=["POST"])

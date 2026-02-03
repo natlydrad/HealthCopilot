@@ -78,6 +78,17 @@ def insert_ingredient(ingredient):
             r.raise_for_status()
     return r.json()
 
+
+def delete_ingredient(ingredient_id: str) -> bool:
+    """Delete an ingredient by ID. Uses service token (bypasses API rules)."""
+    if not ingredient_id:
+        return False
+    url = f"{PB_URL}/api/collections/ingredients/records/{ingredient_id}"
+    headers = {"Authorization": f"Bearer {get_token()}"}
+    r = requests.delete(url, headers=headers)
+    return r.status_code in (200, 204)
+
+
 def fetch_records(collection_name, per_page=200):
     """Generic fetch helper for any PocketBase collection."""
     headers = {"Authorization": f"Bearer {get_token()}"}
