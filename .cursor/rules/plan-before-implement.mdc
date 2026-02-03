@@ -1,0 +1,26 @@
+---
+description: Plan changes first and get user approval before implementing
+alwaysApply: true
+---
+
+# Plan before implement
+
+When the user asks you to **make a change** (feature, bugfix, refactor, or other modification):
+
+1. **Plan first.** Write out what you will do: which files to touch, what approach you'll take, and the main steps.
+2. **Ask for approval.** Present the plan to the user and wait for them to confirm before editing.
+3. **Implement only after approval.** Once they say yes (or approve with small tweaks), proceed with the edits.
+
+**Examples of user requests that trigger this:**
+- "Add X feature"
+- "Fix the Y bug"
+- "Change how Z works"
+- "Implement the USDA image picker"
+
+**What does NOT require planning first:**
+- Simple questions ("how does X work?", "what file does Y?")
+- Read-only tasks (audit, search, explain)
+- User explicitly says "just do it" or "go ahead" or "implement it" without asking for a plan
+- Tiny one-line fixes the user has clearly specified
+
+When in doubt, plan first and ask.

@@ -49,4 +49,29 @@ Backlog of improvements we might do later. Not critical path.
 
 ---
 
+## USDA brand match corrections: show product images, click to select
+
+**What:** When we show USDA options for a brand correction (e.g. "Silk Original Soy Milk"), display product images for each option so the user can visually pick the right one. User clicks the correct product image to select it.
+
+**Why nice-to-have:**
+- Visual confirmation reduces mis-clicks (e.g. Silk Unsweetened vs Silk Original look different).
+- Better UX for brand-heavy corrections—user sees the package, not just text + macros.
+- Complements the existing "pick from USDA options" flow we built.
+
+**Why not critical:**
+- USDA FoodData Central API does not return product images (it’s a nutrition DB, not a product catalog).
+- Would require an external source for images (Open Food Facts, Google Images, brand CDNs, etc.).
+- Text + macros selection already works.
+
+**Rough implementation:**
+1. **Image source:** Open Food Facts has product images; could try barcode→OFF→image_url when we have a barcode. Or: search Google/Bing Images API (costs, rate limits) for "{brand} {product} package".
+2. **UI:** Extend the USDA options cards in the correction chat—when an image URL is available, show it as a thumbnail. Keep the existing click-to-select behavior.
+3. **Fallback:** No image → show text-only card as today.
+
+**References:**
+- USDA FoodData Central: no product images in API responses.
+- Open Food Facts: product images available via API for barcode lookups.
+
+---
+
 *Add more nice-to-haves below as we go.*

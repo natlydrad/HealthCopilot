@@ -335,23 +335,41 @@ export async function deleteIngredient(ingredientId) {
 export async function clearMealIngredients(mealId) {
   if (!authToken) throw new Error("Not logged in");
 
-  // In dev without VITE_PARSE_API_URL: use Vite proxy /parse-api → localhost:5001 (avoids CORS)
   const parseUrl = import.meta.env.VITE_PARSE_API_URL || "http://localhost:5001";
   const useProxy = import.meta.env.DEV && !import.meta.env.VITE_PARSE_API_URL;
   const url = useProxy ? `/parse-api/clear/${mealId}` : `${parseUrl}/clear/${mealId}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30_000);
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${authToken}` },
-    signal: controller.signal,
-  });
-  clearTimeout(timeout);
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(err || `Clear failed (${res.status})`);
+  let res;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${authToken}` },
+      signal: controller.signal,
+    });
+  } catch (fetchErr) {
+    clearTimeout(timeout);
+    const msg = fetchErr?.name === "AbortError"
+      ? "Clear timed out. Is the Parse API running?"
+      : (fetchErr?.message || "Network error. Is the Parse API running on port 5001?");
+    throw new Error(msg);
   }
-  const data = await res.json();
+  clearTimeout(timeout);
+  const text = await res.text();
+  if (!res.ok) {
+    let errMsg = text;
+    try {
+      const j = JSON.parse(text);
+      if (j?.error) errMsg = j.error;
+    } catch (_) {}
+    throw new Error(errMsg || `Clear failed (${res.status})`);
+  }
+  let data = {};
+  try {
+    data = JSON.parse(text);
+  } catch (_) {
+    console.warn("Clear: unexpected non-JSON response", text?.slice(0, 100));
+  }
   const deleted = data.deleted ?? 0;
   console.log(`✅ Cleared ${deleted} ingredients for meal ${mealId}`);
   return deleted;

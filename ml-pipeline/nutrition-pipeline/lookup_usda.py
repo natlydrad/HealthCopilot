@@ -502,18 +502,21 @@ def usda_search_options(
                 })
         except Exception as e:
             print(f"   ⚠️ usda_search_options error for '{q}': {e}")
-    # Rank by calorie fit (per 100g)
+    # Rank by calorie fit (primary) and name overlap (secondary) — most likely first
     expected = get_expected_cal_range(query)
+    q_words = set(w for w in query_lower.split() if len(w) > 2)
     for c in all_candidates:
         grams = convert_to_grams(quantity or 1, unit or "serving", c.get("serving_size_g", 100))
         cal_100 = (c["calories"] or 0) * 100 / grams if grams > 0 else 0
-        c["_score"] = score_calorie_fit(cal_100, expected[0], expected[1]) if expected else 0
-    all_candidates.sort(key=lambda x: x["_score"])
+        cal_score = score_calorie_fit(cal_100, expected[0], expected[1]) if expected else 0
+        m_words = set(c["name"].replace(",", " ").lower().split())
+        name_overlap = len(q_words & m_words) if q_words else 0
+        c["_sort"] = (cal_score, -name_overlap)  # lower cal_score first, higher overlap first
+    all_candidates.sort(key=lambda x: x["_sort"])
     for c in all_candidates:
-        del c["_score"]
+        del c["_sort"]
     options = all_candidates[:max_options]
     # Exact branded match: query appears in matched name (e.g. "silk original" in "SILK Original, soymilk")
-    q_words = set(w for w in query_lower.split() if len(w) > 2)
     has_exact = False
     for opt in options:
         m_lower = opt["name"].replace(",", " ").lower()

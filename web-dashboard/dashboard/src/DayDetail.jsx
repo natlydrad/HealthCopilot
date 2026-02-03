@@ -805,7 +805,7 @@ What would you like to change? You can tell me naturally, like "that's actually 
           {pendingPreview?.previewResult?.usdaOptions?.length > 0 && (
             <div className="space-y-1">
               <p className="text-xs font-medium text-gray-600">Pick a USDA match:</p>
-              <div className="max-h-32 overflow-y-auto flex flex-col gap-1">
+              <div className="max-h-48 overflow-y-auto flex flex-col gap-2">
                 {pendingPreview.previewResult.usdaOptions.map((opt) => {
                   const isSelected = pendingPreview.selectedUsdaOption?.usdaCode === opt.usdaCode;
                   const nut = [opt.calories != null && `${opt.calories} cal`, opt.protein != null && `${opt.protein}g protein`, opt.carbs != null && `${opt.carbs}g carbs`].filter(Boolean).join(", ");
@@ -814,10 +814,10 @@ What would you like to change? You can tell me naturally, like "that's actually 
                       key={opt.usdaCode}
                       type="button"
                       onClick={() => setPendingPreview((p) => p ? { ...p, selectedUsdaOption: isSelected ? null : opt } : null)}
-                      className={`text-left px-3 py-2 rounded-lg border text-sm truncate ${isSelected ? "border-green-500 bg-green-50" : "border-gray-200 hover:bg-gray-50"}`}
+                      className={`text-left px-3 py-2.5 rounded-lg border min-h-[3rem] ${isSelected ? "border-green-500 bg-green-50" : "border-gray-200 hover:bg-gray-50"}`}
                     >
-                      <span className="font-medium">{opt.name}</span>
-                      {nut && <span className="text-gray-500 ml-1">— {nut}</span>}
+                      <div className="font-medium text-sm leading-snug break-words">{opt.name}</div>
+                      {nut && <div className="text-gray-500 text-xs mt-0.5">{nut}</div>}
                     </button>
                   );
                 })}
@@ -847,7 +847,8 @@ What would you like to change? You can tell me naturally, like "that's actually 
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => {
-                setMessages(prev => [...prev, { from: "bot", text: "No changes needed. You can close whenever you're ready." }]);
+                setMessages(prev => [...prev, { from: "bot", text: "No changes needed." }]);
+                onClose();
               }}
               className="text-xs px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-green-700 hover:bg-green-100 font-medium flex items-center gap-1.5"
             >
