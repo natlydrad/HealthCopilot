@@ -56,6 +56,7 @@ UNIT_TO_GRAMS = {
 # USDA often returns 100g as "serving" which inflates piece counts 2-3x
 PIECE_GRAMS_BY_FOOD = {
     "chicken wing": 30, "chicken wings": 30, "wing": 30, "wings": 30,
+    "chicken breast": 120, "chicken breasts": 120,  # ~4oz
     "wingette": 25, "drummette": 25, "wingettes": 25, "drummettes": 25,
     "egg": 50, "eggs": 50,
     "bread slice": 30, "slice of bread": 30, "slice": 30,
@@ -165,6 +166,10 @@ def validate_scaled_calories(
     piece_bounds = {
         "chicken wing": (35, 80),   # wingette/drummette: ~48 cal each
         "wing": (35, 80),
+        "chicken breast": (100, 280),  # ~165 cal per 4oz breast
+        "chicken": (80, 280),   # wing ~50, breast ~165
+        "steak": (150, 450),    # 4-6oz beef ~250-350
+        "beef": (100, 450),
         "egg": (60, 120),
         "nugget": (40, 100),
         "meatball": (50, 150),
@@ -346,6 +351,17 @@ def _alternative_usda_queries(ingredient_name: str) -> list[str]:
             queries.append(f"{base} raw")
             if not base.endswith("s") and base.lower() not in ("grape", "mango", "peach", "melon"):
                 queries.append(f"{base}s raw")
+    # Meats: add "raw" to get plain meat, not fried/breaded (which inflates calories)
+    meat_terms = ["chicken", "beef", "steak", "pork", "turkey", "lamb", "salmon", "tuna", "fish"]
+    if any(m in lower for m in meat_terms):
+        if "raw" not in lower and "fried" not in lower and "breaded" not in lower and "battered" not in lower:
+            base = name.split(",")[0].strip()
+            if "wing" in lower:
+                queries.append("chicken wings raw")
+                queries.append("chicken wing raw")
+            elif "chicken" in lower and "breast" not in lower:
+                queries.append("chicken breast raw")
+            queries.append(f"{base} raw")
     return queries
 
 
