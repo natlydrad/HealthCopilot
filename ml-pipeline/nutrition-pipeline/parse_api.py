@@ -311,25 +311,28 @@ def parse_meal(meal_id):
                 "message": "Classified as not food — no ingredients added"
             })
 
-        # When we're using "first recent meal" (from classifier or fallback), we can copy that meal's ingredients instead of re-parsing
+        # When we're using "first recent meal" (from classifier or fallback), we can copy that meal's ingredients instead of re-parsing.
+        # Only do this when there is NO image — if there's an image, the image is the source of truth (e.g. chips label, not "same as before").
         source_meal_id = None  # id of the meal we're referencing (same as before)
+        use_recent_meal = not image_field  # never override with recent meal when user sent a photo of something new
         # If mixed entry, use just the food portion for parsing
         if food_portion and len(categories) > 1:
             print(f"   🔀 Mixed entry, parsing food portion: {food_portion}")
             text = food_portion
-            if recent_meals and len(recent_meals) > 0:
+            if use_recent_meal and recent_meals and len(recent_meals) > 0:
                 source_meal_id = recent_meals[0].get("id")
-        # If classifier inferred food from context (e.g. "second serving" -> "chicken salad, 1 serving"), use it for parsing
-        elif is_food and food_portion and food_portion.strip():
-            print(f"   🔀 Using classifier food_portion for parsing: {food_portion}")
-            text = food_portion
-            if recent_meals and len(recent_meals) > 0:
+        # If classifier inferred "same as before" from EXPLICIT caption ("second serving", etc.), use it — only when no image
+        elif is_food and food_portion and food_portion.strip() and use_recent_meal and recent_meals:
+            raw_caption = (text or "").strip().lower()
+            if raw_caption in ("second serving", "same as before", "another one", "another", "repeat", "same again", "same"):
+                print(f"   🔀 Using classifier food_portion for parsing: {food_portion}")
+                text = food_portion
                 source_meal_id = recent_meals[0].get("id")
-        # Fallback: generic caption ("second serving", "1 serving", etc.), classifier didn't set food_portion but we have recent_meals → use first real meal from context
-        elif is_food and recent_meals_context:
+        # Fallback: text-only, caption EXPLICITLY says "same as before" (not just "1 serving" or empty), use first real meal from context
+        elif use_recent_meal and is_food and recent_meals_context:
             raw = (text or "").strip().lower()
-            generic = raw in ("second serving", "1 serving", "serving", "one serving", "same", "same as before", "another one", "another", "repeat", "same again", "") or (len(raw) <= 25 and not any(w in raw for w in ("chicken", "salad", "sandwich", "rice", "curry", "soup", "pasta", "bread", "egg", "fish", "beef", "toast", "oat", "yogurt", "fruit", "apple", "banana")))
-            if generic:
+            explicit_same_as_before = raw in ("second serving", "same as before", "another one", "another", "repeat", "same again", "same")
+            if explicit_same_as_before:
                 prefix = "Other meals logged today (most recent first): "
                 if recent_meals_context.startswith(prefix):
                     rest = recent_meals_context[len(prefix):].strip()

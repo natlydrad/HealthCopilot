@@ -69,10 +69,10 @@ Return JSON with:
 If it's ONLY food, non_food_portions should be empty {}.
 If it's ONLY non-food, food_portion should be null.
 
-When you are given RECENT MEALS CONTEXT (other meals logged today), use it:
-- The list is in order: MOST RECENT FIRST. The first meal listed is the one they just logged before this entry.
-- If the entry clearly refers to a repeat/second serving of something already logged (e.g. "second serving", "same as before", "another one", "same", "repeat"), classify as food and set food_portion to the FIRST (most recent) meal from context (e.g. "chicken salad, 1 serving"). Do NOT use a later meal in the list (e.g. kiwi, Thai curry) unless the user clearly refers to an earlier one.
-- Do not classify such entries as "other" or non-food just because the text alone is vague.
+When you are given RECENT MEALS CONTEXT (other meals logged today), use it ONLY when the entry EXPLICITLY says same-as-before:
+- The list is MOST RECENT FIRST. Only set food_portion from this list when the text EXPLICITLY says "second serving", "same as before", "another one", "same", "repeat" — not when the text is just "1 serving", "serving", or empty. "1 serving" or empty does NOT mean "same as before".
+- If the entry explicitly refers to a repeat (e.g. "second serving", "same as before", "another one"), set food_portion to the FIRST (most recent) meal from context.
+- Do NOT infer "same as before" from "1 serving" or empty caption alone.
 """
 
 CLASSIFICATION_WITH_IMAGE_PROMPT = """You are a health log classifier. Analyze the user's log entry.
@@ -108,11 +108,10 @@ Return the same JSON format:
   "reasoning": "Brief explanation using both image and text"
 }
 
-When you are given RECENT MEALS CONTEXT (other meals logged today), use it:
-- The list is MOST RECENT FIRST (first = last thing they logged before this entry).
-- If the caption is "second serving" / "same as before" / "another one" AND there is an image: use the IMAGE to decide which recent meal it is. Set food_portion to the meal from the list that MATCHES what is shown in the image (e.g. if the image shows chicken salad, use "chicken salad, 1 serving" even if kiwi or something else is first in the list). Do NOT default to the first in the list when the image clearly shows a different meal from the list.
-- If the caption is second serving etc. and there is NO image, or the image does not clearly match any listed meal, then use the first (most recent) meal.
-- If the caption is just vague (e.g. "1 serving") and the image shows food, pick the listed meal that best matches the image.
+When you are given RECENT MEALS CONTEXT (other meals logged today):
+- Do NOT use the recent meals list when the caption is just "1 serving", "serving", or empty. "1 serving" or empty does NOT mean "same as before". Set food_portion from what is IN THE IMAGE (e.g. chips, product on label).
+- Only use the recent meals list when the caption EXPLICITLY says "second serving", "same as before", "another one", "same", "repeat" AND the image shows the same kind of meal as one in the list.
+- If the image shows a nutrition label, package, or any specific product — set food_portion from the image (the product shown), never from the recent meals list.
 """
 
 
