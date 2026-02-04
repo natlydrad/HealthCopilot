@@ -340,7 +340,14 @@ export async function parseAndSaveMeal(meal) {
     });
     if (res.ok) {
       const data = await res.json();
-      return { ingredients: data.ingredients || [], classificationResult: data.classificationResult || null };
+      return {
+        ingredients: data.ingredients || [],
+        classificationResult: data.classificationResult || null,
+        message: data.message,
+        reason: data.reason,
+        source: data.source,
+        ...data,
+      };
     }
   } catch (err) {
     console.warn("Parse API unreachable, falling back to simple parser:", err.message);

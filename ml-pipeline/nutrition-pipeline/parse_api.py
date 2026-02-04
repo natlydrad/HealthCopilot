@@ -9,6 +9,7 @@ Flow:
 """
 
 import json
+import re
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pb_client import get_token, insert_ingredient, delete_ingredient, delete_non_food_logs_for_meal, build_user_context_prompt, add_learned_confusion, add_common_food, add_portion_preference, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date, fetch_ingredients_by_meal_id, get_learned_patterns_for_user, remove_learned_pattern
@@ -68,6 +69,36 @@ def normalize_quantity(ing):
         ing["quantity"] = 1
         ing["unit"] = ing.get("unit") or "serving"
     return ing
+
+
+def _parse_repeat_intent(raw: str) -> tuple[bool, float]:
+    """
+    Detect 'repeat previous meal' intent from caption. Returns (is_repeat, multiplier).
+    Pattern-based — no explicit phrase list.
+    """
+    raw = (raw or "").strip().lower()
+    if not raw:
+        return False, 1.0
+    # "another N" or "another" / "another one"
+    m = re.match(r"^another\s+(\d+)\s*$", raw)
+    if m:
+        return True, float(m.group(1))
+    if re.match(r"^another(\s+one)?\s*$", raw):
+        return True, 1.0
+    # "N more"
+    m = re.match(r"^(\d+)\s+more\s*$", raw)
+    if m:
+        return True, float(m.group(1))
+    # "two more", "three more", etc.
+    m = re.match(r"^(one|two|three|four|five|six|seven|eight|nine|ten)\s+more\s*$", raw)
+    if m:
+        n = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+             "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}.get(m.group(1), 1)
+        return True, float(n)
+    # Short caption starting with repeat keyword (catches "same", "same as before", "second serving", etc.)
+    if len(raw) <= 25 and re.match(r"^(same|repeat|again|second|third)\b", raw):
+        return True, 1.0
+    return False, 1.0
 
 
 def nutrition_from_label_to_array(label: dict, quantity: float, serving_size_g: float) -> list:
@@ -754,6 +785,7 @@ def parse_meal(meal_id):
         # When we're using "first recent meal" (from classifier or fallback), we can copy that meal's ingredients instead of re-parsing.
         # Only do this when there is NO image — if there's an image, the image is the source of truth (e.g. chips label, not "same as before").
         source_meal_id = None  # id of the meal we're referencing (same as before)
+        copy_multiplier = 1.0  # e.g. "another 2" -> 2x quantities
         use_recent_meal = not image_field  # never override with recent meal when user sent a photo of something new
         # If mixed entry, use just the food portion for parsing
         if food_portion and len(categories) > 1:
@@ -761,35 +793,38 @@ def parse_meal(meal_id):
             text = food_portion
             if use_recent_meal and recent_meals and len(recent_meals) > 0:
                 source_meal_id = recent_meals[0].get("id")
-        # If classifier inferred "same as before" from EXPLICIT caption ("second serving", etc.), use it — only when no image
+        # If classifier inferred "same as before" from caption, use it — only when no image
         elif is_food and food_portion and food_portion.strip() and use_recent_meal and recent_meals:
-            raw_caption = (text or "").strip().lower()
-            if raw_caption in ("second serving", "same as before", "another one", "another", "repeat", "same again", "same"):
+            is_repeat_c, copy_multiplier = _parse_repeat_intent(text or "")
+            if is_repeat_c:
                 print(f"   🔀 Using classifier food_portion for parsing: {food_portion}")
                 text = food_portion
                 source_meal_id = recent_meals[0].get("id")
-        # Fallback: text-only, caption EXPLICITLY says "same as before" (not just "1 serving" or empty), use first real meal from context
+        # Fallback: text-only, caption suggests "repeat previous meal" — pattern-based, no phrase list
         elif use_recent_meal and is_food and recent_meals_context:
             raw = (text or "").strip().lower()
-            explicit_same_as_before = raw in ("second serving", "same as before", "another one", "another", "repeat", "same again", "same")
-            if explicit_same_as_before:
+            is_repeat, copy_multiplier = _parse_repeat_intent(raw)
+            if is_repeat:
+                if recent_meals and len(recent_meals) > 0:
+                    source_meal_id = recent_meals[0].get("id")
                 prefix = "Other meals logged today (most recent first): "
-                if recent_meals_context.startswith(prefix):
+                if recent_meals_context and recent_meals_context.startswith(prefix):
                     rest = recent_meals_context[len(prefix):].strip()
                     for part in rest.split(";"):
                         first_meal = (part or "").strip()
                         if first_meal and first_meal != "(image only)":
                             text = f"{first_meal}, 1 serving"
                             print(f"   🔀 Fallback: using first recent meal for parsing: {text}")
-                            if recent_meals and len(recent_meals) > 0:
-                                source_meal_id = recent_meals[0].get("id")
                             break
+                else:
+                    print(f"   🔀 Fallback: matched 'same as before' phrase, copying from most recent meal")
         
         # Copy ingredients from source meal if we're "same as before" and that meal already has ingredients (no re-parse)
         if source_meal_id and source_meal_id != meal_id:
             existing = fetch_ingredients_by_meal_id(source_meal_id)
             if existing:
-                print(f"   📋 Copying {len(existing)} ingredients from previous meal (no re-parse)")
+                mult = copy_multiplier
+                print(f"   📋 Copying {len(existing)} ingredients from previous meal (no re-parse)" + (f" x{mult}" if mult != 1.0 else ""))
                 saved = []
                 for ing in existing:
                     meta = ing.get("parsingMetadata") or {}
@@ -798,13 +833,22 @@ def parse_meal(meal_id):
                             meta = json.loads(meta) if meta else {}
                         except Exception:
                             meta = {}
+                    orig_qty = float(ing.get("quantity", 1) or 1)
+                    new_qty = orig_qty * mult
+                    orig_nutrition = ing.get("nutrition") if isinstance(ing.get("nutrition"), list) else []
+                    scaled_nutrition = []
+                    for n in orig_nutrition:
+                        if isinstance(n, dict) and "value" in n:
+                            scaled_nutrition.append({**n, "value": (n["value"] or 0) * mult})
+                        else:
+                            scaled_nutrition.append(n)
                     payload = {
                         "mealId": meal_id,
                         "name": ing.get("name"),
-                        "quantity": ing.get("quantity", 1),
+                        "quantity": new_qty,
                         "unit": ing.get("unit", "serving"),
                         "category": ing.get("category", ""),
-                        "nutrition": ing.get("nutrition") if isinstance(ing.get("nutrition"), list) else [],
+                        "nutrition": scaled_nutrition if scaled_nutrition else orig_nutrition,
                         "usdaCode": ing.get("usdaCode"),
                         "source": ing.get("source", "gpt"),
                         "parsingStrategy": "history",  # schema allows: template, brand_db, history, gpt, manual, cached
