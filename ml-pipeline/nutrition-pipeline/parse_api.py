@@ -629,7 +629,7 @@ def parse_meal(meal_id):
         meal = resp.json()
         text = meal.get("text", "").strip()
         image_field = meal.get("image")
-        user_id = meal.get("user")
+        user_id = _resolve_id(meal.get("user"))
         timestamp = meal.get("timestamp")
         
         if not text and not image_field:
@@ -715,8 +715,9 @@ def parse_meal(meal_id):
         delete_non_food_logs_for_meal(meal_id)
 
         # Save non-food entries to non_food_logs (so UI can remember "parsed as non-food" on refresh)
+        # Requires user_id — listRule hides records where user != request.auth.id
         for cat in categories:
-            if cat != "food":
+            if cat != "food" and user_id:
                 content = non_food_portions.get(cat, text)
                 non_food_payload = {
                     "mealId": meal_id,
@@ -738,6 +739,8 @@ def parse_meal(meal_id):
         # If NOT food, do not parse ingredients — return clear "not_food" result
         if not is_food:
             print("   ⏭️ Classified as non-food, skipping nutrition parsing")
+            if not user_id:
+                print("   ⚠️ No user_id for non_food_logs — records may not be visible to user")
             return jsonify({
                 "ingredients": [],
                 "count": 0,

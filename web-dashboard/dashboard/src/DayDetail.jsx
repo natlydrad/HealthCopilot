@@ -190,7 +190,7 @@ function MealCard({ meal, onMealUpdated }) {
       setClassificationResult(data.classificationResult || null);
       if (data.classificationResult === "not_food" || data.isFood === false) {
         setHasNonFoodLogs(true);
-        onMealUpdated?.(meal.id, { isFood: false });
+        onMealUpdated?.(meal.id, { isFood: false, categories: data.categories || [] });
       }
       if (ingredientsList.length === 0 && data.classificationResult !== "not_food") {
         let msg = result?.message || "No ingredients detected. Add a caption or try a clearer photo.";
