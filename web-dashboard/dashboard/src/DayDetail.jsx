@@ -69,6 +69,49 @@ function FrameworkProgress({ title, data, targets, units, labels }) {
   );
 }
 
+function formatContrib(obj) {
+  const parts = [];
+  for (const [k, v] of Object.entries(obj)) {
+    if (v > 0) parts.push(`${k} +${v.toFixed(1)}`);
+  }
+  return parts.length ? parts.join(", ") : "—";
+}
+
+function IngredientBreakdown({ byIngredient, unmatched }) {
+  const contributed = byIngredient.filter((i) => i.contributed);
+  return (
+    <div className="border-t border-slate-600 pt-3 space-y-3">
+      <div className="text-sm font-semibold text-slate-100">How each ingredient was categorized</div>
+      <div className="space-y-1.5 text-sm">
+        {contributed.map((item, idx) => (
+          <div key={idx} className="py-1 border-b border-slate-700/50 last:border-0">
+            <div className="flex items-baseline gap-2">
+              <span className="font-medium text-slate-100">{item.name}</span>
+              <span className="text-slate-400 text-xs">({item.quantity} {item.unit})</span>
+              <span className="text-emerald-400 text-xs">→ {item.matched}</span>
+            </div>
+            <div className="text-xs text-slate-500 mt-0.5 pl-1">
+              MyPlate: {formatContrib(item.myPlate)} · Dozen: {formatContrib(item.dailyDozen)} · Longevity: {formatContrib(item.longevity)}
+            </div>
+          </div>
+        ))}
+      </div>
+      {unmatched.length > 0 && (
+        <div>
+          <div className="text-sm font-semibold text-amber-300 mb-1">Did not contribute to any category</div>
+          <div className="text-sm text-slate-400">
+            {unmatched.map((item, idx) => (
+              <div key={idx}>
+                {item.name} ({item.quantity} {item.unit})
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Determine if an ingredient is low confidence (needs review)
 function isLowConfidence(ing) {
   const name = (ing.name || "").trim();
@@ -292,6 +335,9 @@ export default function DayDetail() {
                 <FrameworkProgress title="MyPlate (2000 cal)" data={totals.frameworks.myPlate} targets={MYPLATE_TARGETS} units={{ grains: "oz", vegetables: "c", fruits: "c", protein: "oz", dairy: "c" }} labels={{ grains: "🌾 Grains", vegetables: "🥬 Vegetables", fruits: "🍎 Fruits", protein: "🥩 Protein", dairy: "🥛 Dairy" }} />
                 <FrameworkProgress title="Dr. Gregor's Daily Dozen" data={totals.frameworks.dailyDozen} targets={DAILY_DOZEN_TARGETS} units={{}} labels={{ beans: "🫘 Beans", berries: "🫐 Berries", otherFruits: "🍎 Other Fruits", cruciferous: "🥦 Cruciferous", greens: "🥬 Greens", otherVeg: "🥕 Other Veg", flaxseed: "🌾 Flaxseed", nuts: "🥜 Nuts", spices: "🌿 Spices", wholeGrains: "🌾 Whole Grains" }} />
                 <FrameworkProgress title="Longevity (plant-forward)" data={totals.frameworks.longevity} targets={LONGEVITY_TARGETS} units={{}} labels={{ legumes: "🫘 Legumes", wholeGrains: "🌾 Whole Grains", vegetables: "🥬 Vegetables", fruits: "🍎 Fruits", nuts: "🥜 Nuts" }} />
+                {totals.frameworks.byIngredient?.length > 0 && (
+                  <IngredientBreakdown byIngredient={totals.frameworks.byIngredient} unmatched={totals.frameworks.unmatched || []} />
+                )}
               </div>
             )}
           </div>

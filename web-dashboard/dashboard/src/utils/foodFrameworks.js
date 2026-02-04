@@ -30,107 +30,131 @@ function toGrams(qty, unit) {
   return qty * (UNIT_TO_GRAMS[u] ?? 80);
 }
 
+/** Process one ingredient, return { mp, dd, lg, matched } — deltas and human-readable matched category */
+function processIngredient(ing) {
+  const mp = { grains: 0, vegetables: 0, fruits: 0, protein: 0, dairy: 0 };
+  const dd = { beans: 0, berries: 0, otherFruits: 0, cruciferous: 0, greens: 0, otherVeg: 0, flaxseed: 0, nuts: 0, spices: 0, wholeGrains: 0 };
+  const lg = { legumes: 0, wholeGrains: 0, vegetables: 0, fruits: 0, nuts: 0 };
+  let matched = null;
+
+  const cat = ing.category || 'food';
+  if (cat === 'supplement') return { mp, dd, lg, matched: 'supplement (skipped)' };
+
+  const name = (ing.name || '').toLowerCase();
+  const qty = ing.quantity || 1;
+  const unit = (ing.unit || '').toLowerCase();
+  const grams = toGrams(qty, unit);
+
+  const fg = ing.parsingMetadata?.foodGroupServings;
+  if (fg && typeof fg === 'object') {
+    mp.grains = Number(fg.grains) || 0; mp.vegetables = Number(fg.vegetables) || 0; mp.fruits = Number(fg.fruits) || 0; mp.protein = Number(fg.protein) || 0; mp.dairy = Number(fg.dairy) || 0;
+    dd.wholeGrains = Number(fg.grains) || 0; dd.greens = (Number(fg.vegetables) || 0) * 0.5; dd.otherVeg = (Number(fg.vegetables) || 0) * 0.5;
+    dd.berries = (Number(fg.fruits) || 0) * 0.3; dd.otherFruits = (Number(fg.fruits) || 0) * 0.7; dd.beans = Number(fg.protein) || 0;
+    lg.legumes = (Number(fg.protein) || 0) * 0.3; lg.wholeGrains = Number(fg.grains) || 0; lg.vegetables = Number(fg.vegetables) || 0; lg.fruits = Number(fg.fruits) || 0;
+    matched = 'GPT foodGroupServings';
+    return { mp, dd, lg, matched };
+  }
+
+  if (BEANS.some(b => name.includes(b))) {
+    if (unit === 'cup' || unit === 'cups') { dd.beans = qty * 2; lg.legumes = qty * 2; mp.protein = qty * 4; }
+    else if (unit === 'tbsp' || unit === 'tablespoon') { dd.beans = qty * 0.5; lg.legumes = 0.25; mp.protein = 0.5; }
+    else { dd.beans = grams / 120; lg.legumes = grams / 120; mp.protein = grams / 28; }
+    matched = 'Beans/legumes';
+  } else if (BERRIES.some(b => name.includes(b))) {
+    if (unit === 'cup' || unit === 'cups') { dd.berries = qty * 2; mp.fruits = qty; lg.fruits = qty; }
+    else { dd.berries = grams / 75; mp.fruits = grams / 150; lg.fruits = grams / 150; }
+    matched = 'Berries';
+  } else if (OTHER_FRUITS.some(f => name.includes(f))) {
+    if (unit === 'cup' || unit === 'cups') { dd.otherFruits = qty * 2; mp.fruits = qty; lg.fruits = qty; }
+    else if (unit === 'piece' || unit === 'pieces') { dd.otherFruits = qty; mp.fruits = qty * 0.5; lg.fruits = qty * 0.5; }
+    else { dd.otherFruits = grams / 120; mp.fruits = grams / 150; lg.fruits = grams / 150; }
+    matched = 'Other fruits';
+  } else if (CRUCIFEROUS.some(c => name.includes(c))) {
+    if (unit === 'cup' || unit === 'cups') { dd.cruciferous = qty * 2; mp.vegetables = qty; lg.vegetables = qty; }
+    else { dd.cruciferous = grams / 90; mp.vegetables = grams / 150; lg.vegetables = grams / 150; }
+    matched = 'Cruciferous';
+  } else if (GREENS.some(g => name.includes(g))) {
+    if (unit === 'cup' || unit === 'cups') { dd.greens = qty * 2; mp.vegetables = qty; lg.vegetables = qty; }
+    else { dd.greens = grams / 50; mp.vegetables = grams / 150; lg.vegetables = grams / 150; }
+    matched = 'Greens';
+  } else if (OTHER_VEG.some(v => name.includes(v))) {
+    if (unit === 'cup' || unit === 'cups') { dd.otherVeg = qty * 2; mp.vegetables = qty; lg.vegetables = qty; }
+    else if (unit === 'piece' || unit === 'pieces') { dd.otherVeg = qty; mp.vegetables = qty * 0.5; lg.vegetables = qty * 0.5; }
+    else { dd.otherVeg = grams / 90; mp.vegetables = grams / 150; lg.vegetables = grams / 150; }
+    matched = 'Other vegetables';
+  } else if (NUTS.some(n => name.includes(n))) {
+    if (unit === 'cup' || unit === 'cups') { dd.nuts = qty * 4; lg.nuts = qty * 4; }
+    else if (unit === 'tbsp' || unit === 'tablespoon') { dd.nuts = qty * 0.5; lg.nuts = qty * 0.5; }
+    else { dd.nuts = grams / 35; lg.nuts = grams / 28; }
+    matched = 'Nuts';
+  } else if (name.includes('flax') || name.includes('chia')) {
+    if (unit === 'tbsp' || unit === 'tablespoon') dd.flaxseed = qty;
+    else dd.flaxseed = grams / 10;
+    matched = 'Flaxseed/chia';
+  } else if (name.includes('turmeric') || name.includes('cumin') || name.includes('cinnamon') || name.includes('spice')) {
+    dd.spices = 0.5;
+    matched = 'Spices';
+  } else if (GRAINS_ALL.some(g => name.includes(g))) {
+    const isWhole = WHOLE_GRAINS.some(g => name.includes(g));
+    if (unit === 'slice' || unit === 'slices') { mp.grains = qty; if (isWhole) { dd.wholeGrains = qty; lg.wholeGrains = qty; } }
+    else if (unit === 'piece' || unit === 'pieces') { mp.grains = qty; if (isWhole) { dd.wholeGrains = qty; lg.wholeGrains = qty; } }
+    else if (unit === 'cup' || unit === 'cups') { mp.grains = qty * 2; if (isWhole) { dd.wholeGrains = qty * 2; lg.wholeGrains = qty * 2; } }
+    else { const ozEq = grams / 28; mp.grains = ozEq; if (isWhole) { dd.wholeGrains = ozEq; lg.wholeGrains = ozEq; } }
+    matched = isWhole ? 'Whole grains' : 'Grains';
+  } else if (PROTEIN.some(p => name.includes(p)) && !BEANS.some(b => name.includes(b))) {
+    if (unit === 'oz') mp.protein = qty;
+    else if (unit === 'egg' || unit === 'eggs') mp.protein = qty;
+    else if (unit === 'cup' || unit === 'cups') mp.protein = qty * 4;
+    else mp.protein = grams / 28;
+    matched = 'Protein (animal)';
+  } else if (DAIRY.some(d => name.includes(d))) {
+    if (unit === 'cup' || unit === 'cups') mp.dairy = qty;
+    else if (unit === 'oz') mp.dairy = qty / 8;
+    else mp.dairy = grams / 240;
+    matched = 'Dairy';
+  }
+
+  return { mp, dd, lg, matched };
+}
+
+function sumObjs(acc, delta) {
+  for (const k of Object.keys(delta)) {
+    if (typeof delta[k] === 'number') acc[k] = (acc[k] || 0) + delta[k];
+  }
+}
+
 /**
- * Compute servings for MyPlate (USDA), Daily Dozen (Dr. Gregor), and Longevity frameworks.
- * @param {Array} ingredients - { name, quantity, unit, category, parsingMetadata }
- * @returns {Object} { myPlate, dailyDozen, longevity }
+ * Compute servings for MyPlate, Daily Dozen, Longevity + per-ingredient attribution.
+ * @returns {Object} { myPlate, dailyDozen, longevity, byIngredient, unmatched }
  */
 export function computeServingsByFramework(ingredients) {
   const myPlate = { grains: 0, vegetables: 0, fruits: 0, protein: 0, dairy: 0 };
   const dailyDozen = { beans: 0, berries: 0, otherFruits: 0, cruciferous: 0, greens: 0, otherVeg: 0, flaxseed: 0, nuts: 0, spices: 0, wholeGrains: 0 };
-  const longevity = { legumes: 0, wholeGrains: 0, vegetables: 0, fruits: 0, nuts: 0 }; // simplified
+  const longevity = { legumes: 0, wholeGrains: 0, vegetables: 0, fruits: 0, nuts: 0 };
+  const byIngredient = [];
+  const unmatched = [];
 
   for (const ing of ingredients) {
-    const cat = ing.category || 'food';
-    if (cat === 'supplement') continue;
+    const { mp, dd, lg, matched } = processIngredient(ing);
+    sumObjs(myPlate, mp); sumObjs(dailyDozen, dd); sumObjs(longevity, lg);
 
-    const name = (ing.name || '').toLowerCase();
-    const qty = ing.quantity || 1;
-    const unit = (ing.unit || '').toLowerCase();
-    const grams = toGrams(qty, unit);
-
-    // Prefer parsingMetadata foodGroupServings when available (GPT-estimated)
-    const fg = ing.parsingMetadata?.foodGroupServings;
-    if (fg && typeof fg === 'object' && cat !== 'supplement') {
-      myPlate.grains += Number(fg.grains) || 0;
-      myPlate.vegetables += Number(fg.vegetables) || 0;
-      myPlate.fruits += Number(fg.fruits) || 0;
-      myPlate.protein += Number(fg.protein) || 0;
-      myPlate.dairy += Number(fg.dairy) || 0;
-      // Map to Daily Dozen loosely: grains→wholeGrains, veg→greens+otherVeg, fruits→berries+otherFruits
-      dailyDozen.wholeGrains += Number(fg.grains) || 0;
-      dailyDozen.greens += (Number(fg.vegetables) || 0) * 0.5;
-      dailyDozen.otherVeg += (Number(fg.vegetables) || 0) * 0.5;
-      dailyDozen.berries += (Number(fg.fruits) || 0) * 0.3;
-      dailyDozen.otherFruits += (Number(fg.fruits) || 0) * 0.7;
-      dailyDozen.beans += Number(fg.protein) || 0; // rough: some protein is legumes
-      longevity.legumes += (Number(fg.protein) || 0) * 0.3;
-      longevity.wholeGrains += Number(fg.grains) || 0;
-      longevity.vegetables += Number(fg.vegetables) || 0;
-      longevity.fruits += Number(fg.fruits) || 0;
-      continue;
-    }
-
-    // Keyword-based mapping
-    if (BEANS.some(b => name.includes(b))) {
-      if (unit === 'cup' || unit === 'cups') { dailyDozen.beans += qty * 2; longevity.legumes += qty * 2; myPlate.protein += qty * 4; }
-      else if (unit === 'tbsp' || unit === 'tablespoon') { dailyDozen.beans += qty * 0.5; longevity.legumes += 0.25; myPlate.protein += 0.5; }
-      else { dailyDozen.beans += grams / 120; longevity.legumes += grams / 120; myPlate.protein += grams / 28; }
-    } else if (BERRIES.some(b => name.includes(b))) {
-      if (unit === 'cup' || unit === 'cups') { dailyDozen.berries += qty * 2; myPlate.fruits += qty; longevity.fruits += qty; }
-      else { dailyDozen.berries += grams / 75; myPlate.fruits += grams / 150; longevity.fruits += grams / 150; }
-    } else if (OTHER_FRUITS.some(f => name.includes(f))) {
-      if (unit === 'cup' || unit === 'cups') { dailyDozen.otherFruits += qty * 2; myPlate.fruits += qty; longevity.fruits += qty; }
-      else if (unit === 'piece' || unit === 'pieces') { dailyDozen.otherFruits += qty; myPlate.fruits += qty * 0.5; longevity.fruits += qty * 0.5; }
-      else { dailyDozen.otherFruits += grams / 120; myPlate.fruits += grams / 150; longevity.fruits += grams / 150; }
-    } else if (CRUCIFEROUS.some(c => name.includes(c))) {
-      if (unit === 'cup' || unit === 'cups') { dailyDozen.cruciferous += qty * 2; myPlate.vegetables += qty; longevity.vegetables += qty; }
-      else { dailyDozen.cruciferous += grams / 90; myPlate.vegetables += grams / 150; longevity.vegetables += grams / 150; }
-    } else if (GREENS.some(g => name.includes(g))) {
-      if (unit === 'cup' || unit === 'cups') { dailyDozen.greens += qty * 2; myPlate.vegetables += qty; longevity.vegetables += qty; }
-      else { dailyDozen.greens += grams / 50; myPlate.vegetables += grams / 150; longevity.vegetables += grams / 150; }
-    } else if (OTHER_VEG.some(v => name.includes(v))) {
-      if (unit === 'cup' || unit === 'cups') { dailyDozen.otherVeg += qty * 2; myPlate.vegetables += qty; longevity.vegetables += qty; }
-      else if (unit === 'piece' || unit === 'pieces') { dailyDozen.otherVeg += qty; myPlate.vegetables += qty * 0.5; longevity.vegetables += qty * 0.5; }
-      else { dailyDozen.otherVeg += grams / 90; myPlate.vegetables += grams / 150; longevity.vegetables += grams / 150; }
-    } else if (NUTS.some(n => name.includes(n))) {
-      if (unit === 'cup' || unit === 'cups') { dailyDozen.nuts += qty * 4; longevity.nuts += qty * 4; }
-      else if (unit === 'tbsp' || unit === 'tablespoon') { dailyDozen.nuts += qty * 0.5; longevity.nuts += qty * 0.5; }
-      else { dailyDozen.nuts += grams / 35; longevity.nuts += grams / 28; }
-    } else if (name.includes('flax') || name.includes('chia')) {
-      if (unit === 'tbsp' || unit === 'tablespoon') dailyDozen.flaxseed += qty;
-      else dailyDozen.flaxseed += grams / 10;
-    } else if (name.includes('turmeric') || name.includes('cumin') || name.includes('cinnamon') || name.includes('spice')) {
-      dailyDozen.spices += 0.5; // rough
-    } else if (GRAINS_ALL.some(g => name.includes(g))) {
-      const isWhole = WHOLE_GRAINS.some(g => name.includes(g));
-      if (unit === 'slice' || unit === 'slices') {
-        myPlate.grains += qty;
-        if (isWhole) { dailyDozen.wholeGrains += qty; longevity.wholeGrains += qty; }
-      } else if (unit === 'piece' || unit === 'pieces') {
-        myPlate.grains += qty;
-        if (isWhole) { dailyDozen.wholeGrains += qty; longevity.wholeGrains += qty; }
-      } else if (unit === 'cup' || unit === 'cups') {
-        myPlate.grains += qty * 2;
-        if (isWhole) { dailyDozen.wholeGrains += qty * 2; longevity.wholeGrains += qty * 2; }
-      } else {
-        const ozEq = grams / 28;
-        myPlate.grains += ozEq;
-        if (isWhole) { dailyDozen.wholeGrains += ozEq; longevity.wholeGrains += ozEq; }
-      }
-    } else if (PROTEIN.some(p => name.includes(p)) && !BEANS.some(b => name.includes(b))) {
-      if (unit === 'oz') { myPlate.protein += qty; }
-      else if (unit === 'egg' || unit === 'eggs') { myPlate.protein += qty; }
-      else if (unit === 'cup' || unit === 'cups') { myPlate.protein += qty * 4; }
-      else { myPlate.protein += grams / 28; }
-    } else if (DAIRY.some(d => name.includes(d))) {
-      if (unit === 'cup' || unit === 'cups') myPlate.dairy += qty;
-      else if (unit === 'oz') myPlate.dairy += qty / 8;
-      else myPlate.dairy += grams / 240;
+    const contributed = Object.values(mp).some(v => v > 0) || Object.values(dd).some(v => v > 0) || Object.values(lg).some(v => v > 0);
+    byIngredient.push({
+      name: ing.name || '?',
+      quantity: ing.quantity ?? 1,
+      unit: ing.unit || 'serving',
+      myPlate: mp,
+      dailyDozen: dd,
+      longevity: lg,
+      matched,
+      contributed,
+    });
+    if (!contributed && matched !== 'supplement (skipped)') {
+      unmatched.push({ name: ing.name || '?', quantity: ing.quantity ?? 1, unit: ing.unit || 'serving' });
     }
   }
 
-  return { myPlate, dailyDozen, longevity };
+  return { myPlate, dailyDozen, longevity, byIngredient, unmatched };
 }
 
 /** MyPlate daily targets (2000 cal) - grains in oz-eq, veg/fruit in cups, protein in oz, dairy in cups */
