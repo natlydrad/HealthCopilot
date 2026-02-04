@@ -13,15 +13,15 @@ const UNIT_TO_GRAMS = {
 };
 
 // Keyword lists for classification
-const BEANS = ['bean', 'beans', 'lentil', 'lentils', 'chickpea', 'chickpeas', 'hummus', 'edamame', 'tofu', 'tempeh', 'split pea', 'black bean', 'pinto', 'kidney', 'garbanzo'];
+const BEANS = ['bean', 'beans', 'lentil', 'lentils', 'chickpea', 'chickpeas', 'hummus', 'edamame', 'tofu', 'tempeh', 'soy', 'split pea', 'black bean', 'pinto', 'kidney', 'garbanzo'];
 const BERRIES = ['berry', 'berries', 'strawberry', 'strawberries', 'blueberry', 'blueberries', 'raspberry', 'raspberries', 'blackberry', 'blackberries', 'cherry', 'cherries', 'cranberry', 'cranberries'];
 const OTHER_FRUITS = ['apple', 'apples', 'banana', 'bananas', 'orange', 'oranges', 'grape', 'grapes', 'mango', 'mangoes', 'pineapple', 'pineapples', 'kiwi', 'kiwis', 'peach', 'peaches', 'pear', 'pears', 'plum', 'plums', 'melon', 'melons', 'watermelon', 'watermelons', 'cantaloupe', 'avocado', 'avocados', 'grapefruit'];
 const CRUCIFEROUS = ['broccoli', 'brussels', 'cabbage', 'cauliflower', 'kale', 'bok choy', 'arugula', 'collard', 'mustard green', 'turnip', 'radish', 'watercress'];
 const GREENS = ['lettuce', 'spinach', 'kale', 'arugula', 'chard', 'collard', 'mustard', 'turnip green', 'watercress', 'dandelion', 'endive', 'mesclun'];
 const OTHER_VEG = ['carrot', 'carrots', 'tomato', 'tomatoes', 'cucumber', 'pepper', 'peppers', 'onion', 'garlic', 'celery', 'mushroom', 'zucchini', 'squash', 'eggplant', 'asparagus', 'green bean', 'beet', 'corn', 'pea', 'salsa', 'vegetable'];
 const NUTS = ['nut', 'nuts', 'almond', 'almonds', 'walnut', 'walnuts', 'cashew', 'cashews', 'peanut', 'peanuts', 'pecan', 'pecans', 'pistachio', 'nut butter', 'almond butter', 'peanut butter'];
-const WHOLE_GRAINS = ['oat', 'oats', 'oatmeal', 'quinoa', 'brown rice', 'barley', 'millet', 'bulgur', 'whole wheat', 'whole grain', 'focaccia', 'bread', 'toast', 'bagel', 'pita', 'tortilla', 'rice', 'pasta', 'noodle', 'cereal', 'cracker', 'muffin', 'pizza', 'crust'];
-const GRAINS_ALL = [...WHOLE_GRAINS, 'flour', 'wheat', 'rye', 'couscous', 'wrap', 'bun', 'roll'];
+const WHOLE_GRAINS = ['oat', 'oats', 'oatmeal', 'quinoa', 'brown rice', 'barley', 'millet', 'bulgur', 'whole wheat', 'whole grain'];
+const GRAINS_ALL = [...WHOLE_GRAINS, 'flour', 'wheat', 'rye', 'couscous', 'wrap', 'bun', 'roll', 'focaccia', 'bread', 'toast', 'bagel', 'pita', 'tortilla', 'rice', 'pasta', 'noodle', 'cereal', 'cracker', 'muffin', 'pizza', 'crust'];
 const PROTEIN = ['chicken', 'beef', 'pork', 'turkey', 'lamb', 'fish', 'salmon', 'tuna', 'sardine', 'shrimp', 'crab', 'lobster', 'egg', 'meat', 'sausage', 'bacon', 'ham', 'burger', 'patty', 'wing', 'breast', 'thigh', 'steak', 'rib'];
 const DAIRY = ['milk', 'cheese', 'yogurt', 'butter', 'cream', 'cottage cheese', 'greek yogurt', 'kefir'];
 
@@ -64,10 +64,50 @@ function processIngredient(ing) {
 
   const fg = ing.parsingMetadata?.foodGroupServings;
   if (fg && typeof fg === 'object') {
-    mp.grains = Number(fg.grains) || 0; mp.vegetables = Number(fg.vegetables) || 0; mp.fruits = Number(fg.fruits) || 0; mp.protein = Number(fg.protein) || 0; mp.dairy = Number(fg.dairy) || 0;
-    dd.wholeGrains = Number(fg.grains) || 0; dd.greens = (Number(fg.vegetables) || 0) * 0.5; dd.otherVeg = (Number(fg.vegetables) || 0) * 0.5;
-    dd.berries = (Number(fg.fruits) || 0) * 0.3; dd.otherFruits = (Number(fg.fruits) || 0) * 0.7; dd.beans = Number(fg.protein) || 0;
-    lg.legumes = (Number(fg.protein) || 0) * 0.3; lg.wholeGrains = Number(fg.grains) || 0; lg.vegetables = Number(fg.vegetables) || 0; lg.fruits = Number(fg.fruits) || 0;
+    const g = Number(fg.grains) || 0;
+    const v = Number(fg.vegetables) || 0;
+    const f = Number(fg.fruits) || 0;
+    const p = Number(fg.protein) || 0;
+    const d = Number(fg.dairy) || 0;
+    const isLegumeSource = BEANS.some(x => name.includes(x));
+    const isPlantMilk = isLegumeSource || /\b(almond|oat|coconut|cashew|rice)\s*milk\b/.test(name);
+    mp.grains = g; mp.vegetables = v; mp.fruits = f;
+    mp.protein = p + (isPlantMilk && d > 0 ? d * 4 : 0);
+    mp.dairy = isPlantMilk ? 0 : d;
+
+    const isWholeGrain = WHOLE_GRAINS.some(x => name.includes(x));
+    dd.wholeGrains = isWholeGrain ? g : 0;
+    lg.wholeGrains = isWholeGrain ? g : 0;
+
+    if (CRUCIFEROUS.some(x => name.includes(x))) {
+      dd.cruciferous = v; dd.greens = 0; dd.otherVeg = 0;
+    } else if (GREENS.some(x => name.includes(x))) {
+      dd.cruciferous = 0; dd.greens = v; dd.otherVeg = 0;
+    } else if (OTHER_VEG.some(x => name.includes(x))) {
+      dd.cruciferous = 0; dd.greens = 0; dd.otherVeg = v;
+    } else {
+      dd.cruciferous = v * 0.25; dd.greens = v * 0.5; dd.otherVeg = v * 0.25;
+    }
+    lg.vegetables = v;
+
+    if (BERRIES.some(x => name.includes(x))) {
+      dd.berries = f; dd.otherFruits = 0;
+    } else if (OTHER_FRUITS.some(x => name.includes(x))) {
+      dd.berries = 0; dd.otherFruits = f;
+    } else {
+      dd.berries = f * 0.3; dd.otherFruits = f * 0.7;
+    }
+    lg.fruits = f;
+
+    if (BEANS.some(x => name.includes(x))) {
+      const beanP = p + (isLegumeSource && d > 0 ? d : 0);
+      dd.beans = beanP; lg.legumes = beanP;
+    } else if (PROTEIN.some(x => name.includes(x))) {
+      dd.beans = 0; lg.legumes = 0;
+    } else {
+      dd.beans = p * 0.3; lg.legumes = p * 0.3;
+    }
+
     matched = matchedFromKeywords(name) ?? 'GPT foodGroupServings';
     return { mp, dd, lg, matched };
   }
