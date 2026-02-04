@@ -53,6 +53,9 @@ web-dashboard/.next/
 web-dashboard/.vercel/
 web-dashboard/dist/
 
+# BrowserTools MCP (third-party clone for Chrome extension)
+browser-tools-mcp/
+
 # ───────────────
 # Misc
 # ───────────────

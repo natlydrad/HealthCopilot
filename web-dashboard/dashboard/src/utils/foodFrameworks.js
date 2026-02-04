@@ -18,7 +18,7 @@ const BERRIES = ['berry', 'berries', 'strawberry', 'strawberries', 'blueberry', 
 const OTHER_FRUITS = ['apple', 'apples', 'banana', 'bananas', 'orange', 'oranges', 'grape', 'grapes', 'mango', 'mangoes', 'pineapple', 'pineapples', 'kiwi', 'kiwis', 'peach', 'peaches', 'pear', 'pears', 'plum', 'plums', 'melon', 'melons', 'watermelon', 'watermelons', 'cantaloupe', 'avocado', 'avocados', 'grapefruit'];
 const CRUCIFEROUS = ['broccoli', 'brussels', 'cabbage', 'cauliflower', 'kale', 'bok choy', 'arugula', 'collard', 'mustard green', 'turnip', 'radish', 'watercress'];
 const GREENS = ['lettuce', 'spinach', 'kale', 'arugula', 'chard', 'collard', 'mustard', 'turnip green', 'watercress', 'dandelion', 'endive', 'mesclun'];
-const OTHER_VEG = ['carrot', 'carrots', 'tomato', 'tomatoes', 'cucumber', 'pepper', 'peppers', 'onion', 'garlic', 'celery', 'mushroom', 'zucchini', 'squash', 'eggplant', 'asparagus', 'green bean', 'beet', 'corn', 'pea', 'salsa', 'vegetable'];
+const OTHER_VEG = ['carrot', 'carrots', 'tomato', 'tomatoes', 'marinara', 'pasta sauce', 'tomato sauce', 'cucumber', 'pepper', 'peppers', 'onion', 'garlic', 'celery', 'mushroom', 'zucchini', 'squash', 'eggplant', 'asparagus', 'green bean', 'beet', 'corn', 'pea', 'salsa', 'vegetable'];
 const NUTS = ['nut', 'nuts', 'almond', 'almonds', 'walnut', 'walnuts', 'cashew', 'cashews', 'peanut', 'peanuts', 'pecan', 'pecans', 'pistachio', 'nut butter', 'almond butter', 'peanut butter'];
 const WHOLE_GRAINS = ['oat', 'oats', 'oatmeal', 'quinoa', 'brown rice', 'barley', 'millet', 'bulgur', 'whole wheat', 'whole grain'];
 const GRAINS_ALL = [...WHOLE_GRAINS, 'flour', 'wheat', 'rye', 'couscous', 'wrap', 'bun', 'roll', 'focaccia', 'bread', 'toast', 'bagel', 'pita', 'tortilla', 'rice', 'pasta', 'noodle', 'cereal', 'cracker', 'muffin', 'pizza', 'crust'];
@@ -71,13 +71,22 @@ function processIngredient(ing) {
     const d = Number(fg.dairy) || 0;
     const isLegumeSource = BEANS.some(x => name.includes(x));
     const isPlantMilk = isLegumeSource || /\b(almond|oat|coconut|cashew|rice)\s*milk\b/.test(name);
-    mp.grains = g; mp.vegetables = v; mp.fruits = f;
-    mp.protein = p + (isPlantMilk && d > 0 ? d * 4 : 0);
+    const isBrothStock = /\b(broth|stock)\b/.test(name);
+    mp.vegetables = v; mp.fruits = f;
+    const baseProtein = isBrothStock ? 0 : (p + (isPlantMilk && d > 0 ? d : 0));
     mp.dairy = isPlantMilk ? 0 : d;
 
     const isWholeGrain = WHOLE_GRAINS.some(x => name.includes(x));
-    dd.wholeGrains = isWholeGrain ? g : 0;
-    lg.wholeGrains = isWholeGrain ? g : 0;
+    const isGrainProduct = GRAINS_ALL.some(x => name.includes(x));
+    let grainServings = g;
+    if (isGrainProduct) {
+      const est = unit === 'piece' || unit === 'pieces' ? qty : unit === 'slice' || unit === 'slices' ? qty : unit === 'cup' || unit === 'cups' ? qty * 2 : grams / 28;
+      grainServings = Math.max(g, est);
+    }
+    mp.grains = grainServings;
+    mp.protein = (isGrainProduct && !PROTEIN.some(x => name.includes(x)) && !BEANS.some(x => name.includes(x))) ? 0 : baseProtein;
+    dd.wholeGrains = isWholeGrain ? grainServings : 0;
+    lg.wholeGrains = isWholeGrain ? grainServings : 0;
 
     if (CRUCIFEROUS.some(x => name.includes(x))) {
       dd.cruciferous = v; dd.greens = 0; dd.otherVeg = 0;
@@ -102,7 +111,9 @@ function processIngredient(ing) {
     if (BEANS.some(x => name.includes(x))) {
       const beanP = p + (isLegumeSource && d > 0 ? d : 0);
       dd.beans = beanP; lg.legumes = beanP;
-    } else if (PROTEIN.some(x => name.includes(x))) {
+    } else if (PROTEIN.some(x => name.includes(x)) || isGrainProduct) {
+      dd.beans = 0; lg.legumes = 0;
+    } else if (isBrothStock) {
       dd.beans = 0; lg.legumes = 0;
     } else {
       dd.beans = p * 0.3; lg.legumes = p * 0.3;

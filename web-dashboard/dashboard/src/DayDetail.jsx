@@ -3,6 +3,16 @@ import { useParams, useNavigate } from "react-router-dom";
 import { fetchMealsForDateRange, fetchIngredients, fetchHasNonFoodLogs, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getLearningStats, removeLearnedPattern, parseAndSaveMeal, clearMealIngredients, clearNonFoodClassification, sendCorrectionMessage, previewCorrection, saveCorrection, reparseIngredientFromText, getParseApiUrl, deleteIngredient, addIngredients, updateIngredientPortion } from "./api";
 import { computeServingsByFramework, MYPLATE_TARGETS, DAILY_DOZEN_TARGETS, LONGEVITY_TARGETS, MATCHED_TO_EMOJI } from "./utils/foodFrameworks";
 
+/** Normalize nutrition from ingredient - handles string, object, scaled_nutrition fallback */
+function getNutritionArray(ing) {
+  let raw = ing?.nutrition ?? ing?.scaled_nutrition;
+  if (typeof raw === "string") {
+    try { raw = JSON.parse(raw); } catch { return []; }
+  }
+  if (Array.isArray(raw) && raw.length > 0) return raw;
+  return [];
+}
+
 // Format nutrition array for display (cal, protein, carbs, fat)
 function formatNutritionSummary(nutrition) {
   if (!Array.isArray(nutrition) || nutrition.length === 0) return "";
@@ -136,7 +146,7 @@ function isLowConfidence(ing) {
   // No USDA match = GPT guessed it
   if (!ing.usdaCode) return true;
   // Source is explicitly GPT without USDA validation
-  if (ing.source === "gpt" && !ing.nutrition?.length) return true;
+  if (ing.source === "gpt" && getNutritionArray(ing).length === 0) return true;
   return false;
 }
 
@@ -221,11 +231,8 @@ export default function DayDetail() {
             addFromKeywords(ing, name, qty, unit);
           }
 
-          let nutritionData = ing.nutrition;
-          if (typeof nutritionData === "string") {
-            try { nutritionData = JSON.parse(nutritionData); } catch { nutritionData = null; }
-          }
-          if (!Array.isArray(nutritionData)) continue;
+          const nutritionData = getNutritionArray(ing);
+          if (nutritionData.length === 0) continue;
           for (const n of nutritionData) {
             const name = (n.nutrientName || "").toLowerCase();
             const value = parseFloat(n.value) || 0;
@@ -781,11 +788,13 @@ function MealCard({ meal, onMealUpdated, onTotalsRefresh, frameworkAttribution }
           </div>
           <ul className="text-sm text-gray-700 space-y-1">
           {ingredients.map((ing) => {
-            const nutrients = Array.isArray(ing.nutrition) ? ing.nutrition : [];
-            const energy = nutrients.find((n) => n.nutrientName === "Energy");
-            const protein = nutrients.find((n) => n.nutrientName === "Protein");
-            const carbs = nutrients.find((n) => n.nutrientName.includes("Carbohydrate"));
-            const fat = nutrients.find((n) => n.nutrientName.includes("Total lipid"));
+            const nutrients = getNutritionArray(ing);
+            // Prefer Energy in KCAL (USDA has both KCAL and kJ); fallback to first Energy
+            const energy = nutrients.find((n) => (n.nutrientName === "Energy" || (n.nutrientName || "").toLowerCase() === "energy") && (n.unitName || "").toUpperCase() === "KCAL")
+              ?? nutrients.find((n) => (n.nutrientName || "").toLowerCase().includes("energy"));
+            const protein = nutrients.find((n) => (n.nutrientName || "").toLowerCase().includes("protein"));
+            const carbs = nutrients.find((n) => (n.nutrientName || "").toLowerCase().includes("carbohydrate"));
+            const fat = nutrients.find((n) => (n.nutrientName || "").toLowerCase().includes("lipid") || (n.nutrientName || "").toLowerCase().includes("fat"));
             const lowConf = isLowConfidence(ing);
 
             // Source label helper
@@ -1128,7 +1137,7 @@ What would you like to change? You can tell me naturally, like "that's actually 
             conversation: updatedConversation,
           });
           const toShow = previewResult.addedIngredient || previewResult.ingredient;
-          const nutText = toShow ? formatNutritionSummary(toShow.nutrition) : "";
+          const nutText = toShow ? formatNutritionSummary(getNutritionArray(toShow)) : "";
           const opts = previewResult.usdaOptions || [];
           const hasExact = previewResult.hasExactUsdaMatch;
           let previewMsg;
