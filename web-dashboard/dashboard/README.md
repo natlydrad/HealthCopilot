@@ -1,6 +1,16 @@
-# React + Vite
+# HealthCopilot Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + Vite dashboard for the HealthCopilot nutrition tracking app.
+
+## Environment Variables
+
+For **production** builds, set the following at build time:
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `VITE_PARSE_API_URL` | Production URL of the Parse API (e.g. `https://parse-api-xyz.onrender.com`). Used for fetching ingredients with full nutrition data. If unset, the build defaults to `http://localhost:5001`, which fails in production and forces a fallback to direct PocketBase. | Yes, if Parse API is deployed |
+
+**Development**: When running `npm run dev`, the Vite proxy forwards `/parse-api` to `localhost:5001`, so you do not need to set `VITE_PARSE_API_URL` locally.
 
 Currently, two official plugins are available:
 

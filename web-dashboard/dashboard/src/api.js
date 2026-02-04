@@ -82,12 +82,32 @@ export async function fetchMealsForDateRange(startDate, endDate) {
 
 
 export async function fetchIngredients(mealId) {
-  // PocketBase filter for a relation field must use this format:
-  // filter=(mealId='jmlpwbqrpq4etn8')
+  // Prefer Parse API: fetches with admin token, includes full nutrition (bypasses PocketBase rules)
+  const useProxy = import.meta.env.DEV && !import.meta.env.VITE_PARSE_API_URL;
+  const parseUrl = useProxy ? `/parse-api/ingredients/${mealId}` : `${PARSE_API_URL}/ingredients/${mealId}`;
+  if (authToken) {
+    try {
+      const res = await fetch(parseUrl, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const items = data.items || [];
+        console.log("📦 fetchIngredients (Parse API) got", items.length, "ingredients");
+        if (items.length > 0) {
+          const first = items[0];
+          console.log("📊 [diagnostic] first ingredient keys:", Object.keys(first), "nutrition:", first?.nutrition ? (Array.isArray(first.nutrition) ? `array[${first.nutrition.length}]` : typeof first.nutrition) : "missing");
+        }
+        return items;
+      }
+    } catch (e) {
+      console.warn("Parse API ingredients fetch failed, falling back to PocketBase:", e.message);
+    }
+  }
+
+  // Fallback: direct PocketBase
   const filter = encodeURIComponent(`(mealId='${mealId}')`);
-
   const url = `${PB_BASE}/api/collections/ingredients/records?filter=${filter}`;
-
   console.log("🛰 Fetching:", url);
   const res = await fetch(url, {
     headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
@@ -99,8 +119,13 @@ export async function fetchIngredients(mealId) {
   }
 
   const data = await res.json();
-  console.log("📦 fetchIngredients got", data.items.length, "ingredients");
-  return data.items;
+  const items = data.items || [];
+  console.log("📦 fetchIngredients (PocketBase) got", items.length, "ingredients");
+  if (items.length > 0) {
+    const first = items[0];
+    console.log("📊 [diagnostic] first ingredient keys:", Object.keys(first), "nutrition:", first?.nutrition ? (Array.isArray(first.nutrition) ? `array[${first.nutrition.length}]` : typeof first.nutrition) : "missing");
+  }
+  return items;
 }
 
 // Fetch all ingredients at once (more efficient than per-meal)
