@@ -172,6 +172,7 @@ function MealCard({ meal, onMealUpdated }) {
   const [classificationResult, setClassificationResult] = useState(null); // "not_food" when classified as non-food
   const [emptyParseMessage, setEmptyParseMessage] = useState(null); // when parse returns 0 ingredients (so user isn't stuck in a loop)
   const [emptyParseReason, setEmptyParseReason] = useState(null);   // API reason/debug (e.g. "from text: 0, from image: 0")
+  const [parseSuccessMessage, setParseSuccessMessage] = useState(null); // "Added: X, Y, Z" after successful parse
   const handleParse = async () => {
     if (!meal.text?.trim() && !meal.image) {
       setParseError("Add a caption or photo first.");
@@ -182,6 +183,7 @@ function MealCard({ meal, onMealUpdated }) {
     setClassificationResult(null);
     setEmptyParseMessage(null);
     setEmptyParseReason(null);
+    setParseSuccessMessage(null);
     try {
       const result = await parseAndSaveMeal(meal);
       const data = result?.ingredients !== undefined ? result : { ingredients: result, classificationResult: null };
@@ -199,6 +201,10 @@ function MealCard({ meal, onMealUpdated }) {
         }
         setEmptyParseMessage(msg);
         setEmptyParseReason(result?.reason || null);
+      } else if (ingredientsList.length > 0) {
+        const names = ingredientsList.map((i) => i.name || "?").join(", ");
+        setParseSuccessMessage(`Added: ${names}`);
+        setTimeout(() => setParseSuccessMessage(null), 5000);
       }
     } catch (err) {
       const message = err?.message || String(err);
@@ -215,6 +221,7 @@ function MealCard({ meal, onMealUpdated }) {
     setClearing(true);
     setEmptyParseMessage(null);
     setEmptyParseReason(null);
+    setParseSuccessMessage(null);
     try {
       await clearMealIngredients(meal.id);
       setIngredients([]);
@@ -430,6 +437,14 @@ function MealCard({ meal, onMealUpdated }) {
       {parsing && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
           <p className="text-blue-700 text-sm">🧠 Parsing...</p>
+        </div>
+      )}
+
+      {/* Parse success confirmation */}
+      {parseSuccessMessage && !parsing && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center justify-between gap-2">
+          <p className="text-green-800 text-sm">✓ {parseSuccessMessage}</p>
+          <button type="button" onClick={() => setParseSuccessMessage(null)} className="text-green-600 hover:text-green-800 shrink-0">✕</button>
         </div>
       )}
 
