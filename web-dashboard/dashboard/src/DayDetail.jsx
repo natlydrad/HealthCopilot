@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { fetchMealsForDateRange, fetchIngredients, fetchHasNonFoodLogs, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getLearningStats, removeLearnedPattern, parseAndSaveMeal, clearMealIngredients, clearNonFoodClassification, sendCorrectionMessage, previewCorrection, saveCorrection, reparseIngredientFromText, getParseApiUrl, deleteIngredient, addIngredients, updateIngredientPortion } from "./api";
+import { computeServingsByFramework, MYPLATE_TARGETS, DAILY_DOZEN_TARGETS, LONGEVITY_TARGETS } from "./utils/foodFrameworks";
 
 // Format nutrition array for display (cal, protein, carbs, fat)
 function formatNutritionSummary(nutrition) {
@@ -26,6 +27,48 @@ function formatNutritionSummary(nutrition) {
 // Vague names that should always be treated as low-confidence
 const VAGUE_NAME_PATTERNS = /pizza toppings|salad stuff|sandwich fillings|leftover food|toppings\b|leftover(s)?\b|generic salad|stuff\b|fillings\b/i;
 
+function FrameworkProgress({ title, data, targets, units, labels }) {
+  const entries = Object.keys(targets).filter((k) => targets[k] > 0);
+  if (entries.length === 0) return null;
+  return (
+    <div className="bg-slate-800 rounded-lg p-3">
+      <div className="text-sm font-semibold text-slate-100 mb-3">{title}</div>
+      <div className="space-y-3">
+        {entries.map((key) => {
+          const val = data[key] ?? 0;
+          const target = Math.max(1, Math.round(targets[key]));
+          const numCircles = Math.min(target, 8);
+          const unitStr = units && units[key] ? units[key] : "sv";
+          const label = labels && labels[key] ? labels[key] : key;
+          return (
+            <div key={key} className="flex items-center gap-2">
+              <span className="text-sm text-slate-100 w-32 shrink-0">{label}</span>
+              <div className="flex gap-1 items-center">
+                {Array.from({ length: numCircles }, (_, i) => {
+                  const fill = i < Math.floor(val) ? 1 : i < val ? val - Math.floor(val) : 0;
+                  return (
+                    <div
+                      key={i}
+                      className="w-5 h-5 rounded-full flex-shrink-0 border-2 border-emerald-400/70 overflow-hidden"
+                      style={{
+                        background: fill >= 1 ? "rgb(16 185 129)" : fill > 0 ? `conic-gradient(rgb(16 185 129) ${fill * 360}deg, transparent ${fill * 360}deg)` : "transparent",
+                      }}
+                      title={`${val.toFixed(1)} / ${targets[key]} ${unitStr}`}
+                    />
+                  );
+                })}
+              </div>
+              <span className="text-sm text-slate-200 w-16 text-right shrink-0">
+                {val.toFixed(1)}/{targets[key]}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // Determine if an ingredient is low confidence (needs review)
 function isLowConfidence(ing) {
   const name = (ing.name || "").trim();
@@ -42,51 +85,112 @@ export default function DayDetail() {
   const { date } = useParams();
   const navigate = useNavigate();
   const [meals, setMeals] = useState([]);
-  const [totals, setTotals] = useState({ calories: 0 });
+  const [totals, setTotals] = useState({ macros: { calories: 0, protein: 0, carbs: 0, fat: 0 }, micros: {}, foodGroups: { vegetables: 0, fruits: 0, protein: 0, grains: 0, dairy: 0 }, frameworks: null });
   const [showLearning, setShowLearning] = useState(false);
+  const [showFrameworkCompare, setShowFrameworkCompare] = useState(false);
+  const [totalsRefreshTrigger, setTotalsRefreshTrigger] = useState(0);
+
+  const refreshTotals = () => setTotalsRefreshTrigger((t) => t + 1);
 
   useEffect(() => {
     async function load() {
-      // Fetch meals for this specific day only
       const dayMeals = await fetchMealsForDateRange(date, date);
-      
-      // Sort by timestamp (earliest first for chronological order)
       const parseTimestamp = (ts) => {
         if (!ts) return 0;
         return new Date(ts.replace(' ', 'T')).getTime() || 0;
       };
-      
       const sortedMeals = [...dayMeals].sort((a, b) => parseTimestamp(a.timestamp) - parseTimestamp(b.timestamp));
-      
       console.log(`📅 ${date}: ${sortedMeals.length} meals loaded`);
       setMeals(sortedMeals);
 
-      let totalCals = 0;
+      const macros = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+      const micros = {};
+      const foodGroups = { vegetables: 0, fruits: 0, protein: 0, grains: 0, dairy: 0 };
+      const allIngredients = [];
+
+      const UNIT_TO_GRAMS = { oz: 28.35, g: 1, grams: 1, gram: 1, cup: 150, cups: 150, tbsp: 15, tablespoon: 15, tsp: 5, teaspoon: 5, piece: 50, pieces: 50, slice: 20, slices: 20, serving: 100, eggs: 50, egg: 50, pill: 0, pills: 0, capsule: 0, capsules: 0, l: 0, liter: 1000, ml: 1 };
+      const VEGETABLES = ['lettuce', 'spinach', 'arugula', 'kale', 'cabbage', 'broccoli', 'carrot', 'tomato', 'cucumber', 'pepper', 'onion', 'garlic', 'celery', 'mushroom', 'zucchini', 'squash', 'eggplant', 'asparagus', 'green bean', 'bean sprout', 'cauliflower', 'brussels', 'radish', 'turnip', 'beet', 'corn', 'pea', 'bean', 'salsa', 'vegetable'];
+      const FRUITS = ['apple', 'apples', 'banana', 'bananas', 'orange', 'oranges', 'berry', 'berries', 'strawberry', 'strawberries', 'blueberry', 'blueberries', 'raspberry', 'raspberries', 'blackberry', 'blackberries', 'grape', 'grapes', 'mango', 'mangoes', 'pineapple', 'pineapples', 'kiwi', 'kiwis', 'peach', 'peaches', 'pear', 'pears', 'plum', 'plums', 'cherry', 'cherries', 'melon', 'melons', 'watermelon', 'watermelons', 'cantaloupe', 'cantaloupes', 'avocado', 'avocados', 'lemon', 'lemons', 'lime', 'limes', 'coconut', 'coconuts'];
+      const PROTEIN = ['chicken', 'beef', 'pork', 'turkey', 'lamb', 'fish', 'salmon', 'tuna', 'sardine', 'shrimp', 'crab', 'lobster', 'egg', 'tofu', 'tempeh', 'bean', 'lentil', 'chickpea', 'protein', 'meat', 'sausage', 'bacon', 'ham', 'burger', 'patty', 'wing', 'breast', 'thigh', 'steak', 'rib'];
+      const GRAINS = ['bread', 'toast', 'bagel', 'rice', 'pasta', 'noodle', 'quinoa', 'oats', 'oatmeal', 'cereal', 'cracker', 'tortilla', 'wrap', 'pita', 'flour', 'wheat', 'barley', 'rye', 'millet', 'couscous', 'focaccia', 'pizza', 'crust', 'flatbread', 'naan', 'ciabatta', 'bun', 'roll', 'muffin'];
+      const DAIRY = ['milk', 'cheese', 'yogurt', 'butter', 'cream', 'sour cream', 'cottage cheese', 'greek yogurt', 'kefir'];
+
+      const addFromKeywords = (ing, name, qty, unit) => {
+        if (FRUITS.some(f => name.includes(f))) {
+          if (unit === 'cup' || unit === 'cups') foodGroups.fruits += qty;
+          else if (unit === 'piece' || unit === 'pieces') foodGroups.fruits += qty;
+          else foodGroups.fruits += (qty * (UNIT_TO_GRAMS[unit] || 80)) / 150;
+        } else if (VEGETABLES.some(v => name.includes(v))) {
+          if (unit === 'cup' || unit === 'cups') foodGroups.vegetables += qty;
+          else if (unit === 'piece' || unit === 'pieces') foodGroups.vegetables += qty * 0.5;
+          else foodGroups.vegetables += (qty * (UNIT_TO_GRAMS[unit] || 80)) / 150;
+        } else if (PROTEIN.some(p => name.includes(p))) {
+          if (unit === 'oz') foodGroups.protein += qty / 3.5;
+          else if (unit === 'egg' || unit === 'eggs') foodGroups.protein += qty;
+          else if (unit === 'cup' || unit === 'cups') foodGroups.protein += qty * 2;
+          else foodGroups.protein += (qty * (UNIT_TO_GRAMS[unit] || 80)) / 100;
+        } else if (GRAINS.some(g => name.includes(g))) {
+          if (unit === 'slice' || unit === 'slices') foodGroups.grains += qty;
+          else if (unit === 'piece' || unit === 'pieces') foodGroups.grains += qty; // 1 piece focaccia/bread ≈ 1 serving
+          else if (unit === 'cup' || unit === 'cups') foodGroups.grains += qty * 2; // ½ cup cooked = 1 serving
+          else foodGroups.grains += (qty * (UNIT_TO_GRAMS[unit] || 80)) / 28; // 28g ≈ 1 oz-equivalent
+        } else if (DAIRY.some(d => name.includes(d))) {
+          if (unit === 'cup' || unit === 'cups') foodGroups.dairy += qty;
+          else if (unit === 'oz') foodGroups.dairy += qty;
+          else foodGroups.dairy += (qty * (UNIT_TO_GRAMS[unit] || 80)) / 240;
+        }
+      };
+
       for (const meal of dayMeals) {
         const ingredients = await fetchIngredients(meal.id);
         for (const ing of ingredients) {
-            let nutritionData = ing.nutrition;
-            if (typeof nutritionData === "string") {
-                try {
-                nutritionData = JSON.parse(nutritionData);
-                } catch {
-                nutritionData = null;
-                }
-            }
-            if (Array.isArray(ing.nutrition)) {
-                const energy = ing.nutrition.find((n) => n.nutrientName === "Energy");
-                if (energy && energy.value) {
-                    totalCals += parseFloat(energy.value);
-                }
-                }
+          allIngredients.push(ing);
+          const category = ing.category || 'food';
+          if (category === 'supplement' || category === 'drink') { /* skip for food groups */ }
 
-            }
+          const fg = ing.parsingMetadata?.foodGroupServings;
+          if (fg && typeof fg === 'object' && category !== 'supplement' && category !== 'drink') {
+            foodGroups.vegetables += Number(fg.vegetables) || 0;
+            foodGroups.fruits += Number(fg.fruits) || 0;
+            foodGroups.protein += Number(fg.protein) || 0;
+            foodGroups.grains += Number(fg.grains) || 0;
+            foodGroups.dairy += Number(fg.dairy) || 0;
+          } else if (category !== 'supplement' && category !== 'drink') {
+            const name = (ing.name || '').toLowerCase();
+            const qty = ing.quantity || 1;
+            const unit = (ing.unit || '').toLowerCase();
+            addFromKeywords(ing, name, qty, unit);
+          }
 
+          let nutritionData = ing.nutrition;
+          if (typeof nutritionData === "string") {
+            try { nutritionData = JSON.parse(nutritionData); } catch { nutritionData = null; }
+          }
+          if (!Array.isArray(nutritionData)) continue;
+          for (const n of nutritionData) {
+            const name = (n.nutrientName || "").toLowerCase();
+            const value = parseFloat(n.value) || 0;
+            const key = n.nutrientName;
+            if ((name.includes("energy") && (n.unitName || "").toUpperCase() === "KCAL") || (name === "energy" && !n.unitName)) {
+              macros.calories += value;
+            } else if (name === "protein") {
+              macros.protein += value;
+            } else if (name.includes("carbohydrate")) {
+              macros.carbs += value;
+            } else if (name.includes("total lipid") || name === "fat") {
+              macros.fat += value;
+            } else if (key && (name.includes("fiber") || (name.includes("sugars") && name.includes("added")) || name.includes("sodium"))) {
+              if (!micros[key]) micros[key] = { value: 0, unit: n.unitName || "" };
+              micros[key].value += value;
+            }
+          }
+        }
       }
-      setTotals({ calories: totalCals });
+      const frameworks = computeServingsByFramework(allIngredients);
+      setTotals({ macros, micros, foodGroups, frameworks });
     }
     load();
-  }, [date]);
+  }, [date, totalsRefreshTrigger]);
 
   return (
     <div className="p-8 bg-gray-50 min-h-screen">
@@ -107,8 +211,91 @@ export default function DayDetail() {
       
       <h1 className="text-2xl font-bold mb-4">{date}</h1>
 
-      <div className="bg-white p-4 rounded-xl shadow mb-6">
-        <p className="font-semibold">Approx. Calories: {Math.round(totals.calories)}</p>
+      <div className="bg-white rounded-xl shadow mb-6 overflow-hidden">
+        <div className="bg-slate-800 text-white px-4 py-3">
+          <div className="text-sm font-semibold text-slate-300 mb-2">Daily totals</div>
+          <div className="flex flex-wrap gap-4 items-center">
+            <span>🔥 {Math.round(totals.macros.calories)} cal</span>
+            <span>🥩 {Math.round(totals.macros.protein)}g protein</span>
+            <span>🍞 {Math.round(totals.macros.carbs)}g carbs</span>
+            <span>🧈 {Math.round(totals.macros.fat)}g fat</span>
+            {totals.macros.calories > 0 && (() => {
+              const pCal = totals.macros.protein * 4;
+              const cCal = totals.macros.carbs * 4;
+              const fCal = totals.macros.fat * 9;
+              const total = pCal + cCal + fCal;
+              if (total <= 0) return null;
+              const pPct = (pCal / total) * 100;
+              const cPct = (cCal / total) * 100;
+              const fPct = (fCal / total) * 100;
+              return (
+                <div className="flex items-center gap-3 ml-auto">
+                  <div
+                    className="w-12 h-12 rounded-full shrink-0"
+                    style={{
+                      background: `conic-gradient(
+                        #60a5fa ${pPct}%,
+                        #fbbf24 ${pPct}% ${pPct + cPct}%,
+                        #f97316 ${pPct + cPct}% 100%
+                      )`
+                    }}
+                    title="Calories from macros"
+                  />
+                  <div className="flex flex-col text-xs gap-0.5">
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-400 shrink-0" /> {pPct.toFixed(0)}% protein</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" /> {cPct.toFixed(0)}% carbs</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-orange-400 shrink-0" /> {fPct.toFixed(0)}% fat</span>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+        {Object.keys(totals.micros).length > 0 && (
+          <div className="bg-slate-700 text-white px-4 py-2 text-sm flex flex-wrap gap-4">
+            {totals.micros["Fiber, total dietary"] && (
+              <span>🌾 Fiber: {Math.round(totals.micros["Fiber, total dietary"].value)}g</span>
+            )}
+            {(() => {
+              const entry = totals.micros["Sugars, added"] ?? totals.micros["Sugars, added (by difference)"]
+                ?? Object.entries(totals.micros).find(([k]) => k.toLowerCase().includes("sugar") && k.toLowerCase().includes("added"));
+              const val = entry?.value ?? entry?.[1]?.value;
+              return val != null && <span>🍬 Added sugar: {Math.round(val)}g</span>;
+            })()}
+            {totals.micros["Sodium, Na"] && (
+              <span>🧂 Na: {Math.round(totals.micros["Sodium, Na"].value)}mg</span>
+            )}
+          </div>
+        )}
+        {totals.foodGroups && Object.values(totals.foodGroups).some(v => v > 0) && (
+          <div className="bg-slate-600 text-white px-4 py-2 text-sm flex flex-wrap gap-4">
+            <span className="text-slate-300 font-medium">Servings:</span>
+            {totals.foodGroups.vegetables > 0 && <span>🥬 Veg: {totals.foodGroups.vegetables.toFixed(1)}</span>}
+            {totals.foodGroups.fruits > 0 && <span>🍎 Fruit: {totals.foodGroups.fruits.toFixed(1)}</span>}
+            {totals.foodGroups.protein > 0 && <span>🥩 Protein: {totals.foodGroups.protein.toFixed(1)}</span>}
+            {totals.foodGroups.grains > 0 && <span>🌾 Grain: {totals.foodGroups.grains.toFixed(1)}</span>}
+            {totals.foodGroups.dairy > 0 && <span>🥛 Dairy: {totals.foodGroups.dairy.toFixed(1)}</span>}
+          </div>
+        )}
+        {totals.frameworks && (
+          <div className="border-t border-slate-500 bg-slate-700">
+            <button
+              type="button"
+              onClick={() => setShowFrameworkCompare((v) => !v)}
+              className="w-full px-4 py-2 text-left text-sm font-medium text-slate-100 hover:bg-slate-600 flex items-center justify-between"
+            >
+              📊 Compare to MyPlate, Daily Dozen & Longevity
+              <span className="text-slate-300">{showFrameworkCompare ? "▼" : "▶"}</span>
+            </button>
+            {showFrameworkCompare && (
+              <div className="px-4 pb-4 pt-2 space-y-4 bg-slate-800">
+                <FrameworkProgress title="MyPlate (2000 cal)" data={totals.frameworks.myPlate} targets={MYPLATE_TARGETS} units={{ grains: "oz", vegetables: "c", fruits: "c", protein: "oz", dairy: "c" }} labels={{ grains: "🌾 Grains", vegetables: "🥬 Vegetables", fruits: "🍎 Fruits", protein: "🥩 Protein", dairy: "🥛 Dairy" }} />
+                <FrameworkProgress title="Dr. Gregor's Daily Dozen" data={totals.frameworks.dailyDozen} targets={DAILY_DOZEN_TARGETS} units={{}} labels={{ beans: "🫘 Beans", berries: "🫐 Berries", otherFruits: "🍎 Other Fruits", cruciferous: "🥦 Cruciferous", greens: "🥬 Greens", otherVeg: "🥕 Other Veg", flaxseed: "🌾 Flaxseed", nuts: "🥜 Nuts", spices: "🌿 Spices", wholeGrains: "🌾 Whole Grains" }} />
+                <FrameworkProgress title="Longevity (plant-forward)" data={totals.frameworks.longevity} targets={LONGEVITY_TARGETS} units={{}} labels={{ legumes: "🫘 Legumes", wholeGrains: "🌾 Whole Grains", vegetables: "🥬 Vegetables", fruits: "🍎 Fruits", nuts: "🥜 Nuts" }} />
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {meals.map((meal) => (
@@ -118,6 +305,7 @@ export default function DayDetail() {
           onMealUpdated={(mid, updates) =>
             setMeals((prev) => prev.map((m) => (m.id === mid ? { ...m, ...updates } : m)))
           }
+          onTotalsRefresh={refreshTotals}
         />
       ))}
 
@@ -129,7 +317,7 @@ export default function DayDetail() {
   );
 }
 
-function MealCard({ meal, onMealUpdated }) {
+function MealCard({ meal, onMealUpdated, onTotalsRefresh }) {
   const [ingredients, setIngredients] = useState([]);
   const [correcting, setCorrecting] = useState(null);
   const [parsing, setParsing] = useState(false);
@@ -206,6 +394,7 @@ function MealCard({ meal, onMealUpdated }) {
         setParseSuccessMessage(`Added: ${names}`);
         setTimeout(() => setParseSuccessMessage(null), 5000);
       }
+      onTotalsRefresh?.();
     } catch (err) {
       const message = err?.message || String(err);
       console.error("Parse failed:", message);
@@ -225,6 +414,7 @@ function MealCard({ meal, onMealUpdated }) {
     try {
       await clearMealIngredients(meal.id);
       setIngredients([]);
+      onTotalsRefresh?.();
     } catch (err) {
       console.error("Clear failed:", err);
       alert(`Clear failed: ${err.message}`);
@@ -240,6 +430,7 @@ function MealCard({ meal, onMealUpdated }) {
     try {
       await deleteIngredient(ing.id);
       setIngredients((prev) => prev.filter((i) => i.id !== ing.id));
+      onTotalsRefresh?.();
     } catch (err) {
       console.error("Delete ingredient failed:", err);
       alert(`Delete failed: ${err.message}`);
@@ -267,6 +458,7 @@ function MealCard({ meal, onMealUpdated }) {
       const result = await updateIngredientPortion(editingPortionId, qty, editingUnit);
       const saved = result.ingredient;
       setIngredients((prev) => prev.map((i) => (i.id === editingPortionId ? { ...i, ...saved } : i)));
+      onTotalsRefresh?.();
       setEditingPortionId(null);
       if (result.pieceWeightEstimated) {
         setPortionEstimateNote("⚠️ Used estimated piece weight (50g) — verify calories if something looks off.");
@@ -290,6 +482,7 @@ function MealCard({ meal, onMealUpdated }) {
       const added = result.ingredients || [];
       if (added.length > 0) {
         setIngredients((prev) => [...prev, ...added]);
+        onTotalsRefresh?.();
         setAddIngredientsText("");
         setShowAddIngredients(false);
       }
@@ -703,12 +896,12 @@ function MealCard({ meal, onMealUpdated }) {
           onSave={(result) => {
             if (result.addedIngredient) {
               setIngredients(prev => [...prev, result.addedIngredient]);
-              fetchIngredients(meal.id).then((ings) => setIngredients(ings)).catch(() => {});
+              fetchIngredients(meal.id).then((ings) => { setIngredients(ings); onTotalsRefresh?.(); }).catch(() => {});
             } else if (result.ingredient) {
-              // Use server response as source of truth (it has the actual saved values)
               const saved = result.ingredient;
               setIngredients(prev => prev.map(i => i.id === correcting.id ? { ...i, ...saved } : i));
-              setCorrecting((prev) => ({ ...prev, ...saved })); // Update modal header with saved values
+              setCorrecting((prev) => ({ ...prev, ...saved }));
+              onTotalsRefresh?.();
             }
             // Never auto-close; user exits on their own
           }}
