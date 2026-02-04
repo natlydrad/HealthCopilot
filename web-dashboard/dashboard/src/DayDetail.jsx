@@ -143,6 +143,7 @@ function MealCard({ meal, onMealUpdated }) {
   const [editingQty, setEditingQty] = useState("");
   const [editingUnit, setEditingUnit] = useState("serving");
   const [updatingPortionId, setUpdatingPortionId] = useState(null);
+  const [portionEstimateNote, setPortionEstimateNote] = useState(null);
   const [loaded, setLoaded] = useState(false);
   const [expandedNutrientId, setExpandedNutrientId] = useState(null);
 
@@ -254,11 +255,16 @@ function MealCard({ meal, onMealUpdated }) {
       return;
     }
     setUpdatingPortionId(editingPortionId);
+    setPortionEstimateNote(null);
     try {
       const result = await updateIngredientPortion(editingPortionId, qty, editingUnit);
       const saved = result.ingredient;
       setIngredients((prev) => prev.map((i) => (i.id === editingPortionId ? { ...i, ...saved } : i)));
       setEditingPortionId(null);
+      if (result.pieceWeightEstimated) {
+        setPortionEstimateNote("⚠️ Used estimated piece weight (50g) — verify calories if something looks off.");
+        setTimeout(() => setPortionEstimateNote(null), 8000);
+      }
     } catch (err) {
       console.error("Portion update failed:", err);
       alert(`Update failed: ${err.message}`);
@@ -457,6 +463,14 @@ function MealCard({ meal, onMealUpdated }) {
             </button>
           </div>
           <p className="text-amber-700 text-xs mt-1">Classified as non-food — no ingredients added.</p>
+        </div>
+      )}
+
+      {/* Portion estimate warning (when piece weight not in our list) */}
+      {portionEstimateNote && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 mb-2 flex items-center justify-between gap-2">
+          <p className="text-amber-800 text-xs">{portionEstimateNote}</p>
+          <button type="button" onClick={() => setPortionEstimateNote(null)} className="text-amber-600 hover:text-amber-800 shrink-0">✕</button>
         </div>
       )}
 

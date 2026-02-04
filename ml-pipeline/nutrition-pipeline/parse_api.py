@@ -331,14 +331,19 @@ def update_ingredient_portion(ingredient_id):
         from lookup_usda import UNIT_TO_GRAMS, get_piece_grams
         unit_lower_o = orig_unit.lower()
         unit_lower_n = new_unit.lower()
+        piece_weight_estimated = False  # True when we used generic 50g (food not in our list)
         # Use food-specific piece weights when unit is piece/pieces (not generic 50g)
         if unit_lower_o in ("piece", "pieces"):
             pg = get_piece_grams(food_name)
+            if pg is None:
+                piece_weight_estimated = True
             orig_grams = orig_qty * (pg if pg is not None else UNIT_TO_GRAMS.get(unit_lower_o, 50))
         else:
             orig_grams = orig_qty * UNIT_TO_GRAMS.get(unit_lower_o, 100)
         if unit_lower_n in ("piece", "pieces"):
             pg = get_piece_grams(food_name)
+            if pg is None:
+                piece_weight_estimated = True
             new_grams = new_qty * (pg if pg is not None else UNIT_TO_GRAMS.get(unit_lower_n, 50))
         else:
             new_grams = new_qty * UNIT_TO_GRAMS.get(unit_lower_n, 100)
@@ -378,7 +383,11 @@ def update_ingredient_portion(ingredient_id):
             except Exception as e:
                 print(f"   ⚠️ Could not save portion preference: {e}")
 
-        return jsonify({"success": True, "ingredient": updated}), 200
+        return jsonify({
+            "success": True,
+            "ingredient": updated,
+            "pieceWeightEstimated": piece_weight_estimated,
+        }), 200
     except Exception as e:
         import traceback
         traceback.print_exc()
