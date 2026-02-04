@@ -37,7 +37,9 @@ function FrameworkProgress({ title, data, targets, units, labels }) {
         {entries.map((key) => {
           const val = data[key] ?? 0;
           const target = Math.max(1, Math.round(targets[key]));
-          const numCircles = Math.min(target, 8);
+          const overflow = Math.max(0, val - target);
+          const overflowCount = Math.min(Math.ceil(overflow), Math.max(0, 8 - target));
+          const numCircles = Math.min(target + overflowCount, 8);
           const unitStr = units && units[key] ? units[key] : "sv";
           const label = labels && labels[key] ? labels[key] : key;
           return (
@@ -45,15 +47,29 @@ function FrameworkProgress({ title, data, targets, units, labels }) {
               <span className="text-sm text-slate-100 w-32 shrink-0">{label}</span>
               <div className="flex gap-1 items-center">
                 {Array.from({ length: numCircles }, (_, i) => {
-                  const fill = i < Math.floor(val) ? 1 : i < val ? val - Math.floor(val) : 0;
+                  if (i < target) {
+                    const fill = i < Math.floor(val) ? 1 : i < val ? val - Math.floor(val) : 0;
+                    return (
+                      <div
+                        key={i}
+                        className="w-5 h-5 rounded-full flex-shrink-0 border-2 border-emerald-400/70 overflow-hidden"
+                        style={{
+                          background: fill >= 1 ? "rgb(16 185 129)" : fill > 0 ? `conic-gradient(rgb(16 185 129) ${fill * 360}deg, transparent ${fill * 360}deg)` : "transparent",
+                        }}
+                        title={`${val.toFixed(1)} / ${targets[key]} ${unitStr}`}
+                      />
+                    );
+                  }
+                  const j = i - target;
+                  const overflowFill = j < Math.floor(overflow) ? 1 : j < overflow ? overflow - Math.floor(overflow) : 0;
                   return (
                     <div
                       key={i}
-                      className="w-5 h-5 rounded-full flex-shrink-0 border-2 border-emerald-400/70 overflow-hidden"
+                      className="w-5 h-5 rounded-full flex-shrink-0 border-2 border-slate-500 overflow-hidden"
                       style={{
-                        background: fill >= 1 ? "rgb(16 185 129)" : fill > 0 ? `conic-gradient(rgb(16 185 129) ${fill * 360}deg, transparent ${fill * 360}deg)` : "transparent",
+                        background: overflowFill >= 1 ? "rgb(100 116 139)" : overflowFill > 0 ? `conic-gradient(rgb(100 116 139) ${overflowFill * 360}deg, transparent ${overflowFill * 360}deg)` : "transparent",
                       }}
-                      title={`${val.toFixed(1)} / ${targets[key]} ${unitStr}`}
+                      title={`${val.toFixed(1)} / ${targets[key]} ${unitStr} (overflow)`}
                     />
                   );
                 })}

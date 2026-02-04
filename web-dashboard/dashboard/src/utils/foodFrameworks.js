@@ -30,6 +30,23 @@ function toGrams(qty, unit) {
   return qty * (UNIT_TO_GRAMS[u] ?? 80);
 }
 
+/** Return matched category from name only (for display/emoji when fg provides numbers) */
+function matchedFromKeywords(name) {
+  if (BEANS.some(b => name.includes(b))) return 'Beans/legumes';
+  if (BERRIES.some(b => name.includes(b))) return 'Berries';
+  if (OTHER_FRUITS.some(f => name.includes(f))) return 'Other fruits';
+  if (CRUCIFEROUS.some(c => name.includes(c))) return 'Cruciferous';
+  if (GREENS.some(g => name.includes(g))) return 'Greens';
+  if (OTHER_VEG.some(v => name.includes(v))) return 'Other vegetables';
+  if (NUTS.some(n => name.includes(n))) return 'Nuts';
+  if (name.includes('flax') || name.includes('chia')) return 'Flaxseed/chia';
+  if (name.includes('turmeric') || name.includes('cumin') || name.includes('cinnamon') || name.includes('spice')) return 'Spices';
+  if (GRAINS_ALL.some(g => name.includes(g))) return WHOLE_GRAINS.some(g => name.includes(g)) ? 'Whole grains' : 'Grains';
+  if (PROTEIN.some(p => name.includes(p)) && !BEANS.some(b => name.includes(b))) return 'Protein (animal)';
+  if (DAIRY.some(d => name.includes(d))) return 'Dairy';
+  return null;
+}
+
 /** Process one ingredient, return { mp, dd, lg, matched } — deltas and human-readable matched category */
 function processIngredient(ing) {
   const mp = { grains: 0, vegetables: 0, fruits: 0, protein: 0, dairy: 0 };
@@ -51,7 +68,7 @@ function processIngredient(ing) {
     dd.wholeGrains = Number(fg.grains) || 0; dd.greens = (Number(fg.vegetables) || 0) * 0.5; dd.otherVeg = (Number(fg.vegetables) || 0) * 0.5;
     dd.berries = (Number(fg.fruits) || 0) * 0.3; dd.otherFruits = (Number(fg.fruits) || 0) * 0.7; dd.beans = Number(fg.protein) || 0;
     lg.legumes = (Number(fg.protein) || 0) * 0.3; lg.wholeGrains = Number(fg.grains) || 0; lg.vegetables = Number(fg.vegetables) || 0; lg.fruits = Number(fg.fruits) || 0;
-    matched = 'GPT foodGroupServings';
+    matched = matchedFromKeywords(name) ?? 'GPT foodGroupServings';
     return { mp, dd, lg, matched };
   }
 
