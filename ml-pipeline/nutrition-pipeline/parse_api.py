@@ -26,6 +26,17 @@ CORS(app, allow_headers=["Authorization", "Content-Type", "X-User-Id"])  # Dashb
 
 PB_URL = os.getenv("PB_URL", "https://pocketbase-1j2x.onrender.com")
 
+def _resolve_id(value) -> str | None:
+    """Resolve record ID from PocketBase relation field (string or expanded object)."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict) and value.get("id"):
+        return str(value["id"])
+    return None
+
+
 def _base_food_term(name: str) -> str | None:
     """Extract base food term for broader portion matching. E.g. 'chicken breast' -> 'chicken'."""
     if not name or len(name) < 3:
@@ -224,6 +235,294 @@ def clear_meal_ingredients(meal_id):
         return jsonify({"deleted": total_deleted}), 200
     except Exception as e:
         print(f"   ❌ Clear failed: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/delete-ingredient/<ingredient_id>", methods=["POST", "DELETE"])
+def delete_single_ingredient(ingredient_id):
+    """
+    Delete one ingredient. Uses service token. Verifies the ingredient's meal belongs to the requesting user.
+    """
+    auth = request.headers.get("Authorization")
+    if not auth or not auth.startswith("Bearer "):
+        return jsonify({"error": "Authorization required"}), 401
+    token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
+    user_id = _user_id_from_bearer()
+    if not user_id:
+        return jsonify({"error": "Invalid or missing user token"}), 401
+    try:
+        headers = {"Authorization": f"Bearer {get_token()}"}
+        ing_resp = requests.get(
+            f"{PB_URL}/api/collections/ingredients/records/{ingredient_id}",
+            headers=headers
+        )
+        if ing_resp.status_code != 200:
+            return jsonify({"error": "Ingredient not found"}), 404
+        ingredient = ing_resp.json()
+        meal_id = _resolve_id(ingredient.get("mealId"))
+        if not meal_id:
+            return jsonify({"error": "Ingredient has no meal"}), 400
+        meal_resp = requests.get(
+            f"{PB_URL}/api/collections/meals/records/{meal_id}",
+            headers=headers
+        )
+        if meal_resp.status_code != 200:
+            return jsonify({"error": "Meal not found"}), 404
+        meal = meal_resp.json()
+        meal_user = _resolve_id(meal.get("user"))
+        if meal_user != user_id:
+            return jsonify({"error": "Not authorized to delete this ingredient"}), 403
+        if delete_ingredient(ingredient_id):
+            print(f"   🗑️ Deleted ingredient: {ingredient.get('name', '?')}")
+            return jsonify({"deleted": True, "id": ingredient_id}), 200
+        return jsonify({"error": "Delete failed"}), 500
+    except Exception as e:
+        print(f"   ❌ Delete ingredient failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/update-portion/<ingredient_id>", methods=["POST", "PATCH"])
+def update_ingredient_portion(ingredient_id):
+    """
+    Quick-edit: change only quantity/unit of an ingredient. Scales nutrition and records
+    portion preference for learning (so future parses use your typical amounts).
+    Body: { quantity: number, unit: string }
+    """
+    auth = request.headers.get("Authorization")
+    if not auth or not auth.startswith("Bearer "):
+        return jsonify({"error": "Authorization required"}), 401
+    user_id = _user_id_from_bearer()
+    if not user_id:
+        return jsonify({"error": "Invalid or missing user token"}), 401
+    data = request.get_json() or {}
+    new_qty = data.get("quantity")
+    new_unit = (data.get("unit") or "serving").strip()
+    if new_qty is None or (isinstance(new_qty, (int, float)) and new_qty <= 0):
+        return jsonify({"error": "quantity must be a positive number"}), 400
+    new_qty = float(new_qty)
+    try:
+        headers = {"Authorization": f"Bearer {get_token()}"}
+        ing_resp = requests.get(
+            f"{PB_URL}/api/collections/ingredients/records/{ingredient_id}",
+            headers=headers
+        )
+        if ing_resp.status_code != 200:
+            return jsonify({"error": "Ingredient not found"}), 404
+        original = ing_resp.json()
+        meal_id = _resolve_id(original.get("mealId"))
+        if not meal_id:
+            return jsonify({"error": "Ingredient has no meal"}), 400
+        meal_resp = requests.get(
+            f"{PB_URL}/api/collections/meals/records/{meal_id}",
+            headers=headers
+        )
+        if meal_resp.status_code != 200:
+            return jsonify({"error": "Meal not found"}), 404
+        meal = meal_resp.json()
+        meal_user = _resolve_id(meal.get("user"))
+        if meal_user != user_id:
+            return jsonify({"error": "Not authorized to edit this ingredient"}), 403
+
+        orig_qty = original.get("quantity", 1)
+        orig_unit = (original.get("unit") or "serving").strip()
+        food_name = (original.get("name") or "").strip()
+        from lookup_usda import UNIT_TO_GRAMS, get_piece_grams
+        unit_lower_o = orig_unit.lower()
+        unit_lower_n = new_unit.lower()
+        # Use food-specific piece weights when unit is piece/pieces (not generic 50g)
+        if unit_lower_o in ("piece", "pieces"):
+            pg = get_piece_grams(food_name)
+            orig_grams = orig_qty * (pg if pg is not None else UNIT_TO_GRAMS.get(unit_lower_o, 50))
+        else:
+            orig_grams = orig_qty * UNIT_TO_GRAMS.get(unit_lower_o, 100)
+        if unit_lower_n in ("piece", "pieces"):
+            pg = get_piece_grams(food_name)
+            new_grams = new_qty * (pg if pg is not None else UNIT_TO_GRAMS.get(unit_lower_n, 50))
+        else:
+            new_grams = new_qty * UNIT_TO_GRAMS.get(unit_lower_n, 100)
+        if orig_grams <= 0:
+            orig_grams = 100
+        multiplier = new_grams / orig_grams
+
+        update = {"quantity": new_qty, "unit": new_unit}
+        orig_nutrition = original.get("nutrition") or []
+        if isinstance(orig_nutrition, str):
+            try:
+                orig_nutrition = json.loads(orig_nutrition)
+            except Exception:
+                orig_nutrition = []
+        if orig_nutrition and isinstance(orig_nutrition, list):
+            scaled = []
+            for n in orig_nutrition:
+                s = dict(n)
+                if "value" in s and s["value"] is not None:
+                    s["value"] = round(float(s["value"]) * multiplier, 2)
+                scaled.append(s)
+            update["nutrition"] = scaled
+
+        patch_resp = requests.patch(
+            f"{PB_URL}/api/collections/ingredients/records/{ingredient_id}",
+            headers=headers,
+            json=update
+        )
+        if patch_resp.status_code != 200:
+            return jsonify({"error": f"Update failed: {patch_resp.text}"}), 500
+        updated = patch_resp.json()
+
+        if food_name and new_qty > 0:
+            try:
+                add_portion_preference(user_id, food_name, new_qty, new_unit)
+                print(f"   📐 Learned portion: {food_name} → {new_qty} {new_unit}")
+            except Exception as e:
+                print(f"   ⚠️ Could not save portion preference: {e}")
+
+        return jsonify({"success": True, "ingredient": updated}), 200
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+def _process_and_insert_parsed_ingredient(ing, meal_id, user_context, source="add_ingredients"):
+    """Process one parsed ingredient (USDA lookup, GPT fallback) and insert. Returns created record or None."""
+    name = ing.get("name", "").lower().strip()
+    if name in BANNED_INGREDIENTS or len(name) < 2:
+        print(f"   ⏭️ Skipping banned/short: {name}")
+        return None
+    ing = normalize_quantity(ing)
+    quantity = ing.get("quantity", 1)
+    unit = ing.get("unit", "serving")
+    usda = None
+    scaled_nutrition = []
+    source_ing = "gpt"
+    portion_grams = None
+    print(f"🔎 Looking up USDA for: '{name}'")
+    usda = usda_lookup(name)
+    if usda:
+        serving_size = usda.get("serving_size_g", 100.0)
+        unit_lower = (unit or "").lower()
+        if unit_lower in ("piece", "pieces"):
+            piece_g = get_piece_grams(name)
+            if piece_g is not None:
+                serving_size = piece_g
+        scaled_nutrition = scale_nutrition(usda.get("nutrition", []), quantity, unit, serving_size)
+        cal_val = next((n.get("value", 0) for n in scaled_nutrition if n.get("nutrientName") == "Energy"), 0)
+        is_valid, _ = validate_scaled_calories(name, quantity, unit, cal_val)
+        if not is_valid:
+            usda = None
+            scaled_nutrition = []
+            usda = usda_lookup_valid_for_portion(name, quantity, unit)
+            if usda:
+                serving_size = usda.get("serving_size_g", 100.0)
+                if unit_lower in ("piece", "pieces"):
+                    piece_g = get_piece_grams(name)
+                    if piece_g is not None:
+                        serving_size = piece_g
+                scaled_nutrition = scale_nutrition(usda.get("nutrition", []), quantity, unit, serving_size)
+                source_ing = "usda"
+                portion_grams = round(quantity * serving_size, 1)
+        else:
+            source_ing = "usda"
+            portion_grams = round(quantity * (serving_size if unit_lower in ("serving", "piece", "pieces") else
+                                      28.35 if unit == "oz" else 240 if unit == "cup" else 15 if unit == "tbsp" else 100), 1)
+    if not scaled_nutrition:
+        gpt_nutrition = gpt_estimate_nutrition(name, quantity, unit)
+        if gpt_nutrition:
+            scaled_nutrition = gpt_nutrition
+            source_ing = "gpt"
+    payload = {
+        "mealId": meal_id,
+        "name": ing["name"],
+        "quantity": quantity,
+        "unit": unit,
+        "category": ing.get("category", "food"),
+        "nutrition": scaled_nutrition,
+        "usdaCode": usda.get("usdaCode") if usda else None,
+        "source": source_ing,
+        "parsingStrategy": "gpt",
+        "parsingMetadata": {
+            "source": source_ing,
+            "parsingSource": source,
+            "usdaMatch": bool(usda),
+            "parsedVia": "parse_api",
+            "reasoning": ing.get("reasoning", "User added via add-ingredients"),
+            "portionGrams": portion_grams,
+            "fromLabel": False,
+            "partialLabel": False,
+            "foodGroupServings": ing.get("foodGroupServings") if isinstance(ing.get("foodGroupServings"), dict) else None,
+        }
+    }
+    result = insert_ingredient(payload)
+    return result
+
+
+@app.route("/add-ingredients/<meal_id>", methods=["POST"])
+def add_ingredients(meal_id):
+    """
+    Add multiple ingredients from natural text.
+    Body: { text: "sardines 1 can, marinara 2 tbsp, olives 5" }
+    Uses parse_ingredients (GPT) then USDA lookup + insert for each.
+    """
+    auth = request.headers.get("Authorization")
+    if not auth or not auth.startswith("Bearer "):
+        return jsonify({"error": "Authorization required"}), 401
+    user_id = _user_id_from_bearer()
+    if not user_id:
+        return jsonify({"error": "Invalid or missing user token"}), 401
+    data = request.get_json() or {}
+    text = (data.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "text required"}), 400
+    try:
+        token = get_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        meal_resp = requests.get(
+            f"{PB_URL}/api/collections/meals/records/{meal_id}",
+            headers=headers
+        )
+        if meal_resp.status_code != 200:
+            return jsonify({"error": "Meal not found"}), 404
+        meal = meal_resp.json()
+        meal_user = _resolve_id(meal.get("user"))
+        if meal_user != user_id:
+            return jsonify({"error": "Not authorized to add ingredients to this meal"}), 403
+        user_context = build_user_context_prompt(user_id) if user_id else ""
+        parsed = parse_ingredients(text, user_context)
+        if not parsed:
+            return jsonify({
+                "ingredients": [],
+                "count": 0,
+                "message": "No ingredients detected in that text."
+            }), 200
+        saved = []
+        print(f"📦 Adding {len(parsed)} ingredients to meal {meal_id}...")
+        for ing in parsed:
+            result = _process_and_insert_parsed_ingredient(ing, meal_id, user_context)
+            if result:
+                saved.append(result)
+                print(f"   ✅ Added: {ing.get('name', '?')}")
+                # Record as user-added food for future parsing hints
+                try:
+                    name = (ing.get("name") or "").strip()
+                    qty = ing.get("quantity", 1)
+                    unit = (ing.get("unit") or "serving").strip()
+                    if name and len(name) >= 2:
+                        default_portion = f"{qty} {unit}" if qty and unit else None
+                        add_common_food(meal_user, name, default_portion=default_portion)
+                        print(f"   📝 Learned: user added '{name}'")
+                except Exception as e:
+                    print(f"   ⚠️ Could not record user-added food: {e}")
+        return jsonify({
+            "ingredients": saved,
+            "count": len(saved),
+            "message": f"Added {len(saved)} ingredient(s)."
+        }), 200
+    except Exception as e:
+        print(f"❌ Add ingredients failed: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 
@@ -812,10 +1111,36 @@ def correct_ingredient_chat(ingredient_id):
             return jsonify({"error": f"Meal not found: {meal_id}"}), 404
         
         meal = meal_resp.json()
-        
+        user_id = _resolve_id(meal.get("user"))
+        meal_ts = meal.get("timestamp", "")
+        meal_id_for_ctx = _resolve_id(ingredient.get("mealId"))
+
+        # Build recent meals context (other meals today with their ingredients) for "same as earlier" / "50%" corrections
+        recent_meals_context = ""
+        if user_id and meal_ts and meal_id_for_ctx:
+            try:
+                date_iso = meal_ts.strip()[:10] if len(meal_ts.strip()) >= 10 else ""
+                if date_iso:
+                    recent_meals = fetch_meals_for_user_on_date(
+                        user_id, date_iso, exclude_meal_id=meal_id_for_ctx,
+                        before_timestamp=meal_ts, limit=10
+                    )
+                    parts = []
+                    for m in recent_meals:
+                        mid = m.get("id")
+                        mtext = (m.get("text") or "").strip() or "(image)"
+                        ings = fetch_ingredients_by_meal_id(mid) if mid else []
+                        ing_strs = [f"{i.get('name','?')} ({i.get('quantity',1)} {i.get('unit','serving')})" for i in ings]
+                        parts.append(f"- \"{mtext}\": {', '.join(ing_strs) if ing_strs else '(no ingredients)'}")
+                    if parts:
+                        recent_meals_context = "\n".join(parts)
+                        print(f"   📅 Recent meals context: {len(recent_meals)} meals")
+            except Exception as e:
+                print(f"   ⚠️ Recent meals context failed: {e}")
+
         print(f"💬 Correction chat for ingredient: {ingredient.get('name')}")
         print(f"   User: {user_message}")
-        
+
         # Call the correction chat function
         result = correction_chat(
             meal=meal,
@@ -823,7 +1148,8 @@ def correct_ingredient_chat(ingredient_id):
             user_message=user_message,
             conversation_history=conversation,
             pb_url=PB_URL,
-            token=token
+            token=token,
+            recent_meals_context=recent_meals_context,
         )
         
         print(f"   AI: {result.get('reply', '')[:100]}...")
@@ -1007,13 +1333,27 @@ def save_correction(ingredient_id):
         unit_changed = correction.get("unit") and correction["unit"] != original.get("unit")
         force_recalc = correction.get("forceRecalculate", False)
         force_use_gpt = correction.get("forceUseGptEstimate", False)
+        corrected_name = correction.get("name", original.get("name"))
+        quantity = correction.get("quantity", original.get("quantity", 1))
+        unit = correction.get("unit", original.get("unit", "serving"))
         
-        if force_use_gpt:
-            # User flagged poor USDA match - try better USDA first, then GPT
-            corrected_name = correction.get("name", original.get("name"))
-            quantity = correction.get("quantity", original.get("quantity", 1))
-            unit = correction.get("unit", original.get("unit", "serving"))
-            print(f"📐 User flagged poor USDA match - trying better USDA first for: {corrected_name} ({quantity} {unit})")
+        # User selected a USDA option — always use it (for any correction type including poor_usda_match)
+        chosen = correction.get("chosenUsdaOption")
+        if chosen and chosen.get("usdaCode") and chosen.get("nutrition"):
+            usda = {
+                "usdaCode": chosen["usdaCode"],
+                "name": chosen.get("name", corrected_name),
+                "nutrition": chosen["nutrition"],
+                "serving_size_g": chosen.get("serving_size_g", 100),
+            }
+            update["nutrition"] = chosen["nutrition"]
+            update["usdaCode"] = chosen["usdaCode"]
+            update["source"] = "usda"
+            usda_match_info = {"found": True, "matchedName": chosen.get("name"), "userChose": True, "searchedFor": corrected_name}
+            print(f"   ✅ Using user-chosen USDA: {chosen.get('name')}")
+        elif force_use_gpt:
+            # User said USDA is wrong — try better USDA first, then GPT fallback
+            print(f"📐 Poor USDA match — trying better USDA for: {corrected_name} ({quantity} {unit})")
             usda = usda_lookup_valid_for_portion(corrected_name, quantity, unit)
             if usda:
                 scaled_nutrition = scale_nutrition(
@@ -1031,39 +1371,24 @@ def save_correction(ingredient_id):
                     "usedBetterMatch": True,
                     "searchedFor": corrected_name,
                 }
-                print(f"   ✅ Better USDA match: {usda.get('name')}")
+                cal_val = next((n.get("value", 0) for n in scaled_nutrition if n.get("nutrientName") == "Energy"), 0)
+                print(f"   ✅ Better USDA match: {usda.get('name')} ({cal_val:.0f} cal)")
             else:
-                print(f"   ⏭️ No valid USDA match - using GPT estimate")
-                gpt_nutrition = gpt_estimate_nutrition(corrected_name, quantity, unit)
+                target_cal = correction.get("targetCalories")
+                target_protein = correction.get("targetProtein")
+                print(f"   ⏭️ No valid USDA — using GPT estimate")
+                gpt_nutrition = gpt_estimate_nutrition(corrected_name, quantity, unit, target_cal=target_cal, target_protein=target_protein)
                 if gpt_nutrition:
                     update["nutrition"] = gpt_nutrition
                     update["source"] = "gpt"
                     update["usdaCode"] = None
                     usda_match_info = {"found": False, "usedGptInstead": True, "searchedFor": corrected_name}
-                    print(f"   ✅ GPT estimate: {next((n.get('value') for n in gpt_nutrition if n.get('nutrientName') == 'Energy'), 0):.0f} cal")
+                    cal_val = next((n.get("value") for n in gpt_nutrition if n.get("nutrientName") == "Energy"), 0)
+                    print(f"   ✅ GPT estimate: {cal_val:.0f} cal")
                 else:
                     print("   ⚠️ GPT estimate failed, keeping existing nutrition")
         
         elif name_changed or force_recalc:
-            # Name changed or force recalc - do fresh USDA lookup
-            corrected_name = correction.get("name", original.get("name"))
-            quantity = correction.get("quantity", original.get("quantity", 1))
-            unit = correction.get("unit", original.get("unit", "serving"))
-            chosen = correction.get("chosenUsdaOption")
-
-            if chosen and chosen.get("usdaCode") and chosen.get("nutrition"):
-                usda = {
-                    "usdaCode": chosen["usdaCode"],
-                    "name": chosen.get("name", corrected_name),
-                    "nutrition": chosen["nutrition"],
-                    "serving_size_g": chosen.get("serving_size_g", 100),
-                }
-                update["nutrition"] = chosen["nutrition"]
-                update["usdaCode"] = chosen["usdaCode"]
-                update["source"] = "usda"
-                usda_match_info = {"found": True, "matchedName": chosen.get("name"), "userChose": True, "searchedFor": corrected_name}
-                print(f"   ✅ Using user-chosen USDA: {chosen.get('name')}")
-            elif name_changed or force_recalc:
                 if name_changed:
                     print(f"📝 Name changed: {original.get('name')} → {corrected_name}")
                 else:
@@ -1140,9 +1465,8 @@ def save_correction(ingredient_id):
                 "correctionReason": correction_reason,
                 "usdaMatch": usda_match_info,
             }
-            # When name changed, fetch USDA options so user can choose
-            if name_changed and not correction.get("chosenUsdaOption"):
-                corrected_name = correction.get("name", original.get("name"))
+            # Fetch USDA options so user can pick a better match (when name changed OR poor USDA)
+            if not correction.get("chosenUsdaOption") and (name_changed or correction_reason == "poor_usda_match"):
                 qty = correction.get("quantity", original.get("quantity", 1))
                 u = correction.get("unit", original.get("unit", "serving"))
                 try:

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { fetchMealsForDateRange, fetchIngredients, fetchHasNonFoodLogs, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getLearningStats, removeLearnedPattern, parseAndSaveMeal, clearMealIngredients, clearNonFoodClassification, sendCorrectionMessage, previewCorrection, saveCorrection, getParseApiUrl } from "./api";
+import { fetchMealsForDateRange, fetchIngredients, fetchHasNonFoodLogs, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getLearningStats, removeLearnedPattern, parseAndSaveMeal, clearMealIngredients, clearNonFoodClassification, sendCorrectionMessage, previewCorrection, saveCorrection, reparseIngredientFromText, getParseApiUrl, deleteIngredient, addIngredients, updateIngredientPortion } from "./api";
 
 // Format nutrition array for display (cal, protein, carbs, fat)
 function formatNutritionSummary(nutrition) {
@@ -23,8 +23,14 @@ function formatNutritionSummary(nutrition) {
   return parts.length ? parts.join(", ") : "";
 }
 
+// Vague names that should always be treated as low-confidence
+const VAGUE_NAME_PATTERNS = /pizza toppings|salad stuff|sandwich fillings|leftover food|toppings\b|leftover(s)?\b|generic salad|stuff\b|fillings\b/i;
+
 // Determine if an ingredient is low confidence (needs review)
 function isLowConfidence(ing) {
+  const name = (ing.name || "").trim();
+  // Vague name heuristic: treat known vague terms as low-confidence
+  if (VAGUE_NAME_PATTERNS.test(name)) return true;
   // No USDA match = GPT guessed it
   if (!ing.usdaCode) return true;
   // Source is explicitly GPT without USDA validation
@@ -129,6 +135,14 @@ function MealCard({ meal, onMealUpdated }) {
   const [parsing, setParsing] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [clearingNonFood, setClearingNonFood] = useState(false);
+  const [addingIngredients, setAddingIngredients] = useState(false);
+  const [showAddIngredients, setShowAddIngredients] = useState(false);
+  const [addIngredientsText, setAddIngredientsText] = useState("");
+  const [deletingId, setDeletingId] = useState(null);
+  const [editingPortionId, setEditingPortionId] = useState(null);
+  const [editingQty, setEditingQty] = useState("");
+  const [editingUnit, setEditingUnit] = useState("serving");
+  const [updatingPortionId, setUpdatingPortionId] = useState(null);
   const [loaded, setLoaded] = useState(false);
   const [expandedNutrientId, setExpandedNutrientId] = useState(null);
 
@@ -208,6 +222,69 @@ function MealCard({ meal, onMealUpdated }) {
       alert(`Clear failed: ${err.message}`);
     } finally {
       setClearing(false);
+    }
+  };
+
+  // Delete single ingredient
+  const handleDeleteIngredient = async (ing) => {
+    if (!confirm(`Remove "${ing.name}" from this meal?`)) return;
+    setDeletingId(ing.id);
+    try {
+      await deleteIngredient(ing.id);
+      setIngredients((prev) => prev.filter((i) => i.id !== ing.id));
+    } catch (err) {
+      console.error("Delete ingredient failed:", err);
+      alert(`Delete failed: ${err.message}`);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // Quick-edit portion (amount) without opening correction chat
+  const handleStartPortionEdit = (ing) => {
+    setEditingPortionId(ing.id);
+    setEditingQty(String(ing.quantity ?? 1));
+    setEditingUnit(ing.unit || "serving");
+  };
+  const handlePortionUpdate = async () => {
+    if (!editingPortionId) return;
+    const qty = parseFloat(editingQty);
+    if (isNaN(qty) || qty <= 0) {
+      setEditingPortionId(null);
+      return;
+    }
+    setUpdatingPortionId(editingPortionId);
+    try {
+      const result = await updateIngredientPortion(editingPortionId, qty, editingUnit);
+      const saved = result.ingredient;
+      setIngredients((prev) => prev.map((i) => (i.id === editingPortionId ? { ...i, ...saved } : i)));
+      setEditingPortionId(null);
+    } catch (err) {
+      console.error("Portion update failed:", err);
+      alert(`Update failed: ${err.message}`);
+    } finally {
+      setUpdatingPortionId(null);
+    }
+  };
+
+  // Add multiple ingredients from text
+  const handleAddIngredients = async () => {
+    const text = addIngredientsText.trim();
+    if (!text) return;
+    setAddingIngredients(true);
+    try {
+      const result = await addIngredients(meal.id, text);
+      const added = result.ingredients || [];
+      if (added.length > 0) {
+        setIngredients((prev) => [...prev, ...added]);
+        setAddIngredientsText("");
+        setShowAddIngredients(false);
+      }
+    } catch (err) {
+      console.error("Add ingredients failed:", err);
+      alert(`Add ingredients failed: ${err.message}`);
+    } finally {
+      setAddingIngredients(false);
     }
   };
 
@@ -387,14 +464,32 @@ function MealCard({ meal, onMealUpdated }) {
       {ingredients.length > 0 && (
         <div>
           <div className="flex justify-between items-center mb-2">
-            <span className="text-xs text-gray-400">{ingredients.length} ingredient{ingredients.length !== 1 ? 's' : ''}</span>
-            <button
-              onClick={handleClear}
-              disabled={clearing}
-              className="text-xs text-red-400 hover:text-red-600 disabled:opacity-50"
-            >
-              {clearing ? "Clearing..." : "🗑️ Clear"}
-            </button>
+            <span className="text-xs text-gray-400 flex items-center gap-2">
+              {ingredients.length} ingredient{ingredients.length !== 1 ? 's' : ''}
+              {(() => {
+                const needReview = ingredients.filter(ing => isLowConfidence(ing)).length;
+                return needReview > 0 ? (
+                  <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-medium">
+                    {needReview} need{needReview === 1 ? 's' : ''} review
+                  </span>
+                ) : null;
+              })()}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowAddIngredients(true)}
+                className="text-xs text-blue-600 hover:text-blue-800"
+              >
+                + Add
+              </button>
+              <button
+                onClick={handleClear}
+                disabled={clearing}
+                className="text-xs text-red-400 hover:text-red-600 disabled:opacity-50"
+              >
+                {clearing ? "Clearing..." : "🗑️ Clear"}
+              </button>
+            </div>
           </div>
           <ul className="text-sm text-gray-700 space-y-1">
           {ingredients.map((ing) => {
@@ -421,7 +516,7 @@ function MealCard({ meal, onMealUpdated }) {
             return (
               <li 
                 key={ing.id}
-                className={`rounded-lg transition-colors ${lowConf ? 'bg-amber-50' : ''}`}
+                className={`rounded-lg transition-colors ${lowConf ? 'bg-amber-50 border-l-4 border-amber-400' : ''}`}
               >
                 <div
                   onClick={() => setCorrecting(ing)}
@@ -430,12 +525,12 @@ function MealCard({ meal, onMealUpdated }) {
                   {/* Low confidence indicator */}
                   {lowConf && (
                     <span 
-                      className="text-amber-500 text-xs" 
+                      className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-amber-200 text-amber-800 shrink-0"
                       title={ing.parsingMetadata?.partialLabel 
                         ? "Label was partially visible – nutrition from USDA. Re-photo with full label for exact values." 
-                        : "Tap to correct"}
+                        : "Needs review — tap to fix"}
                     >
-                      ?
+                      Review
                     </span>
                   )}
                   
@@ -454,10 +549,59 @@ function MealCard({ meal, onMealUpdated }) {
                     </span>
                   )}
                   
-                  {ing.quantity && ing.unit && (
-                    <span className="text-gray-400 text-xs">
-                      ({ing.quantity} {ing.unit})
-                    </span>
+                  {/* Amount: click to quick-edit (no GPT) */}
+                  {editingPortionId === ing.id ? (
+                    <div
+                      className="flex items-center gap-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="number"
+                        min="0.25"
+                        step="0.25"
+                        value={editingQty}
+                        onChange={(e) => setEditingQty(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handlePortionUpdate();
+                          if (e.key === "Escape") setEditingPortionId(null);
+                        }}
+                        className="w-14 px-1 py-0.5 text-xs border rounded"
+                        autoFocus
+                      />
+                      <select
+                        value={editingUnit}
+                        onChange={(e) => setEditingUnit(e.target.value)}
+                        className="text-xs border rounded py-0.5"
+                      >
+                        {["serving", "cup", "cups", "oz", "g", "tbsp", "tsp", "piece", "pieces", "slice", "slices", "egg", "eggs"].map((u) => (
+                          <option key={u} value={u}>{u}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handlePortionUpdate}
+                        disabled={updatingPortionId === ing.id || isNaN(parseFloat(editingQty)) || parseFloat(editingQty) <= 0}
+                        className="text-[10px] px-1.5 py-0.5 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                      >
+                        {updatingPortionId === ing.id ? "…" : "✓"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingPortionId(null)}
+                        className="text-[10px] px-1.5 py-0.5 text-gray-500 hover:text-gray-700"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); handleStartPortionEdit(ing); }}
+                      className="text-gray-400 text-xs hover:text-blue-600 hover:underline"
+                      title="Click to change amount (saves for learning)"
+                    >
+                      ({ing.quantity ?? 1} {ing.unit || "serving"})
+                    </button>
                   )}
                   
                   {energy || protein || carbs || fat ? (
@@ -477,7 +621,18 @@ function MealCard({ meal, onMealUpdated }) {
                   >
                     {showNutrients ? "▼ Nutrients" : "▶ Nutrients"}
                   </button>
-                  <span className="text-gray-300 text-xs">tap to edit</span>
+                  <span className={`text-xs ${lowConf ? 'text-amber-600' : 'text-gray-300'}`}>
+                    {lowConf ? 'Needs review — tap to fix' : 'tap to edit'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); handleDeleteIngredient(ing); }}
+                    disabled={deletingId === ing.id}
+                    className="ml-auto p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
+                    title="Remove ingredient"
+                  >
+                    {deletingId === ing.id ? "…" : "🗑"}
+                  </button>
                 </div>
                 {/* Expanded: full macro/micro list */}
                 {showNutrients && (
@@ -530,21 +685,61 @@ function MealCard({ meal, onMealUpdated }) {
           }}
         />
       )}
+
+      {/* Add ingredients modal */}
+      {showAddIngredients && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl p-4">
+            <h3 className="font-semibold text-lg mb-2">Add ingredients</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              Describe what to add (e.g. sardines 1 can, marinara 2 tbsp, olives 5)
+            </p>
+            <textarea
+              value={addIngredientsText}
+              onChange={(e) => setAddIngredientsText(e.target.value)}
+              placeholder="sardines 1 can, marinara 2 tbsp"
+              className="w-full px-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              rows={3}
+              disabled={addingIngredients}
+            />
+            <div className="flex gap-2 mt-4 justify-end">
+              <button
+                onClick={() => { setShowAddIngredients(false); setAddIngredientsText(""); }}
+                disabled={addingIngredients}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddIngredients}
+                disabled={addingIngredients || !addIngredientsText.trim()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {addingIngredients ? "Adding…" : "Add"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // Natural language correction chat component
 function CorrectionChat({ ingredient, meal, onClose, onSave }) {
+  const lowConf = isLowConfidence(ingredient);
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
+  const [reDescribeMode, setReDescribeMode] = useState(false);
+  const inputRef = useRef(null);
   const [pendingCorrection, setPendingCorrection] = useState(null);
   const [pendingLearned, setPendingLearned] = useState(null);
   const [pendingReason, setPendingReason] = useState(null);
   const [pendingShouldLearn, setPendingShouldLearn] = useState(false);
   const [conversationHistory, setConversationHistory] = useState([]);
   const [pendingPreview, setPendingPreview] = useState(null); // { previewResult, correction, learned, reason, shouldLearn, conversation, selectedUsdaOption? }
+  const [loadingPreview, setLoadingPreview] = useState(false);
   const messagesEndRef = useRef(null);
 
   // Build the meal image URL
@@ -590,10 +785,12 @@ What would you like to change? You can tell me naturally, like "that's actually 
         conversationHistory
       );
 
-      // Add bot response
-      setMessages(prev => [...prev, { from: "bot", text: result.reply }]);
+      // Add bot response — but skip when we'll show a preview (avoid "here's the correction" with no details)
+      if (!(result.complete && result.correction)) {
+        setMessages(prev => [...prev, { from: "bot", text: result.reply }]);
+      }
 
-      // Update conversation history for context
+      // Update conversation history for context (always, for API)
       setConversationHistory(prev => [
         ...prev,
         { role: "user", content: msg },
@@ -613,7 +810,10 @@ What would you like to change? You can tell me naturally, like "that's actually 
       setPendingShouldLearn(result.shouldLearn || false);
 
       // If complete, preview first — show what would change, user confirms before save
+      // Don't add the GPT reply when we'll show a preview; show "Loading preview..." instead
+      // so the user doesn't see "here's the correction" with no details.
       if (result.complete && result.correction) {
+        setLoadingPreview(true);
         const updatedConversation = [
           ...conversationHistory,
           { role: "user", content: msg },
@@ -637,18 +837,25 @@ What would you like to change? You can tell me naturally, like "that's actually 
             conversation: updatedConversation,
           });
           const toShow = previewResult.addedIngredient || previewResult.ingredient;
-          const nutText = formatNutritionSummary(toShow?.nutrition);
+          const nutText = toShow ? formatNutritionSummary(toShow.nutrition) : "";
           const opts = previewResult.usdaOptions || [];
           const hasExact = previewResult.hasExactUsdaMatch;
-          let previewMsg = previewResult.addedIngredient
-            ? `Here's what I'll add:\n\n**${toShow.name}** — ${toShow.quantity ?? 1} ${toShow.unit || "serving"}${nutText ? "\n" + nutText : ""}\n\nConfirm to save, or cancel to edit.`
-            : `Here's what I'll change it to:\n\n**${toShow.name}** — ${toShow.quantity ?? 1} ${toShow.unit || "serving"}${nutText ? "\n" + nutText : ""}\n\nConfirm to save, or cancel to edit.`;
+          let previewMsg;
+          if (!toShow) {
+            previewMsg = "Preview unavailable — you can try confirming anyway, or cancel and correct again.";
+          } else {
+            previewMsg = previewResult.addedIngredient
+              ? `Here's what I'll add:\n\n**${toShow.name}** — ${toShow.quantity ?? 1} ${toShow.unit || "serving"}${nutText ? "\n" + nutText : ""}\n\nConfirm to save, or cancel to edit.`
+              : `Here's what I'll change it to:\n\n**${toShow.name}** — ${toShow.quantity ?? 1} ${toShow.unit || "serving"}${nutText ? "\n" + nutText : ""}\n\nConfirm to save, or cancel to edit.`;
+          }
           if (opts.length > 0) {
             previewMsg += `\n\n${!hasExact ? "No exact USDA match for \"" + (result.correction?.name || ingredient.name) + "\". " : ""}Choose an option below or confirm to use the default.`;
           }
           setMessages(prev => [...prev, { from: "bot", text: previewMsg, isPreview: true, usdaOptions: opts }]);
         } catch (err) {
           setMessages(prev => [...prev, { from: "bot", text: `Could not preview: ${err.message}. You can try again.` }]);
+        } finally {
+          setLoadingPreview(false);
         }
       }
 
@@ -668,6 +875,7 @@ What would you like to change? You can tell me naturally, like "that's actually 
     const msg = inputValue.trim();
     if (msg) {
       setInputValue("");
+      setReDescribeMode(false);
       sendMessage(msg);
     }
   };
@@ -789,10 +997,19 @@ What would you like to change? You can tell me naturally, like "that's actually 
               </div>
             </div>
           ))}
-          {loading && (
+          {(loading || loadingPreview) && (
             <div className="flex justify-start">
-              <div className="bg-gray-100 text-gray-500 px-4 py-2 rounded-2xl rounded-bl-md">
-                Thinking...
+              <div className="bg-gray-100 text-gray-500 px-4 py-2 rounded-2xl rounded-bl-md max-w-[85%]">
+                {loadingPreview ? (
+                  <div>
+                    <p className="text-sm">Loading preview...</p>
+                    <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: "60%" }} />
+                    </div>
+                  </div>
+                ) : (
+                  "Thinking..."
+                )}
               </div>
             </div>
           )}
@@ -801,6 +1018,28 @@ What would you like to change? You can tell me naturally, like "that's actually 
 
         {/* Quick actions + Input */}
         <div className="p-4 border-t bg-gray-50 space-y-3">
+          {/* Low-confidence quick actions */}
+          {lowConf && !pendingPreview && (
+            <div className="flex flex-wrap gap-2 pb-1 border-b border-amber-200/50">
+              <span className="text-xs text-amber-700 font-medium w-full">Quick fix:</span>
+              <button
+                type="button"
+                onClick={() => sendMessage("This is wrong, please be more specific")}
+                disabled={loading}
+                className="text-xs px-3 py-2 bg-amber-100 border border-amber-300 rounded-lg text-amber-800 hover:bg-amber-200 font-medium disabled:opacity-50"
+              >
+                👎 Wrong
+              </button>
+              <button
+                type="button"
+                onClick={() => { setReDescribeMode(true); inputRef.current?.focus(); }}
+                disabled={loading}
+                className="text-xs px-3 py-2 bg-amber-100 border border-amber-300 rounded-lg text-amber-800 hover:bg-amber-200 font-medium disabled:opacity-50"
+              >
+                ✏️ Re-describe
+              </button>
+            </div>
+          )}
           {/* USDA options when preview has them */}
           {pendingPreview?.previewResult?.usdaOptions?.length > 0 && (
             <div className="space-y-1">
@@ -887,10 +1126,11 @@ What would you like to change? You can tell me naturally, like "that's actually 
           {/* Text input - always available */}
           <form onSubmit={handleSubmit} className="flex gap-2">
             <input
+              ref={inputRef}
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Tell me what to correct..."
+              placeholder={reDescribeMode ? "Describe in your own words (e.g. 2 slices pepperoni pizza)" : "Tell me what to correct..."}
               className="flex-1 px-4 py-2 border rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               autoFocus
               disabled={loading}

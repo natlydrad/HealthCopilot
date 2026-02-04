@@ -1,0 +1,27 @@
+---
+description: Restart parse API yourself after nutrition-pipeline changes; do not ask the user
+globs: ml-pipeline/nutrition-pipeline/*.py
+alwaysApply: false
+---
+
+# Parse API: Restart yourself, don't ask
+
+When you change code in the nutrition pipeline (e.g. `parse_api.py`, `parser_gpt.py`, `lookup_usda.py`, `log_classifier.py`, or other files in `ml-pipeline/nutrition-pipeline/`), **restart the parse API yourself**. Do not ask the user to restart it.
+
+## What to do
+
+1. **If a parse API process is already running**  
+   Start the API again in a terminal (it will bind to the same port; the user can stop the old process if needed, or run in a new terminal). Prefer running in the background so the session stays usable:
+   - From repo root: `cd ml-pipeline/nutrition-pipeline && python parse_api.py`  
+   - Use `is_background: true` when running this command so it doesn't block.
+
+2. **If you're not sure whether it's running**  
+   Start it anyway in the background. The API runs on port 5001 by default (or `PARSE_API_PORT` from env).
+
+## Command
+
+```bash
+cd ml-pipeline/nutrition-pipeline && python parse_api.py
+```
+
+Run this yourself after relevant changes. Do not say "you may need to restart the parse API" or "please restart the parse API"—just run the command.

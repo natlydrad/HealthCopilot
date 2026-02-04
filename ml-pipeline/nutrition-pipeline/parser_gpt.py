@@ -35,6 +35,7 @@ def parse_ingredients(text: str, user_context: str = ""):
     - "pad thai" → rice noodles, egg, tofu/shrimp, peanuts, bean sprouts
     
     DO NOT return composite foods like "burrito" or "sandwich" - break them down!
+    AVOID vague terms: "pizza toppings", "salad stuff", "sandwich fillings", "leftover food". Prefer specific items: "pepperoni pizza slice", "2 slices cheese pizza", "lettuce, tomato, dressing", "turkey sandwich".
     Simple items stay as-is: "apple", "coffee", "eggs", "chicken breast"
     
     Return ONLY a JSON array (no markdown, no explanation).
@@ -44,6 +45,7 @@ def parse_ingredients(text: str, user_context: str = ""):
     - unit (string) - use appropriate units:
         * Eggs: count (unit: "eggs")
         * Bread/tortillas: count (unit: "slice" or "piece")
+        * Bacon: count (unit: "piece" or "slice" — 2 pieces = 2 slices bacon)
         * Meats: oz (chicken→4oz, steak→6oz)
         * Rice/beans/grains: cups (unit: "cup", typically 0.5-1)
         * Vegetables: cups (unit: "cup", typically 0.25-0.5)
@@ -204,6 +206,9 @@ def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = No
         - A burrito on a plate → tortilla, rice, beans, cheese, salsa, meat
         - A bowl of salad → greens, tomatoes, cucumber, dressing, croutons
         - Fried rice → rice, egg, vegetables, soy sauce
+        - Pizza → "pepperoni pizza slice", "2 slices cheese pizza", "veggie pizza", etc. — NEVER "pizza toppings"
+        - Bacon: use unit "piece" or "slice" (e.g. 2 pieces bacon), NOT cup
+        AVOID vague terms: "pizza toppings", "salad stuff", "sandwich fillings", "leftover food". Prefer specific items.
         List actual ingredients, not composite names.
         
         NUTRITION FACTS LABEL: When you return ONE packaged product (Step 1), only add "nutritionFromLabel" if the FULL label is visible and you can read at least Calories and Serving size. Use:
@@ -276,7 +281,8 @@ def correction_chat(
     user_message: str,
     conversation_history: list,
     pb_url: str,
-    token: str | None = None
+    token: str | None = None,
+    recent_meals_context: str = "",
 ) -> dict:
     """
     Have a conversational correction chat about an ingredient.
@@ -307,6 +313,10 @@ CURRENT INGREDIENT:
 - Quantity: {ingredient.get('quantity')} {ingredient.get('unit')}
 - Source: {ingredient.get('source', 'unknown')}
 - Original reasoning: {ingredient.get('parsingMetadata', {}).get('reasoning', 'not recorded')}
+""" + (f"""
+OTHER MEALS LOGGED TODAY (most recent first) — use this when user says "same as earlier", "same meal", "50% of what I had", etc.:
+{recent_meals_context}
+""" if recent_meals_context else "") + """
 
 Your job is to:
 1. Understand what the user wants to correct
@@ -317,14 +327,15 @@ Your job is to:
    - "brand_specific": User is specifying a particular brand → MAYBE LEARN (only if visually distinguishable)
    - "missing_item": User is ADDING a WHOLE NEW item you missed (e.g. "there was also a banana", "you missed the coffee") → the "correction" is the NEW item to add as a SEPARATE ingredient; we will NOT change the current ingredient. Only use this when they explicitly say they're adding something that was NOT the item you're correcting. DON'T LEARN.
    - "brand_specific" or similar: User is adding INFO to the current item (brand, type, e.g. "it's oat milk" or "unsweetened soy milk") → UPDATE the current ingredient with the new name/info. NOT missing_item.
-   - "poor_usda_match": The USDA nutrition data is wrong (e.g. "450 cal for 1 orange is crazy", "that's way too many calories", "USDA match is off") → use GPT estimate instead. Set correction with "forceUseGptEstimate": true. DON'T LEARN.
+   - "poor_usda_match": The USDA nutrition data is wrong (e.g. "450 cal for 1 orange is crazy", "replace USDA with ~2 cal for black coffee", "that's way too many calories") → use GPT estimate instead. Set correction with "forceUseGptEstimate": true. If user specifies target calories (e.g. "~2 cal", "about 5 calories"), add "targetCalories": number to correction. DON'T LEARN.
 3. Have a natural conversation - if unclear, ask: "Just to make sure I learn the right thing - did I misidentify this, or are you adding something I missed?"
 4. "Add info" vs "add new ingredient": If user is clarifying/adding info TO the current item (brand, type: "it's soy milk", "oat milk", "unsweetened") → use "brand_specific", correction updates the CURRENT ingredient name. If user says they're adding something ELSE you missed ("there was also X", "you forgot the banana") → use "missing_item", correction is the NEW separate ingredient.
+5. "Same as earlier" / portion scaling: When user says "same meal as earlier but 50%", "half of what I had", "quarter of the pizza", "same as the egg noodles meal", etc., use the OTHER MEALS LOGGED TODAY context to find the matching meal and its ingredients. Replace the current ingredient with that meal's ingredients scaled by the given factor. Portion factors: half/50% → 0.5; quarter/25% → 0.25; third/33% → 0.33; three quarters/75% → 0.75. For "quarter of [food]" or "a quarter of the [food]" when referring to the current item, use quantity 0.25 (with same name/unit). Use correctionReason "portion_estimate" and set correction with the correct name, quantity (scaled), unit from the referenced meal.
 
 IMPORTANT: Always end your response with a JSON block:
 ```json
 {{
-  "correction": {{"name": "corrected name or null", "quantity": number or null, "unit": "unit or null", "forceUseGptEstimate": true or omit}},
+  "correction": {{"name": "corrected name or null", "quantity": number or null, "unit": "unit or null", "forceUseGptEstimate": true or omit, "targetCalories": number or omit, "targetProtein": number or omit}},
   "correctionReason": "misidentified" | "added_after" | "portion_estimate" | "brand_specific" | "missing_item" | "poor_usda_match",
   "shouldLearn": true/false,
   "learned": {{"mistaken": "what you thought", "actual": "what it is"}} or null,
@@ -337,7 +348,7 @@ RULES:
 - Set "learned" ONLY when shouldLearn is true
 - Set "complete": true when the correction is finalized
 - Set correction fields to null if they shouldn't change
-- When correctionReason is "poor_usda_match", set correction.forceUseGptEstimate = true (so we replace USDA nutrition with GPT estimate)
+- When correctionReason is "poor_usda_match", ALWAYS set correction.forceUseGptEstimate = true. If user says "~2 cal", "about 2 calories", "replace with 2 cal", etc., add correction.targetCalories = 2
 - If unsure about the reason, ASK before setting complete=true"""
 
         # Build messages
@@ -425,15 +436,22 @@ RULES:
         }
 
 
-def gpt_estimate_nutrition(ingredient_name: str, quantity: float, unit: str) -> list | None:
+def gpt_estimate_nutrition(ingredient_name: str, quantity: float, unit: str, target_cal: float | None = None, target_protein: float | None = None) -> list | None:
     """
     Fallback when USDA lookup fails or returns unreasonable values.
     GPT estimates macros for the given portion.
+    Optional target_cal/target_protein: when user specified (e.g. "~2 cal for black coffee"), use as hint.
     Returns nutrition array in USDA-style format: [{nutrientName, unitName, value}, ...]
     or None on error.
     """
     try:
+        hint = ""
+        if target_cal is not None and target_cal > 0:
+            hint = f"\nUSER SPECIFIED: Use approximately {target_cal:.0f} calories."
+            if target_protein is not None and target_protein >= 0:
+                hint += f" Target protein: ~{target_protein:.0f}g."
         prompt = f"""Estimate nutrition for this food portion. Be conservative and realistic.
+{hint}
 
 Food: {ingredient_name}
 Quantity: {quantity} {unit}
@@ -447,6 +465,7 @@ Return ONLY a JSON object with these keys (numbers only, no units in values):
 IMPORTANT: Include ALL four keys. Sandwiches, wraps, and bread-based items have carbs from bread.
 
 Examples:
+- 8 oz black coffee: ~2 cal, 0g protein, 0g carbs, 0g fat
 - 1 chicken salad sandwich: ~350 cal, 20g protein, 35g carbs, 15g fat
 - 1 serving chicken salad (no bread): ~200 cal, 15g protein, 5g carbs, 14g fat
 - 6 small chicken wings baked: ~280 cal, 25g protein, 0g carbs, 18g fat

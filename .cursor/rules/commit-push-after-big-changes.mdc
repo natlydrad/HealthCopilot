@@ -1,0 +1,22 @@
+---
+description: Commit and push after completing a logical unit of work (feature, bugfix, refactor)
+alwaysApply: true
+---
+
+# Commit and push after big changes
+
+When you complete a **logical unit of work**—e.g. a feature is done, a bug is fixed, a refactor is finished, or the user indicates they're done—**commit and push automatically**. Do not ask "should I commit?"; just do it.
+
+## When to commit and push
+
+- After finishing a feature, bugfix, or refactor that the user asked for.
+- When the user says they're done, or that something looks good.
+- When you've made a coherent set of changes (multiple related edits) and there's a natural stopping point.
+
+## What to do
+
+1. **Stage** the relevant files: `git add` (the files you changed, or `git add -A` if the whole change set is one unit).
+2. **Commit** with a short, descriptive message (e.g. "Add parse API auto-restart rule", "Fix portion scaling in lookup_usda").
+3. **Push**: `git push` (request **git_write** and **network** permissions when running these commands).
+
+Do not commit after every single tiny edit—only after a completed chunk of work. When in doubt, commit and push at the end of the conversation turn where you finished the task.

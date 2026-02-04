@@ -53,19 +53,37 @@ UNIT_TO_GRAMS = {
 
 
 # Food-specific grams per piece (when unit is "piece"/"pieces")
-# USDA often returns 100g as "serving" which inflates piece counts 2-3x
+# USDA does not standardize piece weights—each food has its own serving. We use curated values.
+# Reference: USDA FDC, typical retail/recipe sizes
 PIECE_GRAMS_BY_FOOD = {
     "chicken wing": 30, "chicken wings": 30, "wing": 30, "wings": 30,
     "chicken breast": 120, "chicken breasts": 120,  # ~4oz
     "wingette": 25, "drummette": 25, "wingettes": 25, "drummettes": 25,
     "egg": 50, "eggs": 50,
-    "bread slice": 30, "slice of bread": 30, "slice": 30,
+    "bread slice": 30, "slice of bread": 30, "slice": 30, "slices": 30,
+    "bacon": 18, "bacon slice": 18, "bacon strip": 18,  # cooked ~15-20g/slice
     "nugget": 20, "nuggets": 20, "chicken nugget": 20, "chicken nuggets": 20,
     "meatball": 30, "meatballs": 30,
     "cookie": 15, "cookies": 15,
     "apple": 180, "apples": 180,
     "banana": 120, "bananas": 120,
     "orange": 130, "oranges": 130,
+    "tomato": 120, "tomatoes": 120,
+    "avocado": 150, "avocados": 150,
+    "potato": 170, "potatoes": 170,
+    "onion": 110, "onions": 110,
+    "carrot": 60, "carrots": 60,
+    "strawberry": 12, "strawberries": 12,
+    "grape": 5, "grapes": 5,
+    "blueberry": 1, "blueberries": 1,
+    "raspberry": 4, "raspberries": 4,
+    "blackberry": 4, "blackberries": 4,
+    "muffin": 60, "muffins": 60,
+    "pancake": 60, "pancakes": 60,
+    "tortilla": 45, "tortillas": 45,
+    "sausage": 70, "sausages": 70, "sausage link": 70, "sausage links": 70,
+    "fish stick": 25, "fish sticks": 25,
+    "shrimp": 15, "shrimps": 15, "large shrimp": 15,
 }
 
 
@@ -202,6 +220,12 @@ def validate_scaled_calories(
                     return False, f"Scaled {scaled_calories:.0f} cal for {quantity} {key} = {per_piece:.0f} cal/piece (expected <{hi})"
                 break
 
+    # Zero-cal drinks: black coffee, tea, diet soda, etc. — reject USDA matches with calories
+    zero_cal_drinks = ("coffee", "tea", "espresso", "black coffee", "green tea", "herbal tea")
+    if any(d in name_lower for d in zero_cal_drinks):
+        if unit_lower in ("oz", "cup", "cups", "serving", "servings") and quantity <= 24:
+            if scaled_calories > 15:
+                return False, f"Black coffee/tea should be ~0-5 cal, not {scaled_calories:.0f}"
     # Whole-meal sanity: single ingredient >1200 cal is suspect (unless bulk)
     if quantity <= 10 and unit_lower in ("piece", "pieces", "oz", "g", "cup", "cups"):
         if scaled_calories > 1200:
@@ -432,6 +456,12 @@ def _alternative_usda_queries(ingredient_name: str) -> list[str]:
                 queries.append(p)
                 queries.append(f"{p} unsweetened")
                 break
+    # Coffee/tea: search "brewed" to get black coffee (~2 cal), not creamer or sweetened
+    if "coffee" in lower or "espresso" in lower:
+        queries.append("coffee brewed")
+        queries.append("black coffee brewed")
+    if "tea" in lower and "green" not in lower and "herbal" not in lower:
+        queries.append("tea brewed")
     return queries
 
 

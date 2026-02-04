@@ -1,5 +1,6 @@
 let authToken = null;
 const PB_BASE = "https://pocketbase-1j2x.onrender.com";
+const PARSE_API_URL = import.meta.env.VITE_PARSE_API_URL || "http://localhost:5001";
 
 export function setAuthToken(token) {
   authToken = token;
@@ -32,32 +33,24 @@ export async function fetchMeals() {
 }
 
 // Fetch meals for a specific date range (on-demand loading)
-// Converts local dates to UTC for proper timezone handling
 export async function fetchMealsForDateRange(startDate, endDate) {
   if (!authToken) throw new Error("Not logged in");
 
-  // startDate and endDate are in format "YYYY-MM-DD" (local time)
-  // Convert to UTC bounds based on user's timezone
-  
-  // Create local midnight for start date, then convert to UTC
-  const localStart = new Date(`${startDate}T00:00:00`);
-  const localEnd = new Date(`${endDate}T23:59:59.999`);
-  
-  // Format as PocketBase expects (space instead of T)
-  const formatForPB = (date) => {
-    return date.toISOString().replace('T', ' ');
-  };
-  
-  const startTS = formatForPB(localStart);
-  const endTS = formatForPB(localEnd);
+  // startDate/endDate are "YYYY-MM-DD" in user's LOCAL calendar (from Dashboard)
+  // Interpret as local midnight/end-of-day, then convert to UTC for PocketBase filter
+  // (avoids timezone bug: e.g. Feb 3 PST should query Feb 3 08:00 UTC -> Feb 4 07:59 UTC)
+  const startLocal = new Date(startDate + "T00:00:00");
+  const endLocal = new Date(endDate + "T23:59:59.999");
+  const startTS = startLocal.toISOString().replace("T", " ").replace(/\.\d{3}Z$/, ".000Z");
+  const endTS = endLocal.toISOString().replace("T", " ").replace(/\.\d{3}Z$/, ".999Z");
 
   // Use timestamp field for meal time filtering
   const filter = encodeURIComponent(
     `timestamp >= "${startTS}" && timestamp <= "${endTS}"`
   );
 
-  const url = `${PB_BASE}/api/collections/meals/records?perPage=500&sort=timestamp&filter=${filter}`;
-  console.log("🔍 Fetching meals:", startDate, "to", endDate, "| UTC:", startTS, "to", endTS);
+  const url = `${PB_BASE}/api/collections/meals/records?perPage=100&sort=-timestamp&filter=${filter}`;
+  console.log("🔍 Fetching meals:", startDate, "to", endDate);
 
   try {
     const res = await fetch(url, {
@@ -91,15 +84,13 @@ export async function fetchMealsForDateRange(startDate, endDate) {
 export async function fetchIngredients(mealId) {
   // PocketBase filter for a relation field must use this format:
   // filter=(mealId='jmlpwbqrpq4etn8')
-  // perPage=500: default is 30 - we were only fetching/deleting first 30, leaving rest to "come back" on refresh
   const filter = encodeURIComponent(`(mealId='${mealId}')`);
 
-  const url = `${PB_BASE}/api/collections/ingredients/records?filter=${filter}&perPage=500`;
+  const url = `${PB_BASE}/api/collections/ingredients/records?filter=${filter}`;
 
   console.log("🛰 Fetching:", url);
   const res = await fetch(url, {
     headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-    cache: "no-store", // prevent stale cache after clear
   });
 
   if (!res.ok) {
@@ -309,120 +300,6 @@ function guessCategory(name) {
   return "food";
 }
 
-// Delete an ingredient record
-export async function deleteIngredient(ingredientId) {
-  if (!authToken) throw new Error("Not logged in");
-
-  const url = `${PB_BASE}/api/collections/ingredients/records/${ingredientId}`;
-  const res = await fetch(url, {
-    method: "DELETE",
-    headers: {
-      Authorization: `Bearer ${authToken}`,
-    },
-  });
-
-  if (!res.ok) {
-    const error = await res.text();
-    console.error(`DELETE ${url} → ${res.status}`, error);
-    throw new Error(`Delete failed (${res.status}): ${error || res.statusText}`);
-  }
-
-  return true;
-}
-
-// Delete ALL ingredients for a meal (clear parse)
-// Uses Parse API (service token) to bypass PocketBase deleteRule 403
-export async function clearMealIngredients(mealId) {
-  if (!authToken) throw new Error("Not logged in");
-
-  const parseUrl = import.meta.env.VITE_PARSE_API_URL || "http://localhost:5001";
-  const useProxy = import.meta.env.DEV && !import.meta.env.VITE_PARSE_API_URL;
-  const url = useProxy ? `/parse-api/clear/${mealId}` : `${parseUrl}/clear/${mealId}`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30_000);
-  let res;
-  try {
-    res = await fetch(url, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${authToken}` },
-      signal: controller.signal,
-    });
-  } catch (fetchErr) {
-    clearTimeout(timeout);
-    const msg = fetchErr?.name === "AbortError"
-      ? "Clear timed out. Is the Parse API running?"
-      : (fetchErr?.message || "Network error. Is the Parse API running on port 5001?");
-    throw new Error(msg);
-  }
-  clearTimeout(timeout);
-  const text = await res.text();
-  if (!res.ok) {
-    let errMsg = text;
-    try {
-      const j = JSON.parse(text);
-      if (j?.error) errMsg = j.error;
-    } catch (_) {}
-    throw new Error(errMsg || `Clear failed (${res.status})`);
-  }
-  let data = {};
-  try {
-    data = JSON.parse(text);
-  } catch (_) {
-    console.warn("Clear: unexpected non-JSON response", text?.slice(0, 100));
-  }
-  const deleted = data.deleted ?? 0;
-  console.log(`✅ Cleared ${deleted} ingredients for meal ${mealId}`);
-  return deleted;
-}
-
-// Check if meal was classified as non-food (has non_food_logs)
-export async function fetchHasNonFoodLogs(mealId) {
-  if (!authToken) return false;
-  const filter = encodeURIComponent(`mealId='${mealId}'`);
-  const res = await fetch(
-    `${PB_BASE}/api/collections/non_food_logs/records?filter=${filter}&perPage=1`,
-    { headers: { Authorization: `Bearer ${authToken}` }, cache: "no-store" }
-  );
-  if (!res.ok) return false;
-  const data = await res.json();
-  return (data.items?.length ?? 0) > 0;
-}
-
-// Clear non-food classification: delete non_food_logs for this meal, reset meal.isFood to null
-export async function clearNonFoodClassification(mealId) {
-  if (!authToken) throw new Error("Not logged in");
-
-  const filter = encodeURIComponent(`mealId='${mealId}'`);
-  const listRes = await fetch(
-    `${PB_BASE}/api/collections/non_food_logs/records?filter=${filter}&perPage=50`,
-    { headers: { Authorization: `Bearer ${authToken}` }, cache: "no-store" }
-  );
-  if (!listRes.ok) throw new Error("Failed to fetch non-food logs");
-  const { items } = await listRes.json();
-  for (const log of items || []) {
-    const delRes = await fetch(
-      `${PB_BASE}/api/collections/non_food_logs/records/${log.id}`,
-      { method: "DELETE", headers: { Authorization: `Bearer ${authToken}` } }
-    );
-    if (!delRes.ok) console.warn("Failed to delete non_food_log", log.id);
-  }
-
-  const patchRes = await fetch(
-    `${PB_BASE}/api/collections/meals/records/${mealId}`,
-    {
-      method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${authToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ isFood: null }),
-    }
-  );
-  if (!patchRes.ok) throw new Error("Failed to reset meal classification");
-  console.log(`✅ Cleared non-food classification for meal ${mealId}`);
-  return true;
-}
-
 // Create an ingredient record
 export async function createIngredient(ingredient) {
   if (!authToken) throw new Error("Not logged in");
@@ -445,207 +322,55 @@ export async function createIngredient(ingredient) {
   return res.json();
 }
 
-// Backend Parse API URL (for GPT Vision image parsing)
-const PARSE_API_URL = import.meta.env.VITE_PARSE_API_URL || "http://localhost:5001";
-export function getParseApiUrl() {
-  return PARSE_API_URL;
-}
-
 // Parse and save ingredients for a meal (parse-on-view)
-// Tries backend API first (supports images), falls back to simple text parsing
 export async function parseAndSaveMeal(meal) {
   const hasText = meal.text?.trim();
   const hasImage = meal.image;
-  
   if (!hasText && !hasImage) return { ingredients: [], classificationResult: null };
-  
-  console.log("🧠 Parsing meal:", meal.id, hasText ? `"${meal.text}"` : "[image only]");
-  
-  // Try backend API first (supports images via GPT Vision)
-  // Send user's token so backend can load meal image (user-owned file)
+
+  // Try Parse API first (supports images + GPT)
   try {
-    console.log("🔗 Trying Parse API...", `${PARSE_API_URL}/parse/${meal.id}`);
+    const useProxy = import.meta.env.DEV && !import.meta.env.VITE_PARSE_API_URL;
+    const url = useProxy ? `/parse-api/parse/${meal.id}` : `${PARSE_API_URL}/parse/${meal.id}`;
     const timezone = typeof Intl !== "undefined" && Intl.DateTimeFormat ? Intl.DateTimeFormat().resolvedOptions().timeZone : "";
-    const apiRes = await fetch(`${PARSE_API_URL}/parse/${meal.id}`, {
+    const res = await fetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-      },
+      headers: { "Content-Type": "application/json", ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
       body: JSON.stringify(timezone ? { timezone } : {}),
     });
-    
-    if (apiRes.ok) {
-      const data = await apiRes.json();
-      console.log("✅ Parse API success:", data.count, "ingredients from", data.source, data.classificationResult || "");
-      return {
-        ingredients: data.ingredients || [],
-        classificationResult: data.classificationResult || null,
-        isFood: data.isFood,
-        message: data.message,
-        source: data.source,
-        reason: data.reason,
-      };
+    if (res.ok) {
+      const data = await res.json();
+      return { ingredients: data.ingredients || [], classificationResult: data.classificationResult || null };
     }
-    
-    // Surface backend error so user sees why it failed
-    const errBody = await apiRes.json().catch(() => ({}));
-    const msg = errBody?.error || errBody?.message || `Parse API returned ${apiRes.status}`;
-    console.warn("⚠️ Parse API error:", msg);
-    throw new Error(msg);
   } catch (err) {
-    if (err instanceof Error && err.message?.startsWith("Parse API returned")) {
-      throw err;
-    }
-    if (err instanceof Error && err.message && err.message !== "Failed to fetch") {
-      throw err;
-    }
-    console.log("⚠️ Parse API unreachable:", err?.message || err, "- falling back to simple parser");
+    console.warn("Parse API unreachable, falling back to simple parser:", err.message);
   }
-  
-  // Fallback: Simple text parsing (no images)
-  if (!hasText) {
-    const msg = "Parse server unreachable. Image-only meals need the parse server; text-only meals will use simple parser.";
-    throw new Error(msg);
-  }
-  
+
+  // Fallback: simple text-only parsing
+  if (!hasText) return { ingredients: [], classificationResult: null };
   const parsed = await parseMealSimple(meal.text);
-  console.log("📝 Simple parsed:", parsed);
-  
   if (parsed.length === 0) return { ingredients: [], classificationResult: null };
 
-  // Save each ingredient
   const saved = [];
   for (const ing of parsed) {
     try {
-      // Look up nutrition from USDA
       const usda = await lookupUSDANutrition(ing.name);
-      
-      const quantity = ing.quantity || 1;
-      const unit = ing.unit || "serving";
-      
-      // Scale nutrition to actual portion size
-      const scaledNutrition = usda?.nutrition 
-        ? scaleNutrition(usda.nutrition, quantity, unit)
-        : [];
-      
-      const ingredient = {
+      const result = await createIngredient({
         mealId: meal.id,
         name: ing.name,
-        quantity,
-        unit,
+        quantity: ing.quantity || 1,
+        unit: ing.unit || "serving",
         category: ing.category || "food",
         source: usda ? "usda" : "simple",
         usdaCode: usda?.usdaCode || null,
-        nutrition: scaledNutrition,
-      };
-      
-      const result = await createIngredient(ingredient);
+        nutrition: usda?.nutrition || [],
+      });
       saved.push(result);
-      console.log("✅ Saved:", ing.name, `(${quantity} ${unit})`);
     } catch (err) {
       console.error("Failed to save ingredient:", ing.name, err);
     }
   }
-  
   return { ingredients: saved, classificationResult: null };
-}
-
-// ============================================================
-// CORRECTION CHAT API
-// ============================================================
-
-// Send a message in the correction chat
-export async function sendCorrectionMessage(ingredientId, message, conversation = []) {
-  console.log("💬 Sending correction message:", message);
-  
-  try {
-    const res = await fetch(`${PARSE_API_URL}/correct/${ingredientId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, conversation }),
-    });
-    
-    if (!res.ok) {
-      const error = await res.text();
-      throw new Error(`Correction API error: ${error}`);
-    }
-    
-    const data = await res.json();
-    console.log("💬 AI response:", data.reply?.substring(0, 100));
-    return data;
-  } catch (err) {
-    console.error("Correction chat error:", err);
-    throw err;
-  }
-}
-
-// Preview what would be saved (no persistence)
-export async function previewCorrection(ingredientId, correction, learned = null, correctionReason = null, shouldLearn = false, conversation = []) {
-  return saveCorrection(ingredientId, correction, learned, correctionReason, shouldLearn, conversation, true);
-}
-
-// Save a finalized correction (correction may include chosenUsdaOption)
-export async function saveCorrection(ingredientId, correction, learned = null, correctionReason = null, shouldLearn = false, conversation = [], preview = false) {
-  console.log(preview ? "👁️ Previewing correction:" : "💾 Saving correction:", correction, "reason:", correctionReason);
-  
-  try {
-    const res = await fetch(`${PARSE_API_URL}/correct/${ingredientId}/save`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        correction, 
-        learned, 
-        correctionReason,
-        shouldLearn,
-        conversation,
-        preview
-      }),
-    });
-    
-    if (!res.ok) {
-      const error = await res.text();
-      throw new Error(`Save correction error: ${error}`);
-    }
-    
-    const data = await res.json();
-    if (preview) {
-      console.log("👁️ Preview received:", data.ingredient?.name, data.addedIngredient?.name);
-    } else {
-      console.log("✅ Correction saved:", data.success, "learned:", data.shouldLearn);
-    }
-    return data;
-  } catch (err) {
-    console.error(preview ? "Preview error:" : "Save correction error:", err);
-    throw err;
-  }
-}
-
-// Unit to grams conversion (matches backend)
-const UNIT_TO_GRAMS = {
-  oz: 28.35, ounce: 28.35, ounces: 28.35,
-  g: 1.0, gram: 1.0, grams: 1.0,
-  cup: 240.0, cups: 240.0,
-  tbsp: 15.0, tablespoon: 15.0,
-  tsp: 5.0, teaspoon: 5.0,
-  piece: 100.0, pieces: 100.0,
-  slice: 30.0, slices: 30.0,
-  egg: 50.0, eggs: 50.0,
-  serving: 100.0, servings: 100.0,
-};
-
-// Scale nutrition values from per-100g to actual portion
-function scaleNutrition(nutrients, quantity, unit) {
-  const gramsPerUnit = UNIT_TO_GRAMS[unit?.toLowerCase()] || 100;
-  const grams = quantity * gramsPerUnit;
-  const scaleFactor = grams / 100;
-  
-  console.log(`📊 Scaling: ${quantity} ${unit} = ${grams.toFixed(1)}g (${scaleFactor.toFixed(2)}x)`);
-  
-  return nutrients.map(n => ({
-    ...n,
-    value: n.value != null ? Math.round(n.value * scaleFactor * 100) / 100 : n.value
-  }));
 }
 
 // USDA FoodData Central API lookup
@@ -685,7 +410,6 @@ export async function getCorrections(limit = 50) {
   
   const res = await fetch(url, {
     headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-    cache: "no-store",
   });
 
   if (!res.ok) return [];
@@ -693,93 +417,45 @@ export async function getCorrections(limit = 50) {
   return data.items || [];
 }
 
-// Get learned patterns - uses Parse API (admin token) so Learning panel works
-// even when PocketBase API rules block direct access to user_food_profile
+// Get learned patterns — uses Parse API (reads user_food_profile) so Learning panel works
+// even when PocketBase API rules block direct access
 export async function getLearnedPatterns() {
-  const parseUrl = import.meta.env.VITE_PARSE_API_URL || "http://localhost:5001";
   const useProxy = import.meta.env.DEV && !import.meta.env.VITE_PARSE_API_URL;
-  const url = useProxy ? `/parse-api/learning/patterns` : `${parseUrl}/learning/patterns`;
-  const userId = getCurrentUserId();
+  const url = useProxy ? "/parse-api/learning/patterns" : `${PARSE_API_URL}/learning/patterns`;
   if (authToken) {
     try {
       const headers = { Authorization: `Bearer ${authToken}`, "Cache-Control": "no-store" };
-      if (userId) headers["X-User-Id"] = userId;
+      if (getCurrentUserId()) headers["X-User-Id"] = getCurrentUserId();
       const res = await fetch(url, { headers });
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data.patterns)) {
-          return data.patterns;
-        }
-      } else {
-        console.warn("Learning/patterns non-ok:", res.status, await res.text().catch(() => ""));
+        if (Array.isArray(data.patterns)) return data.patterns;
       }
     } catch (e) {
-      console.warn("Parse API learning/patterns failed, falling back to PocketBase:", e);
+      console.warn("Parse API learning/patterns failed, falling back to corrections:", e);
     }
   }
-
-  // Fallback: direct PocketBase (may be empty if API rules block access)
-  // Quantity-only corrections (e.g. 5 pieces → 6 pieces) are NOT learned as patterns:
-  // they’re stored in ingredient_corrections for audit, but don’t become confusionPairs.
+  // Fallback: aggregate from corrections
   const corrections = await getCorrections(200);
   const patterns = {};
   for (const c of corrections) {
     if (c.correctionType === "add_missing") continue;
     const orig = c.originalParse?.name?.toLowerCase();
     const corr = c.userCorrection?.name;
-    
     if (orig && corr && orig !== corr.toLowerCase()) {
       const key = `${orig}→${corr}`;
       if (!patterns[key]) {
-        patterns[key] = {
-          original: orig,
-          learned: corr,
-          count: 0,
-          correctionIds: [],
-          lastCorrected: c.created,
-          firstCorrected: c.created,
-        };
+        patterns[key] = { original: orig, learned: corr, count: 0, correctionIds: [] };
       }
       patterns[key].count++;
-      patterns[key].correctionIds.push(c.id);
-      if (c.created < patterns[key].firstCorrected) {
-        patterns[key].firstCorrected = c.created;
-      }
+      if (c.id) patterns[key].correctionIds.push(c.id);
     }
   }
-  
-  const result = Object.values(patterns).map(p => ({
+  return Object.values(patterns).map(p => ({
     ...p,
+    status: p.count >= 3 ? "confident" : "learning",
     confidence: Math.min(0.5 + (p.count * 0.15), 0.99),
-    status: p.count >= 3 ? "confident" : p.count >= 1 ? "learning" : "new",
-  }));
-  result.sort((a, b) => b.count - a.count);
-  return result;
-}
-
-// Remove a learned pattern (unlearn a mistake) - uses Parse API so it works
-// even when PocketBase API rules block direct user updates to user_food_profile
-export async function removeLearnedPattern(original, learned, correctionIds = []) {
-  if (!authToken) throw new Error("Not logged in");
-  const parseUrl = import.meta.env.VITE_PARSE_API_URL || "http://localhost:5001";
-  const useProxy = import.meta.env.DEV && !import.meta.env.VITE_PARSE_API_URL;
-  const url = useProxy ? "/parse-api/learning/unlearn" : `${parseUrl}/learning/unlearn`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${authToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      original: (original || "").trim(),
-      learned: (learned || "").trim(),
-      correctionIds: correctionIds || [],
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error || `Unlearn failed (${res.status})`);
-  }
+  })).sort((a, b) => b.count - a.count);
 }
 
 // Get learning stats over time (for tracking adaptation)
@@ -870,4 +546,214 @@ export async function updateIngredientWithNutrition(ingredientId, updates, origi
   }
   
   return updateIngredient(ingredientId, updates);
+}
+
+// ============================================================
+// PARSE API (corrections, reparse, clear, non-food, learning)
+// ============================================================
+
+export function getParseApiUrl() {
+  return PARSE_API_URL;
+}
+
+function _parseApiFetch(path, options = {}) {
+  const useProxy = import.meta.env.DEV && !import.meta.env.VITE_PARSE_API_URL;
+  const url = useProxy ? `/parse-api${path}` : `${PARSE_API_URL}${path}`;
+  return fetch(url, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      ...options.headers,
+    },
+    ...options,
+  });
+}
+
+export async function fetchHasNonFoodLogs(mealId) {
+  if (!authToken) return false;
+  try {
+    const res = await fetch(
+      `${PB_BASE}/api/collections/non_food_logs/records?filter=mealId='${mealId}'&perPage=1`,
+      { headers: { Authorization: `Bearer ${authToken}` }, cache: "no-store" }
+    );
+    if (!res.ok) return false;
+    const data = await res.json();
+    return (data.items?.length || 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
+export async function clearNonFoodClassification(mealId) {
+  if (!authToken) throw new Error("Not logged in");
+  const logs = await fetch(
+    `${PB_BASE}/api/collections/non_food_logs/records?filter=mealId='${mealId}'`,
+    { headers: { Authorization: `Bearer ${authToken}` } }
+  ).then((r) => r.json()).catch(() => ({ items: [] }));
+  for (const log of logs.items || []) {
+    await fetch(`${PB_BASE}/api/collections/non_food_logs/records/${log.id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+  }
+  await fetch(`${PB_BASE}/api/collections/meals/records/${mealId}`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ isFood: true, categories: [] }),
+  });
+}
+
+export async function clearMealIngredients(mealId) {
+  if (!authToken) throw new Error("Not logged in");
+  const useProxy = import.meta.env.DEV && !import.meta.env.VITE_PARSE_API_URL;
+  const url = useProxy ? `/parse-api/clear/${mealId}` : `${PARSE_API_URL}/clear/${mealId}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${authToken}` },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Clear failed (${res.status})`);
+  }
+  const data = await res.json();
+  return data.deleted ?? 0;
+}
+
+export async function deleteIngredient(ingredientId) {
+  if (!authToken) throw new Error("Not logged in");
+  const useProxy = import.meta.env.DEV && !import.meta.env.VITE_PARSE_API_URL;
+  const url = useProxy ? `/parse-api/delete-ingredient/${ingredientId}` : `${PARSE_API_URL}/delete-ingredient/${ingredientId}`;
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${authToken}` },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    let msg = text;
+    try {
+      const j = text ? JSON.parse(text) : {};
+      if (typeof j?.error === "string" && j.error) msg = j.error;
+    } catch (_) {}
+    throw new Error(msg || `Delete failed (${res.status})`);
+  }
+  const data = await res.json();
+  return data;
+}
+
+export async function addIngredients(mealId, text) {
+  if (!authToken) throw new Error("Not logged in");
+  const res = await _parseApiFetch(`/add-ingredients/${mealId}`, {
+    method: "POST",
+    body: JSON.stringify({ text: (text || "").trim() }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    let msg = text;
+    try {
+      const j = text ? JSON.parse(text) : {};
+      if (typeof j?.error === "string" && j.error) msg = j.error;
+    } catch (_) {}
+    throw new Error(msg || `Add ingredients failed (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function updateIngredientPortion(ingredientId, quantity, unit) {
+  if (!authToken) throw new Error("Not logged in");
+  const res = await _parseApiFetch(`/update-portion/${ingredientId}`, {
+    method: "POST",
+    body: JSON.stringify({ quantity: Number(quantity), unit: (unit || "serving").trim() }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    let msg = text;
+    try {
+      const j = text ? JSON.parse(text) : {};
+      if (typeof j?.error === "string" && j.error) msg = j.error;
+    } catch (_) {}
+    throw new Error(msg || `Update portion failed (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function sendCorrectionMessage(ingredientId, message, conversation = []) {
+  const res = await _parseApiFetch(`/correct/${ingredientId}`, {
+    method: "POST",
+    body: JSON.stringify({ message, conversation }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    let msg = text;
+    try {
+      const j = text ? JSON.parse(text) : {};
+      if (typeof j?.error === "string" && j.error) msg = j.error;
+    } catch (_) {}
+    throw new Error(msg || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function previewCorrection(ingredientId, correction, learned, correctionReason, shouldLearn, conversation) {
+  return saveCorrection(ingredientId, correction, learned, correctionReason, shouldLearn, conversation, true);
+}
+
+export async function saveCorrection(ingredientId, correction, learned, correctionReason, shouldLearn, conversation, preview = false) {
+  const res = await _parseApiFetch(`/correct/${ingredientId}/save`, {
+    method: "POST",
+    body: JSON.stringify({
+      correction,
+      learned,
+      correctionReason,
+      shouldLearn,
+      conversation,
+      preview,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    let msg = text;
+    try {
+      const j = text ? JSON.parse(text) : {};
+      if (typeof j?.error === "string" && j.error) msg = j.error;
+    } catch (_) {}
+    throw new Error(msg || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function reparseIngredientFromText(ingredientId, text, preview = true) {
+  if (!authToken) throw new Error("Not logged in");
+  const res = await _parseApiFetch(`/reparse/${ingredientId}`, {
+    method: "POST",
+    body: JSON.stringify({ text: (text || "").trim(), preview }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    let msg = text;
+    try {
+      const j = text ? JSON.parse(text) : {};
+      if (typeof j?.error === "string" && j.error) msg = j.error;
+    } catch (_) {}
+    throw new Error(msg || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function removeLearnedPattern(original, learned, correctionIds = []) {
+  if (!authToken) throw new Error("Not logged in");
+  const useProxy = import.meta.env.DEV && !import.meta.env.VITE_PARSE_API_URL;
+  const url = useProxy ? "/parse-api/learning/unlearn" : `${PARSE_API_URL}/learning/unlearn`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${authToken}`,
+      "Content-Type": "application/json",
+      ...(getCurrentUserId() ? { "X-User-Id": getCurrentUserId() } : {}),
+    },
+    body: JSON.stringify({ original: (original || "").trim(), learned: (learned || "").trim(), correctionIds: correctionIds || [] }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || `Unlearn failed (${res.status})`);
+  }
 }

@@ -1,0 +1,16 @@
+---
+description: After any change that affects the parse API, restart it yourself; never ask the user
+alwaysApply: true
+---
+
+# Parse API: Always restart yourself
+
+When you make changes that affect the parse API (e.g. in `ml-pipeline/nutrition-pipeline/` or anything that would require the API to reload), **restart the parse API yourself**. Do not ask the user to restart.
+
+Run in the background from repo root:
+
+```bash
+cd ml-pipeline/nutrition-pipeline && python parse_api.py
+```
+
+Use `is_background: true`. Do not say "please restart the parse API" or "you may need to restart"—just run the command.
