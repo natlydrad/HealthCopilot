@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { fetchMealsForDateRange, fetchIngredients, fetchHasNonFoodLogs, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getLearningStats, removeLearnedPattern, parseAndSaveMeal, clearMealIngredients, clearNonFoodClassification, sendCorrectionMessage, previewCorrection, saveCorrection, reparseIngredientFromText, getParseApiUrl, deleteIngredient, addIngredients, updateIngredientPortion } from "./api";
-import { computeServingsByFramework, MYPLATE_TARGETS, DAILY_DOZEN_TARGETS, LONGEVITY_TARGETS } from "./utils/foodFrameworks";
+import { computeServingsByFramework, MYPLATE_TARGETS, DAILY_DOZEN_TARGETS, LONGEVITY_TARGETS, MATCHED_TO_EMOJI } from "./utils/foodFrameworks";
 
 // Format nutrition array for display (cal, protein, carbs, fat)
 function formatNutritionSummary(nutrition) {
@@ -352,6 +352,10 @@ export default function DayDetail() {
             setMeals((prev) => prev.map((m) => (m.id === mid ? { ...m, ...updates } : m)))
           }
           onTotalsRefresh={refreshTotals}
+          frameworkAttribution={totals.frameworks?.byIngredient?.reduce((acc, item) => {
+            if (item.id && item.contributed) acc[item.id] = { matched: item.matched, emoji: MATCHED_TO_EMOJI[item.matched] || "•" };
+            return acc;
+          }, {}) || {}}
         />
       ))}
 
@@ -363,7 +367,7 @@ export default function DayDetail() {
   );
 }
 
-function MealCard({ meal, onMealUpdated, onTotalsRefresh }) {
+function MealCard({ meal, onMealUpdated, onTotalsRefresh, frameworkAttribution }) {
   const [ingredients, setIngredients] = useState([]);
   const [correcting, setCorrecting] = useState(null);
   const [parsing, setParsing] = useState(false);
@@ -788,7 +792,7 @@ function MealCard({ meal, onMealUpdated, onTotalsRefresh }) {
               >
                 <div
                   onClick={() => setCorrecting(ing)}
-                  className={`flex items-center gap-2 p-2 cursor-pointer ${lowConf ? 'hover:bg-amber-100' : 'hover:bg-gray-50'}`}
+                  className={`flex items-center gap-2 p-2 cursor-pointer flex-wrap ${lowConf ? 'hover:bg-amber-100' : 'hover:bg-gray-50'}`}
                 >
                   {/* Low confidence indicator */}
                   {lowConf && (
@@ -802,25 +806,11 @@ function MealCard({ meal, onMealUpdated, onTotalsRefresh }) {
                     </span>
                   )}
                   
-                  <span className="font-medium">{ing.name}</span>
-                  
-                  {/* Source badge */}
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${sourceInfo.color}`}>
-                    {sourceInfo.label}
-                  </span>
-                  {ing.parsingMetadata?.partialLabel && (
-                    <span 
-                      className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700"
-                      title="Label was partially visible – nutrition from USDA. Re-photo with full label for exact values."
-                    >
-                      Partial label
-                    </span>
-                  )}
-                  
-                  {/* Amount: click to quick-edit (no GPT) */}
+                  {/* Name + amount + framework + calories — grouped together */}
+                  <span className="font-medium shrink-0">{ing.name}</span>
                   {editingPortionId === ing.id ? (
                     <div
-                      className="flex items-center gap-1"
+                      className="flex items-center gap-1 shrink-0"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <input
@@ -865,20 +855,37 @@ function MealCard({ meal, onMealUpdated, onTotalsRefresh }) {
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); handleStartPortionEdit(ing); }}
-                      className="text-gray-400 text-xs hover:text-blue-600 hover:underline"
+                      className="text-gray-500 text-xs hover:text-blue-600 hover:underline shrink-0"
                       title="Click to change amount (saves for learning)"
                     >
                       ({ing.quantity ?? 1} {ing.unit || "serving"})
                     </button>
                   )}
-                  
+                  {frameworkAttribution?.[ing.id] && (
+                    <span className="text-sm shrink-0" title={frameworkAttribution[ing.id].matched}>
+                      {frameworkAttribution[ing.id].emoji}
+                    </span>
+                  )}
                   {energy || protein || carbs || fat ? (
-                    <span className="text-gray-500 text-xs ml-auto">
+                    <span className="text-gray-600 text-xs shrink-0">
                       {energy ? `${Math.round(energy.value)} cal` : ""}
                       {protein ? ` · ${Math.round(protein.value)}g P` : ""}
                     </span>
                   ) : (
-                    <span className="text-gray-400 text-xs ml-auto italic">no data</span>
+                    <span className="text-gray-400 text-xs shrink-0 italic">no data</span>
+                  )}
+                  
+                  {/* Source badge */}
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${sourceInfo.color}`}>
+                    {sourceInfo.label}
+                  </span>
+                  {ing.parsingMetadata?.partialLabel && (
+                    <span 
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 shrink-0"
+                      title="Label was partially visible – nutrition from USDA. Re-photo with full label for exact values."
+                    >
+                      Partial label
+                    </span>
                   )}
                   
                   {/* View nutrients toggle */}
@@ -889,14 +896,14 @@ function MealCard({ meal, onMealUpdated, onTotalsRefresh }) {
                   >
                     {showNutrients ? "▼ Nutrients" : "▶ Nutrients"}
                   </button>
-                  <span className={`text-xs ${lowConf ? 'text-amber-600' : 'text-gray-300'}`}>
+                  <span className={`text-xs shrink-0 ${lowConf ? 'text-amber-600' : 'text-gray-300'}`}>
                     {lowConf ? 'Needs review — tap to fix' : 'tap to edit'}
                   </span>
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); handleDeleteIngredient(ing); }}
                     disabled={deletingId === ing.id}
-                    className="ml-auto p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
+                    className="ml-auto p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded disabled:opacity-50 shrink-0"
                     title="Remove ingredient"
                   >
                     {deletingId === ing.id ? "…" : "🗑"}

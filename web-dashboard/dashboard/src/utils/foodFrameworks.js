@@ -140,6 +140,7 @@ export function computeServingsByFramework(ingredients) {
 
     const contributed = Object.values(mp).some(v => v > 0) || Object.values(dd).some(v => v > 0) || Object.values(lg).some(v => v > 0);
     byIngredient.push({
+      id: ing.id,
       name: ing.name || '?',
       quantity: ing.quantity ?? 1,
       unit: ing.unit || 'serving',
@@ -165,3 +166,21 @@ export const DAILY_DOZEN_TARGETS = { beans: 3, berries: 1, otherFruits: 3, cruci
 
 /** Longevity targets - plant-forward emphasis */
 export const LONGEVITY_TARGETS = { legumes: 1.5, wholeGrains: 3, vegetables: 5, fruits: 2, nuts: 1 };
+
+/** Emoji for each matched category (for inline display next to ingredient) */
+export const MATCHED_TO_EMOJI = {
+  'Beans/legumes': '🫘',
+  'Berries': '🫐',
+  'Other fruits': '🍎',
+  'Cruciferous': '🥦',
+  'Greens': '🥬',
+  'Other vegetables': '🥕',
+  'Nuts': '🥜',
+  'Flaxseed/chia': '🌾',
+  'Spices': '🌿',
+  'Whole grains': '🌾',
+  'Grains': '🌾',
+  'Protein (animal)': '🥩',
+  'Dairy': '🥛',
+  'GPT foodGroupServings': '🍽️',
+};
