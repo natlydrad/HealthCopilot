@@ -14,8 +14,9 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pb_client import get_token, insert_ingredient, delete_ingredient, delete_non_food_logs_for_meal, build_user_context_prompt, add_learned_confusion, add_common_food, add_portion_preference, add_to_pantry, is_branded_or_specific, lookup_pantry_match, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date, fetch_ingredients_by_meal_id, get_learned_patterns_for_user, remove_learned_pattern, check_learned_correction
 from parser_gpt import parse_ingredients, parse_ingredients_from_image, correction_chat, get_image_base64, gpt_estimate_nutrition
-from lookup_usda import usda_lookup, usda_lookup_by_fdc_id, usda_lookup_valid_for_portion, usda_search_options, scale_nutrition, get_piece_grams, validate_scaled_calories, validate_scaled_protein, UNIT_TO_GRAMS
+from lookup_usda import usda_lookup, usda_lookup_by_fdc_id, usda_lookup_valid_for_portion, usda_search_options, scale_nutrition, get_piece_grams, validate_scaled_calories, validate_scaled_protein, UNIT_TO_GRAMS, zero_calorie_nutrition_array
 from log_classifier import classify_log, classify_log_with_image
+from common_sense import common_sense_check
 import requests
 import os
 from dotenv import load_dotenv
@@ -238,6 +239,18 @@ def clear_meal_ingredients(meal_id):
     PocketBase API rules (which block delete for regular users).
     Requires Authorization header (user must be logged in).
     """
+    # #region agent log
+    _log_path = "/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log"
+    try:
+        import time as _t
+        import os as _os
+        _os.makedirs(_os.path.dirname(_log_path), exist_ok=True)
+        _line = json.dumps({"timestamp": _t.time() * 1000, "location": "parse_api.py:clear_entry", "message": "clear_meal_ingredients entry", "data": {"meal_id": meal_id}, "sessionId": "debug-session", "hypothesisId": "H1"}) + "\n"
+        open(_log_path, "a").write(_line)
+        print(f"   [DEBUG clear] entry meal_id={meal_id}", flush=True)
+    except Exception as _log_err:
+        print(f"   [DEBUG clear] log write failed: {_log_err}", flush=True)
+    # #endregion
     auth = request.headers.get("Authorization")
     if not auth or not auth.startswith("Bearer "):
         return jsonify({"error": "Authorization required"}), 401
@@ -246,6 +259,15 @@ def clear_meal_ingredients(meal_id):
         max_rounds = 20  # prevent infinite loop if deletes fail
         for _ in range(max_rounds):
             ingredients = fetch_ingredients_by_meal_id(meal_id)
+            # #region agent log
+            try:
+                import time as _t
+                _line = json.dumps({"timestamp": _t.time() * 1000, "location": "parse_api.py:clear_after_fetch", "message": "after fetch_ingredients_by_meal_id", "data": {"count": len(ingredients or []), "first_id": ingredients[0].get("id") if ingredients else None}, "sessionId": "debug-session", "hypothesisId": "H2"}) + "\n"
+                open(_log_path, "a").write(_line)
+                print(f"   [DEBUG clear] after fetch count={len(ingredients or [])}", flush=True)
+            except Exception:
+                pass
+            # #endregion
             if not ingredients:
                 break
             deleted_this_round = 0
@@ -265,6 +287,16 @@ def clear_meal_ingredients(meal_id):
         print(f"   🗑️ Cleared {total_deleted} ingredients for meal {meal_id}")
         return jsonify({"deleted": total_deleted}), 200
     except Exception as e:
+        # #region agent log
+        try:
+            import time as _t
+            import traceback
+            _line = json.dumps({"timestamp": _t.time() * 1000, "location": "parse_api.py:clear_except", "message": "clear_meal_ingredients exception", "data": {"exception_type": type(e).__name__, "message": str(e), "tb": traceback.format_exc()[:500]}, "sessionId": "debug-session", "hypothesisId": "H4"}) + "\n"
+            open(_log_path, "a").write(_line)
+            print(f"   [DEBUG clear] exception: {type(e).__name__}: {e}", flush=True)
+        except Exception:
+            pass
+        # #endregion
         print(f"   ❌ Clear failed: {e}")
         return jsonify({"error": str(e)}), 500
 
@@ -690,6 +722,10 @@ def classify_text():
         return jsonify({"error": str(e)}), 500
 
 
+def _trace_append(trace, step, message, detail=None):
+    trace.append({"step": step, "message": message, "detail": detail or {}})
+
+
 @app.route("/parse/<meal_id>", methods=["POST"])
 def parse_meal(meal_id):
     """
@@ -700,6 +736,7 @@ def parse_meal(meal_id):
     2. If non-food → save to non_food_logs, return early
     3. If food → GPT parse → USDA → save ingredients
     """
+    trace = []
     try:
         # Use service token (PB_EMAIL/PB_PASSWORD) so meal + image fetch are consistent with original working behavior
         token = get_token()
@@ -709,16 +746,19 @@ def parse_meal(meal_id):
         resp = requests.get(f"{PB_URL}/api/collections/meals/records/{meal_id}", headers=headers)
         
         if resp.status_code != 200:
-            return jsonify({"error": f"Meal not found: {meal_id}"}), 404
+            _trace_append(trace, "meal_fetch_failed", "Meal not found")
+            return jsonify({"error": f"Meal not found: {meal_id}", "trace": trace}), 404
         
         meal = resp.json()
         text = meal.get("text", "").strip()
         image_field = meal.get("image")
         user_id = _resolve_id(meal.get("user"))
         timestamp = meal.get("timestamp")
+        _trace_append(trace, "meal_fetched", "Fetched meal from DB", {"hasText": bool(text), "hasImage": bool(image_field)})
         
         if not text and not image_field:
-            return jsonify({"error": "Meal has no text or image to parse"}), 400
+            _trace_append(trace, "skip", "Meal has no text or image to parse")
+            return jsonify({"error": "Meal has no text or image to parse", "trace": trace}), 400
         
         print(f"🍽️ Parsing meal: {meal_id}")
         print(f"   Text: {repr((text or '')[:80])}")
@@ -770,9 +810,11 @@ def parse_meal(meal_id):
         # STEP 1: CLASSIFY (food vs non-food) — use text + image when both present
         # ============================================================
         if image_field:
+            _trace_append(trace, "classify", "Classifying (text + image)")
             print("🏷️ Classifying (text + image)...")
             classification = classify_log_with_image(text or "", meal, PB_URL, token, recent_meals_context=recent_meals_context)
         elif text:
+            _trace_append(trace, "classify", "Classifying (text only)")
             print("🏷️ Classifying (text only)...")
             classification = classify_log(text, recent_meals_context=recent_meals_context)
         else:
@@ -782,6 +824,7 @@ def parse_meal(meal_id):
         is_food = "food" in categories
         food_portion = classification.get("food_portion")
         non_food_portions = classification.get("non_food_portions", {})
+        _trace_append(trace, "classify_done", "Classification result", {"isFood": is_food, "categories": categories})
 
         print(f"   isFood: {is_food}")
         print(f"   Categories: {categories}")
@@ -823,6 +866,7 @@ def parse_meal(meal_id):
 
         # If NOT food, do not parse ingredients — return clear "not_food" result
         if not is_food:
+            _trace_append(trace, "skip", "Skipping nutrition parsing (non-food)")
             print("   ⏭️ Classified as non-food, skipping nutrition parsing")
             if not user_id:
                 print("   ⚠️ No user_id for non_food_logs — records may not be visible to user")
@@ -833,7 +877,8 @@ def parse_meal(meal_id):
                 "classificationResult": "not_food",
                 "categories": categories,
                 "source": "classifier",
-                "message": "Classified as not food — no ingredients added"
+                "message": "Classified as not food — no ingredients added",
+                "trace": trace,
             })
 
         # When we're using "first recent meal" (from classifier or fallback), we can copy that meal's ingredients instead of re-parsing.
@@ -843,6 +888,7 @@ def parse_meal(meal_id):
         use_recent_meal = not image_field  # never override with recent meal when user sent a photo of something new
         # If mixed entry, use just the food portion for parsing
         if food_portion and len(categories) > 1:
+            _trace_append(trace, "food_portion", f"Using food portion: {(food_portion or '')[:60]}{'...' if len(food_portion or '') > 60 else ''}")
             print(f"   🔀 Mixed entry, parsing food portion: {food_portion}")
             text = food_portion
             if use_recent_meal and recent_meals and len(recent_meals) > 0:
@@ -918,13 +964,15 @@ def parse_meal(meal_id):
                         saved.append(result)
                         print(f"   ✅ Copied: {ing.get('name')}")
                 if saved:
+                    _trace_append(trace, "copied", f"Copied {len(saved)} ingredients from previous meal", {"count": len(saved), "sourceMealId": source_meal_id})
                     return jsonify({
                         "ingredients": saved,
                         "count": len(saved),
                         "source": "copied",
                         "isFood": True,
                         "categories": categories,
-                        "message": f"Copied {len(saved)} ingredients from previous meal (no re-parse)"
+                        "message": f"Copied {len(saved)} ingredients from previous meal (no re-parse)",
+                        "trace": trace,
                     })
         
         # ============================================================
@@ -943,12 +991,14 @@ def parse_meal(meal_id):
         if image_field:
             image_b64 = get_image_base64(meal, PB_URL, token)
             if not image_b64:
+                _trace_append(trace, "image_load_failed", "Could not load meal image")
                 print("⚠️ Could not load meal image (check file access / token)")
                 return jsonify({
                     "ingredients": [],
                     "count": 0,
                     "source": "gpt_image",
-                    "message": "Could not load image (check file access). Add a caption to parse by text, or try again."
+                    "message": "Could not load image (check file access). Add a caption to parse by text, or try again.",
+                    "trace": trace,
                 }), 200
         
         # Parse with GPT
@@ -1005,6 +1055,8 @@ def parse_meal(meal_id):
                 pass
             # #endregion
 
+        _trace_append(trace, "parse_done", f"Parsing done ({source})", {"parsedCount": len(parsed)})
+
         if not parsed:
             print(f"⚠️ No ingredients detected: had_text={bool(text)}, had_image={bool(image_field)}, source={source}")
             msg = "No ingredients detected"
@@ -1025,21 +1077,32 @@ def parse_meal(meal_id):
             except Exception:
                 pass
             # #endregion
+            _trace_append(trace, "no_ingredients", "No ingredients detected", {"reason": reason})
             return jsonify({
                 "ingredients": [],
                 "count": 0,
                 "source": source,
                 "message": msg,
-                "reason": reason
+                "reason": reason,
+                "trace": trace,
             }), 200
         
-        # Process and save ingredients
+        # Process and save ingredients (collect pending, then common-sense check, then insert)
         saved = []
+        pending = []
         print(f"📦 Processing {len(parsed)} parsed ingredients...")
         
         for ing in parsed:
+            serving_size_g_used = None
             name = ing.get("name", "").lower().strip()
-            
+            # #region agent log
+            try:
+                import time as _t
+                _line = json.dumps({"timestamp": _t.time() * 1000, "location": "parse_api.py:parsed_ing", "message": "GPT parsed ingredient", "data": {"name": ing.get("name"), "quantity": ing.get("quantity"), "unit": ing.get("unit")}, "sessionId": "debug-session", "hypothesisId": "H1"}) + "\n"
+                open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
+            except Exception:
+                pass
+            # #endregion
             # Skip banned items
             if name in BANNED_INGREDIENTS or len(name) < 2:
                 print(f"   ⏭️ Skipping: {name}")
@@ -1070,7 +1133,14 @@ def parse_meal(meal_id):
                         name = actual.lower().strip()
                         print(f"   🧠 LEARNED (fallback): '{parsed_lower}' → '{actual}'")
                         break
-            
+            # #region agent log
+            try:
+                import time as _t
+                _line = json.dumps({"timestamp": _t.time() * 1000, "location": "parse_api.py:after_learned", "message": "After learned correction", "data": {"name": name, "quantity": quantity, "unit": unit}, "sessionId": "debug-session", "hypothesisId": "H4"}) + "\n"
+                open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
+            except Exception:
+                pass
+            # #endregion
             # Prefer nutrition from visible label when GPT read it
             label_nutrition = ing.get("nutritionFromLabel")
             usda = None
@@ -1087,8 +1157,10 @@ def parse_meal(meal_id):
                 has_macros = len(scaled_nutrition) >= 3  # need calories + at least 2 of protein/carb/fat
                 if scaled_nutrition and has_calories and has_macros:
                     print(f"   📋 Using nutrition from label for: '{ing.get('name')}'")
+                    _trace_append(trace, "label", f"Using label for: {ing.get('name')}")
                     source_ing = "label"
                     portion_grams = round(quantity * serving_size_g, 1) if serving_size_g else None
+                    serving_size_g_used = serving_size_g
                     label_used = True
                 else:
                     if scaled_nutrition:
@@ -1129,15 +1201,18 @@ def parse_meal(meal_id):
                             print(f"   🏪 Pantry match: using USDA for '{pantry_match.get('name', name)}'")
                 if not usda:
                     print(f"🔎 Looking up USDA nutrition for: '{name}'")
+                    _trace_append(trace, "usda_lookup", f"USDA lookup: {name}")
                     usda = usda_lookup(name)
                 if usda:
                     # Use food-specific piece weight when unit is piece/pieces (fixes chicken wings etc.)
                     serving_size = usda.get("serving_size_g", 100.0)
+                    serving_size_g_used = serving_size
                     unit_lower = (unit or "").lower()
                     if unit_lower in ("piece", "pieces"):
                         piece_g = get_piece_grams(name)
                         if piece_g is not None:
                             serving_size = piece_g
+                            serving_size_g_used = serving_size
                             print(f"   📐 Using {serving_size}g per piece for '{name}'")
                     scaled_nutrition = scale_nutrition(
                         usda.get("nutrition", []),
@@ -1155,11 +1230,13 @@ def parse_meal(meal_id):
                         usda = usda_lookup_valid_for_portion(name, quantity, unit)
                         if usda:
                             serving_size = usda.get("serving_size_g", 100.0)
+                            serving_size_g_used = serving_size
                             unit_lower = (unit or "").lower()
                             if unit_lower in ("piece", "pieces"):
                                 piece_g = get_piece_grams(name)
                                 if piece_g is not None:
                                     serving_size = piece_g
+                                    serving_size_g_used = serving_size
                             scaled_nutrition = scale_nutrition(
                                 usda.get("nutrition", []),
                                 quantity,
@@ -1187,11 +1264,13 @@ def parse_meal(meal_id):
                             usda = usda_lookup_valid_for_portion(name, quantity, unit)
                             if usda:
                                 serving_size = usda.get("serving_size_g", 100.0)
+                                serving_size_g_used = serving_size
                                 unit_lower = (unit or "").lower()
                                 if unit_lower in ("piece", "pieces"):
                                     piece_g = get_piece_grams(name)
                                     if piece_g is not None:
                                         serving_size = piece_g
+                                        serving_size_g_used = serving_size
                                 scaled_nutrition = scale_nutrition(
                                     usda.get("nutrition", []),
                                     quantity,
@@ -1238,6 +1317,14 @@ def parse_meal(meal_id):
             
             # Prepare payload — only send fields that exist on ingredients collection
             # (no parsingSource; use parsingMetadata.parsingSource and parsingStrategy instead)
+            # #region agent log
+            try:
+                import time as _t
+                _line = json.dumps({"timestamp": _t.time() * 1000, "location": "parse_api.py:payload_before_insert", "message": "Payload quantity/unit before insert", "data": {"name": ing["name"], "quantity": quantity, "unit": unit}, "sessionId": "debug-session", "hypothesisId": "H2"}) + "\n"
+                open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
+            except Exception:
+                pass
+            # #endregion
             payload = {
                 "mealId": meal_id,
                 "name": ing["name"],
@@ -1261,24 +1348,83 @@ def parse_meal(meal_id):
                 }
             }
             
-            # Save to PocketBase
-            result = insert_ingredient(payload)
+            pending.append({
+                "payload": payload,
+                "usda": usda,
+                "serving_size_g": serving_size_g_used,
+                "ing": ing,
+                "source_ing": source_ing,
+                "quantity": quantity,
+                "unit": unit,
+            })
+        
+        # Common-sense check: one GPT call per meal to fix water/ice calories, matcha/coffee serving, etc.
+        try:
+            minimal = []
+            for p in pending:
+                nut = p["payload"].get("nutrition") or []
+                energy_vals = [n.get("value", 0) for n in nut if (n.get("nutrientName") or "").lower() == "energy"]
+                if not energy_vals:
+                    energy_vals = [n.get("value", 0) for n in nut if "energy" in (n.get("nutrientName") or "").lower()]
+                cal = energy_vals[0] if energy_vals else None
+                minimal.append({
+                    "name": p["payload"]["name"],
+                    "quantity": p["payload"]["quantity"],
+                    "unit": p["payload"]["unit"],
+                    "nutrition": p["payload"].get("nutrition"),
+                    "calories": cal,
+                })
+            corrections = common_sense_check(text, minimal)
+            for corr in corrections:
+                name_key = (corr.get("name") or "").strip().lower()
+                if not name_key:
+                    continue
+                for p in pending:
+                    if (p["payload"].get("name") or "").strip().lower() == name_key:
+                        if corr.get("zero_calories"):
+                            p["payload"]["nutrition"] = zero_calorie_nutrition_array()
+                            _trace_append(trace, "common_sense", f"Common sense: {p['payload']['name']} -> 0 cal")
+                            print(f"   🧠 Common sense: {p['payload']['name']} -> 0 cal")
+                        if "quantity" in corr or "unit" in corr or "serving_size_g" in corr:
+                            new_qty = corr.get("quantity") if "quantity" in corr else p["payload"]["quantity"]
+                            new_unit = corr.get("unit") if "unit" in corr else p["payload"]["unit"]
+                            new_serving_g = corr.get("serving_size_g") if "serving_size_g" in corr else p.get("serving_size_g")
+                            p["payload"]["quantity"] = new_qty
+                            p["payload"]["unit"] = new_unit
+                            if p.get("usda") and p["usda"].get("nutrition") and new_serving_g is not None:
+                                p["payload"]["nutrition"] = scale_nutrition(
+                                    p["usda"]["nutrition"],
+                                    new_qty,
+                                    new_unit,
+                                    new_serving_g,
+                                )
+                                _trace_append(trace, "common_sense", f"Common sense: {p['payload']['name']} -> {new_qty} {new_unit} ({new_serving_g}g)")
+                                print(f"   🧠 Common sense: {p['payload']['name']} -> {new_qty} {new_unit} ({new_serving_g}g)")
+                            else:
+                                _trace_append(trace, "common_sense", f"Common sense: {p['payload']['name']} -> {new_qty} {new_unit}")
+                                print(f"   🧠 Common sense: {p['payload']['name']} -> {new_qty} {new_unit}")
+                        break
+        except Exception as e:
+            print(f"   ⚠️ Common sense step failed, inserting as-is: {e}")
+        
+        for p in pending:
+            result = insert_ingredient(p["payload"])
             if result:
                 saved.append(result)
-                print(f"   ✅ Saved: {ing['name']}")
-                # Add to pantry when branded/specific OR when we have a USDA match (so matcha, coffee, etc. are reused)
-                if user_id and (is_branded_or_specific(ing.get("name", "")) or result.get("usdaCode")):
+                _trace_append(trace, "saved_ingredient", f"Saved ingredient: {p['payload']['name']}", {"source": p["source_ing"]})
+                print(f"   ✅ Saved: {p['payload']['name']}")
+                if user_id and (is_branded_or_specific(p["ing"].get("name", "")) or result.get("usdaCode")):
                     try:
                         add_to_pantry(
                             user_id,
-                            result.get("name", ing["name"]),
+                            result.get("name", p["payload"]["name"]),
                             usda_code=result.get("usdaCode"),
                             nutrition=result.get("nutrition"),
                             source="parse",
-                            last_quantity=quantity,
-                            last_unit=unit,
+                            last_quantity=p["payload"]["quantity"],
+                            last_unit=p["payload"]["unit"],
                         )
-                        print(f"   🏪 Added to pantry: {ing['name']}")
+                        print(f"   🏪 Added to pantry: {p['payload']['name']}")
                     except Exception as e:
                         print(f"   ⚠️ Could not add to pantry: {e}")
         
@@ -1287,12 +1433,13 @@ def parse_meal(meal_id):
             "count": len(saved),
             "source": source,
             "isFood": True,
-            "categories": categories
+            "categories": categories,
+            "trace": trace,
         })
         
     except Exception as e:
         print(f"❌ Error parsing meal {meal_id}: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e), "trace": trace}), 500
 
 
 @app.route("/correct/<ingredient_id>", methods=["POST"])

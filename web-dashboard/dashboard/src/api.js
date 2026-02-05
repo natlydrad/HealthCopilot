@@ -1,3 +1,5 @@
+import * as flowLog from "./utils/flowLog";
+
 let authToken = null;
 const PB_BASE = "https://pocketbase-1j2x.onrender.com";
 const PARSE_API_URL = import.meta.env.VITE_PARSE_API_URL || "http://localhost:5001";
@@ -36,6 +38,8 @@ export async function fetchMeals() {
 export async function fetchMealsForDateRange(startDate, endDate) {
   if (!authToken) throw new Error("Not logged in");
 
+  flowLog.add({ type: "action", message: "Fetching meals for range", detail: { startDate, endDate } });
+
   // startDate/endDate are "YYYY-MM-DD" in user's LOCAL calendar (from Dashboard)
   // Interpret as local midnight/end-of-day, then convert to UTC for PocketBase filter
   // (avoids timezone bug: e.g. Feb 3 PST should query Feb 3 08:00 UTC -> Feb 4 07:59 UTC)
@@ -62,6 +66,7 @@ export async function fetchMealsForDateRange(startDate, endDate) {
     if (!res.ok) {
       const errorText = await res.text();
       console.error("❌ API error:", res.status, errorText);
+      flowLog.add({ type: "result", message: "Meals fetch failed", detail: { status: res.status } });
       return [];
     }
 
@@ -69,13 +74,16 @@ export async function fetchMealsForDateRange(startDate, endDate) {
 
     if (!data || !data.items) {
       console.warn("⚠️ No meals in response");
+      flowLog.add({ type: "result", message: "Meals loaded: 0" });
       return [];
     }
 
+    flowLog.add({ type: "result", message: "Meals loaded", detail: { count: data.items.length } });
     console.log(`✅ Found ${data.items.length} meals (total: ${data.totalItems})`);
     return data.items;
   } catch (err) {
     console.error("❌ Failed to fetch meals:", err);
+    flowLog.add({ type: "result", message: "Meals fetch error", detail: { error: err.message } });
     return [];
   }
 }
@@ -106,13 +114,17 @@ export async function createMeal(text, timestamp) {
 
   if (!res.ok) {
     const error = await res.text();
+    flowLog.add({ type: "result", message: "Meal create failed", detail: { error } });
     throw new Error(`Failed to create meal: ${error}`);
   }
 
-  return res.json();
+  const record = await res.json();
+  flowLog.add({ type: "result", message: "Meal created", detail: { mealId: record.id, textPreview: (text || "").slice(0, 40) } });
+  return record;
 }
 
 export async function fetchIngredients(mealId) {
+  flowLog.add({ type: "action", message: "Fetching ingredients", detail: { mealId } });
   // Prefer Parse API: fetches with admin token, includes full nutrition (bypasses PocketBase rules)
   const useProxy = import.meta.env.DEV && !import.meta.env.VITE_PARSE_API_URL;
   const parseUrl = useProxy ? `/parse-api/ingredients/${mealId}` : `${PARSE_API_URL}/ingredients/${mealId}`;
@@ -124,6 +136,7 @@ export async function fetchIngredients(mealId) {
       if (res.ok) {
         const data = await res.json();
         const items = data.items || [];
+        flowLog.add({ type: "result", message: "Ingredients loaded", detail: { count: items.length, mealId } });
         console.log("📦 fetchIngredients (Parse API) got", items.length, "ingredients");
         if (items.length > 0) {
           const first = items[0];
@@ -151,6 +164,7 @@ export async function fetchIngredients(mealId) {
 
   const data = await res.json();
   const items = data.items || [];
+  flowLog.add({ type: "result", message: "Ingredients loaded (PocketBase)", detail: { count: items.length, mealId } });
   console.log("📦 fetchIngredients (PocketBase) got", items.length, "ingredients");
   if (items.length > 0) {
     const first = items[0];
@@ -384,6 +398,8 @@ export async function parseAndSaveMeal(meal) {
   const hasImage = meal.image;
   if (!hasText && !hasImage) return { ingredients: [], classificationResult: null };
 
+  flowLog.add({ type: "action", message: "Parse requested", detail: { mealId: meal.id, hasImage: !!meal.image } });
+
   // Try Parse API first (supports images + GPT)
   try {
     const useProxy = import.meta.env.DEV && !import.meta.env.VITE_PARSE_API_URL;
@@ -396,6 +412,22 @@ export async function parseAndSaveMeal(meal) {
     });
     if (res.ok) {
       const data = await res.json();
+      if (Array.isArray(data.trace)) {
+        for (const t of data.trace) {
+          flowLog.add({
+            type: t.type || "event",
+            message: t.message || String(t.step || ""),
+            source: "parse-api",
+            detail: t.detail ?? (t.step ? { step: t.step } : undefined),
+          });
+        }
+      }
+      const count = (data.ingredients || []).length;
+      flowLog.add({
+        type: "result",
+        message: `Parse done: ${count} ingredients, isFood: ${data.isFood !== false}`,
+        detail: { count, isFood: data.isFood, source: data.source },
+      });
       return {
         ingredients: data.ingredients || [],
         classificationResult: data.classificationResult || null,
@@ -406,6 +438,7 @@ export async function parseAndSaveMeal(meal) {
       };
     }
   } catch (err) {
+    flowLog.add({ type: "result", message: "Parse API unreachable", detail: { error: err.message } });
     console.warn("Parse API unreachable, falling back to simple parser:", err.message);
   }
 
@@ -668,6 +701,7 @@ export async function clearNonFoodClassification(mealId) {
 
 export async function clearMealIngredients(mealId) {
   if (!authToken) throw new Error("Not logged in");
+  flowLog.add({ type: "action", message: "Clearing ingredients for meal", detail: { mealId } });
   const useProxy = import.meta.env.DEV && !import.meta.env.VITE_PARSE_API_URL;
   const url = useProxy ? `/parse-api/clear/${mealId}` : `${PARSE_API_URL}/clear/${mealId}`;
   const res = await fetch(url, {
@@ -676,10 +710,13 @@ export async function clearMealIngredients(mealId) {
   });
   if (!res.ok) {
     const text = await res.text();
+    flowLog.add({ type: "result", message: "Clear ingredients failed", detail: { status: res.status } });
     throw new Error(text || `Clear failed (${res.status})`);
   }
   const data = await res.json();
-  return data.deleted ?? 0;
+  const deleted = data.deleted ?? 0;
+  flowLog.add({ type: "result", message: "Cleared ingredients", detail: { mealId, deleted } });
+  return deleted;
 }
 
 export async function deleteIngredient(ingredientId) {

@@ -221,8 +221,8 @@ def validate_scaled_calories(
                     return False, f"Scaled {scaled_calories:.0f} cal for {quantity} {key} = {per_piece:.0f} cal/piece (expected <{hi})"
                 break
 
-    # Zero-cal drinks: black coffee, tea, diet soda, etc. — reject USDA matches with calories
-    zero_cal_drinks = ("coffee", "tea", "espresso", "black coffee", "green tea", "herbal tea")
+    # Zero-cal drinks: black coffee, tea, water, ice, etc. — reject USDA matches with calories
+    zero_cal_drinks = ("coffee", "tea", "espresso", "black coffee", "green tea", "herbal tea", "water", "ice")
     if any(d in name_lower for d in zero_cal_drinks):
         if unit_lower in ("oz", "cup", "cups", "serving", "servings") and quantity <= 24:
             if scaled_calories > 15:
@@ -264,6 +264,19 @@ def validate_scaled_protein(
         f"Beverage/broth '{ingredient_name[:30]}' has {protein_val:.1f}g protein per portion "
         f"(expected ≤{max_protein_g}g); likely matched to concentrate/powder with wrong serving size"
     )
+
+
+def zero_calorie_nutrition_array() -> list:
+    """
+    Return a nutrition array with all zero values (Energy, Protein, Carbohydrate, Total lipid, etc.)
+    for use when applying common-sense zero_calories (e.g. water, ice).
+    """
+    return [
+        {"nutrientName": "Energy", "unitName": "KCAL", "value": 0},
+        {"nutrientName": "Protein", "unitName": "G", "value": 0},
+        {"nutrientName": "Carbohydrate, by difference", "unitName": "G", "value": 0},
+        {"nutrientName": "Total lipid (fat)", "unitName": "G", "value": 0},
+    ]
 
 
 # Expected calories per 100g by food category — prefer USDA matches in this range
@@ -423,6 +436,16 @@ def usda_lookup(ingredient_name):
             if best:
                 score, _, f, macros, matched_name, raw_nutrients = best
                 cal_100 = macros.get("calories", 0)
+                serving_g = f.get("servingSize", 100)
+                # #region agent log
+                if "matcha" in ingredient_name.lower():
+                    try:
+                        import json, time
+                        _line = json.dumps({"timestamp": time.time() * 1000, "location": "lookup_usda.py:usda_match", "message": "USDA match for matcha", "data": {"ingredient_name": ingredient_name, "matched_name": matched_name, "serving_size_g": serving_g}, "sessionId": "debug-session", "hypothesisId": "H3"}) + "\n"
+                        open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
+                    except Exception:
+                        pass
+                # #endregion
                 print(f"   ✅ Matched: '{matched_name}' (fdcId: {f['fdcId']}) — {cal_100:.0f} cal/100g, score={score:.0f}")
                 print(f"   Macros: {macros}")
                 return {
@@ -430,7 +453,7 @@ def usda_lookup(ingredient_name):
                     "name": matched_name,
                     "nutrition": raw_nutrients,
                     "macros_per_100g": macros,
-                    "serving_size_g": f.get("servingSize", 100),
+                    "serving_size_g": serving_g,
                 }
             # First query had results but none passed validation — try alternative queries (e.g. "matcha" → "matcha beverage")
             for alt_q in _alternative_usda_queries(ingredient_name):
@@ -459,13 +482,23 @@ def usda_lookup(ingredient_name):
                     valid2.sort(key=lambda x: x[0])
                     _, f, macros, matched_name, raw_nutrients = valid2[0]
                     cal_100 = macros.get("calories", 0)
+                    serving_g_alt = f.get("servingSize", 100)
+                    # #region agent log
+                    if "matcha" in ingredient_name.lower():
+                        try:
+                            import json, time
+                            _line = json.dumps({"timestamp": time.time() * 1000, "location": "lookup_usda.py:usda_match_alt", "message": "USDA match (alt) for matcha", "data": {"ingredient_name": ingredient_name, "matched_name": matched_name, "serving_size_g": serving_g_alt}, "sessionId": "debug-session", "hypothesisId": "H3"}) + "\n"
+                            open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
+                        except Exception:
+                            pass
+                    # #endregion
                     print(f"   ✅ Matched (alt): '{matched_name}' (fdcId: {f['fdcId']}) — {cal_100:.0f} cal/100g")
                     return {
                         "usdaCode": f["fdcId"],
                         "name": matched_name,
                         "nutrition": raw_nutrients,
                         "macros_per_100g": macros,
-                        "serving_size_g": f.get("servingSize", 100),
+                        "serving_size_g": serving_g_alt,
                     }
         else:
             print(f"   ⚠️ No USDA results for '{ingredient_name}'")

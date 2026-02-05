@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { fetchMealsForDateRange, fetchIngredients, fetchHasNonFoodLogs, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getLearningStats, removeLearnedPattern, parseAndSaveMeal, clearMealIngredients, clearNonFoodClassification, sendCorrectionMessage, previewCorrection, saveCorrection, reparseIngredientFromText, getParseApiUrl, deleteIngredient, addIngredients, updateIngredientPortion } from "./api";
 import { computeServingsByFramework, MYPLATE_TARGETS, DAILY_DOZEN_TARGETS, LONGEVITY_TARGETS, MATCHED_TO_EMOJI } from "./utils/foodFrameworks";
+import * as flowLog from "./utils/flowLog";
 
 /** Normalize nutrition from ingredient - handles string, object, scaled_nutrition fallback */
 function getNutritionArray(ing) {
@@ -439,6 +440,7 @@ function MealCard({ meal, onMealUpdated, onTotalsRefresh, frameworkAttribution }
       setParseError("Add a caption or photo first.");
       return;
     }
+    flowLog.add({ type: "action", message: "Parse clicked", detail: { mealId: meal.id, textPreview: (meal.text || "").slice(0, 50) } });
     setParsing(true);
     setParseError(null);
     setClassificationResult(null);
@@ -450,6 +452,7 @@ function MealCard({ meal, onMealUpdated, onTotalsRefresh, frameworkAttribution }
       const data = result?.ingredients !== undefined ? result : { ingredients: result, classificationResult: null };
       const ingredientsList = Array.isArray(data.ingredients) ? data.ingredients : [];
       setIngredients(ingredientsList);
+      flowLog.add({ type: "result", message: "Ingredients set", detail: { count: ingredientsList.length } });
       setClassificationResult(data.classificationResult || null);
       if (data.classificationResult === "not_food" || data.isFood === false) {
         setHasNonFoodLogs(true);

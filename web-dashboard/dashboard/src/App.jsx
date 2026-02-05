@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Dashboard from "./Dashboard";
 import DayDetail from "./DayDetail";
 import Insights from "./Insights";
+import FlowLogPanel from "./FlowLogPanel";
 import PlaygroundLayout from "./playground/PlaygroundLayout";
 import PlaygroundDashboard from "./playground/PlaygroundDashboard";
 import PlaygroundDayDetail from "./playground/PlaygroundDayDetail";
@@ -101,6 +102,7 @@ export default function App() {
           <Route path="insights" element={<PlaygroundInsights />} />
         </Route>
       </Routes>
+      <FlowLogPanel />
     </BrowserRouter>
   );
 }
