@@ -1,6 +1,17 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchMealsForDateRange, fetchIngredients } from "./api";
+import { computeServingsByFramework } from "./utils/foodFrameworks";
+
+/** Normalize nutrition from ingredient - same as DayDetail: handles nutrition, scaled_nutrition, string */
+function getNutritionArray(ing) {
+  let raw = ing?.nutrition ?? ing?.scaled_nutrition;
+  if (typeof raw === "string") {
+    try { raw = JSON.parse(raw); } catch { return []; }
+  }
+  if (Array.isArray(raw) && raw.length > 0) return raw;
+  return [];
+}
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -153,197 +164,75 @@ export default function Dashboard() {
     );
   }
 
-  // Extract macros from USDA nutrition array
-  const extractMacros = (nutrition, quantity, unit) => {
-    if (!Array.isArray(nutrition) || nutrition.length === 0) {
-      return { calories: 0, protein: 0, carbs: 0, fat: 0 };
-    }
-    
-    const macros = { calories: 0, protein: 0, carbs: 0, fat: 0 };
-    
-    for (const n of nutrition) {
-      const name = (n.nutrientName || "").toLowerCase();
-      const value = n.value || 0;
-      
-      if (name.includes("energy") && n.unitName === "KCAL") {
-        macros.calories = value;
-      } else if (name === "protein") {
-        macros.protein = value;
-      } else if (name.includes("carbohydrate")) {
-        macros.carbs = value;
-      } else if (name.includes("total lipid") || name === "fat") {
-        macros.fat = value;
-      }
-    }
-    
-    // Scale by quantity (USDA values are per 100g, estimate grams from quantity/unit)
-    const UNIT_TO_GRAMS = {
-      // Weight
-      oz: 28.35, g: 1, grams: 1, gram: 1,
-      // Volume  
-      cup: 150, cups: 150, tbsp: 15, tablespoon: 15, tsp: 5, teaspoon: 5,
-      // Count - smaller portions
-      piece: 50, pieces: 50, slice: 20, slices: 20, 
-      serving: 100, 
-      // Eggs
-      eggs: 50, egg: 50,
-      // Supplements - essentially 0 macros
-      pill: 0, pills: 0, capsule: 0, capsules: 0, l: 0,
-      // Drinks
-      liter: 1000, ml: 1,
-    };
-    const multiplier = UNIT_TO_GRAMS[(unit || "").toLowerCase()] ?? 80; // default to smaller portion
-    const grams = (quantity || 1) * multiplier;
-    const scale = grams / 100;
-    
-    return {
-      calories: macros.calories * scale,
-      protein: macros.protein * scale,
-      carbs: macros.carbs * scale,
-      fat: macros.fat * scale,
-    };
-  };
-
-  // Calculate daily macro totals
+  // Calculate daily macro totals from actual stored nutrition (same as DayDetail - values are already scaled)
   const getDayMacros = (day) => {
     const dayMeals = mealsByDay[day] || [];
     const totals = { calories: 0, protein: 0, carbs: 0, fat: 0 };
-    
     for (const meal of dayMeals) {
       const mealIngs = ingredients[meal.id] || [];
       for (const ing of mealIngs) {
-        const macros = extractMacros(ing.nutrition, ing.quantity, ing.unit);
-        totals.calories += macros.calories || 0;
-        totals.protein += macros.protein || 0;
-        totals.carbs += macros.carbs || 0;
-        totals.fat += macros.fat || 0;
+        const nutritionData = getNutritionArray(ing);
+        for (const n of nutritionData) {
+          const name = (n.nutrientName || "").toLowerCase();
+          const value = parseFloat(n.value) || 0;
+          if ((name.includes("energy") && (n.unitName || "").toUpperCase() === "KCAL") || (name === "energy" && !n.unitName)) {
+            totals.calories += value;
+          } else if (name === "protein") {
+            totals.protein += value;
+          } else if (name.includes("carbohydrate")) {
+            totals.carbs += value;
+          } else if (name.includes("total lipid") || name === "fat") {
+            totals.fat += value;
+          }
+        }
       }
     }
-    
     return totals;
   };
 
-  // Calculate daily micronutrient totals
+  // Calculate daily micronutrient totals from actual stored nutrition (same as DayDetail - values already scaled)
   const getDayMicros = (day) => {
     const dayMeals = mealsByDay[day] || [];
     const micros = {};
-    
-    const UNIT_TO_GRAMS = {
-      oz: 28.35, g: 1, grams: 1, gram: 1,
-      cup: 150, cups: 150, tbsp: 15, tablespoon: 15, tsp: 5, teaspoon: 5,
-      piece: 50, pieces: 50, slice: 20, slices: 20,
-      serving: 100, eggs: 50, egg: 50,
-      pill: 0, pills: 0, capsule: 0, capsules: 0, l: 0,
-      liter: 1000, ml: 1,
-    };
-    
     const keyNutrients = [
       "Fiber, total dietary", "Calcium, Ca", "Iron, Fe", "Sodium, Na",
       "Potassium, K", "Magnesium, Mg", "Zinc, Zn",
       "Vitamin C", "Thiamin", "Riboflavin", "Niacin", "Vitamin B-6",
       "Folate, total", "Vitamin E (alpha-tocopherol)", "Vitamin K (phylloquinone)"
     ];
-    
     for (const meal of dayMeals) {
       const mealIngs = ingredients[meal.id] || [];
       for (const ing of mealIngs) {
-        const nutrition = ing.nutrition || [];
-        if (!Array.isArray(nutrition)) continue;
-        
-        const multiplier = UNIT_TO_GRAMS[(ing.unit || "").toLowerCase()] ?? 80;
-        const grams = (ing.quantity || 1) * multiplier;
-        const scale = grams / 100;
-        
-        for (const n of nutrition) {
+        const nutritionData = getNutritionArray(ing);
+        for (const n of nutritionData) {
           const name = n.nutrientName || "";
           if (keyNutrients.some(key => name.includes(key))) {
             if (!micros[name]) {
               micros[name] = { value: 0, unit: n.unitName || "" };
             }
-            micros[name].value += (n.value || 0) * scale;
+            micros[name].value += parseFloat(n.value) || 0;
           }
         }
       }
     }
-    
     return micros;
   };
 
-  // Calculate food group servings
-  // Prefer foodGroupServings from parsingMetadata (GPT-estimated when parsing) when available
-  // Fall back to keyword-based heuristics for ingredients without it
+  // Calculate food group servings using same logic as DayDetail (computeServingsByFramework)
   const getDayFoodGroups = (day) => {
     const dayMeals = mealsByDay[day] || [];
-    const groups = {
-      vegetables: 0,
-      fruits: 0,
-      protein: 0,
-      grains: 0,
-      dairy: 0,
-    };
-
-    const UNIT_TO_GRAMS = {
-      oz: 28.35, g: 1, grams: 1, gram: 1,
-      cup: 150, cups: 150, tbsp: 15, tablespoon: 15, tsp: 5, teaspoon: 5,
-      piece: 50, pieces: 50, slice: 20, slices: 20,
-      serving: 100, eggs: 50, egg: 50,
-      pill: 0, pills: 0, capsule: 0, capsules: 0, l: 0,
-      liter: 1000, ml: 1,
-    };
-    const VEGETABLES = ['lettuce', 'spinach', 'arugula', 'kale', 'cabbage', 'broccoli', 'carrot', 'tomato', 'cucumber', 'pepper', 'onion', 'garlic', 'celery', 'mushroom', 'zucchini', 'squash', 'eggplant', 'asparagus', 'green bean', 'bean sprout', 'cabbage', 'cauliflower', 'brussels', 'radish', 'turnip', 'beet', 'corn', 'pea', 'bean', 'salsa', 'vegetable'];
-    const FRUITS = ['apple', 'apples', 'banana', 'bananas', 'orange', 'oranges', 'berry', 'berries', 'strawberry', 'strawberries', 'blueberry', 'blueberries', 'raspberry', 'raspberries', 'blackberry', 'blackberries', 'grape', 'grapes', 'mango', 'mangoes', 'pineapple', 'pineapples', 'kiwi', 'kiwis', 'peach', 'peaches', 'pear', 'pears', 'plum', 'plums', 'cherry', 'cherries', 'melon', 'melons', 'watermelon', 'watermelons', 'cantaloupe', 'cantaloupes', 'avocado', 'avocados', 'lemon', 'lemons', 'lime', 'limes', 'coconut', 'coconuts'];
-    const PROTEIN = ['chicken', 'beef', 'pork', 'turkey', 'lamb', 'fish', 'salmon', 'tuna', 'sardine', 'shrimp', 'crab', 'lobster', 'egg', 'tofu', 'tempeh', 'bean', 'lentil', 'chickpea', 'protein', 'meat', 'sausage', 'bacon', 'ham', 'burger', 'patty', 'wing', 'breast', 'thigh', 'steak', 'rib'];
-    const GRAINS = ['bread', 'toast', 'bagel', 'rice', 'pasta', 'noodle', 'quinoa', 'oats', 'oatmeal', 'cereal', 'cracker', 'tortilla', 'wrap', 'pita', 'flour', 'wheat', 'barley', 'rye', 'millet', 'couscous'];
-    const DAIRY = ['milk', 'cheese', 'yogurt', 'butter', 'cream', 'sour cream', 'cottage cheese', 'greek yogurt', 'kefir'];
-
-    const addFromKeywords = (ing, name, qty, unit) => {
-      if (FRUITS.some(f => name.includes(f))) {
-        if (unit === 'cup' || unit === 'cups') groups.fruits += qty;
-        else if (unit === 'piece' || unit === 'pieces') groups.fruits += qty;
-        else groups.fruits += (qty * (UNIT_TO_GRAMS[unit] || 80)) / 150;
-      } else if (VEGETABLES.some(v => name.includes(v))) {
-        if (unit === 'cup' || unit === 'cups') groups.vegetables += qty;
-        else if (unit === 'piece' || unit === 'pieces') groups.vegetables += qty * 0.5;
-        else groups.vegetables += (qty * (UNIT_TO_GRAMS[unit] || 80)) / 150;
-      } else if (PROTEIN.some(p => name.includes(p))) {
-        if (unit === 'oz') groups.protein += qty / 3.5;
-        else if (unit === 'egg' || unit === 'eggs') groups.protein += qty;
-        else if (unit === 'cup' || unit === 'cups') groups.protein += qty * 2;
-        else groups.protein += (qty * (UNIT_TO_GRAMS[unit] || 80)) / 100;
-      } else if (GRAINS.some(g => name.includes(g))) {
-        if (unit === 'slice' || unit === 'slices') groups.grains += qty;
-        else if (unit === 'cup' || unit === 'cups') groups.grains += qty * 2;
-        else groups.grains += (qty * (UNIT_TO_GRAMS[unit] || 80)) / 40;
-      } else if (DAIRY.some(d => name.includes(d))) {
-        if (unit === 'cup' || unit === 'cups') groups.dairy += qty;
-        else if (unit === 'oz') groups.dairy += qty;
-        else groups.dairy += (qty * (UNIT_TO_GRAMS[unit] || 80)) / 240;
-      }
-    };
-
+    const allIngredients = [];
     for (const meal of dayMeals) {
-      const mealIngs = ingredients[meal.id] || [];
-      for (const ing of mealIngs) {
-        const category = ing.category || 'food';
-        if (category === 'supplement' || category === 'drink') continue;
-
-        const fg = ing.parsingMetadata?.foodGroupServings;
-        if (fg && typeof fg === 'object') {
-          groups.vegetables += Number(fg.vegetables) || 0;
-          groups.fruits += Number(fg.fruits) || 0;
-          groups.protein += Number(fg.protein) || 0;
-          groups.grains += Number(fg.grains) || 0;
-          groups.dairy += Number(fg.dairy) || 0;
-        } else {
-          const name = ing.name.toLowerCase();
-          const qty = ing.quantity || 1;
-          const unit = (ing.unit || '').toLowerCase();
-          addFromKeywords(ing, name, qty, unit);
-        }
-      }
+      allIngredients.push(...(ingredients[meal.id] || []));
     }
-
-    return groups;
+    const { myPlate } = computeServingsByFramework(allIngredients);
+    return {
+      vegetables: myPlate.vegetables ?? 0,
+      fruits: myPlate.fruits ?? 0,
+      protein: myPlate.protein ?? 0,
+      grains: myPlate.grains ?? 0,
+      dairy: myPlate.dairy ?? 0,
+    };
   };
 
   return (
@@ -581,74 +470,36 @@ function MealCard({ meal, ingredients, formatTime }) {
     ? `${PB_URL}/api/files/${meal.collectionId}/${meal.id}/${meal.image}`
     : null;
   
-  // Extract macros and micronutrients from ingredients
-  const extractNutrients = (ing) => {
-    const nutrition = ing.nutrition || [];
-    if (!Array.isArray(nutrition) || nutrition.length === 0) return { macros: {}, micros: {} };
-    
-    const UNIT_TO_GRAMS = {
-      oz: 28.35, g: 1, grams: 1, gram: 1,
-      cup: 150, cups: 150, tbsp: 15, tablespoon: 15, tsp: 5, teaspoon: 5,
-      piece: 50, pieces: 50, slice: 20, slices: 20,
-      serving: 100, eggs: 50, egg: 50,
-      pill: 0, pills: 0, capsule: 0, capsules: 0, l: 0,
-      liter: 1000, ml: 1,
-    };
-    
-    const multiplier = UNIT_TO_GRAMS[(ing.unit || "").toLowerCase()] ?? 80;
-    const grams = (ing.quantity || 1) * multiplier;
-    const scale = grams / 100;
-    
-    const macros = { calories: 0, protein: 0, carbs: 0, fat: 0 };
-    const micros = {};
-    const keyNutrients = [
-      "Fiber, total dietary", "Calcium, Ca", "Iron, Fe", "Sodium, Na",
-      "Potassium, K", "Magnesium, Mg", "Zinc, Zn",
-      "Vitamin C", "Thiamin", "Riboflavin", "Niacin", "Vitamin B-6",
-      "Folate, total", "Vitamin E (alpha-tocopherol)", "Vitamin K (phylloquinone)",
-      "Vitamin A", "Vitamin D"
-    ];
-    
-    for (const n of nutrition) {
-      const name = (n.nutrientName || "").toLowerCase();
-      const value = (n.value || 0) * scale;
-      const unit = n.unitName || "";
-      
-      // Extract macros
-      if (name.includes("energy") && unit === "KCAL") {
-        macros.calories = value;
-      } else if (name === "protein") {
-        macros.protein = value;
-      } else if (name.includes("carbohydrate")) {
-        macros.carbs = value;
-      } else if (name.includes("total lipid") || name === "fat") {
-        macros.fat = value;
-      }
-      
-      // Extract micronutrients
-      if (keyNutrients.some(key => n.nutrientName?.includes(key))) {
-        micros[n.nutrientName] = { value, unit };
-      }
-    }
-    
-    return { macros, micros };
-  };
-  
-  // Calculate total macros and micronutrients for this meal
+  // Sum macros and micros from actual stored nutrition (same as DayDetail - values already scaled)
   const mealMacros = { calories: 0, protein: 0, carbs: 0, fat: 0 };
   const mealMicros = {};
+  const keyNutrients = [
+    "Fiber, total dietary", "Calcium, Ca", "Iron, Fe", "Sodium, Na",
+    "Potassium, K", "Magnesium, Mg", "Zinc, Zn",
+    "Vitamin C", "Thiamin", "Riboflavin", "Niacin", "Vitamin B-6",
+    "Folate, total", "Vitamin E (alpha-tocopherol)", "Vitamin K (phylloquinone)",
+    "Vitamin A", "Vitamin D"
+  ];
   for (const ing of ingredients) {
-    const { macros, micros } = extractNutrients(ing);
-    mealMacros.calories += macros.calories || 0;
-    mealMacros.protein += macros.protein || 0;
-    mealMacros.carbs += macros.carbs || 0;
-    mealMacros.fat += macros.fat || 0;
-    
-    for (const [name, data] of Object.entries(micros)) {
-      if (!mealMicros[name]) {
-        mealMicros[name] = { value: 0, unit: data.unit };
+    const nutritionData = getNutritionArray(ing);
+    for (const n of nutritionData) {
+      const name = (n.nutrientName || "").toLowerCase();
+      const value = parseFloat(n.value) || 0;
+      if ((name.includes("energy") && (n.unitName || "").toUpperCase() === "KCAL") || (name === "energy" && !n.unitName)) {
+        mealMacros.calories += value;
+      } else if (name === "protein") {
+        mealMacros.protein += value;
+      } else if (name.includes("carbohydrate")) {
+        mealMacros.carbs += value;
+      } else if (name.includes("total lipid") || name === "fat") {
+        mealMacros.fat += value;
       }
-      mealMicros[name].value += data.value;
+      if (keyNutrients.some(key => n.nutrientName?.includes(key))) {
+        if (!mealMicros[n.nutrientName]) {
+          mealMicros[n.nutrientName] = { value: 0, unit: n.unitName || "" };
+        }
+        mealMicros[n.nutrientName].value += value;
+      }
     }
   }
   
