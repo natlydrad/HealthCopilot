@@ -474,7 +474,9 @@
       }).join('\n  ');
       return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
+  <g id="walkRoot">
   ${inner}
+  </g>
 </svg>`;
     }
 
@@ -483,7 +485,7 @@
       let start = null;
       const duration = 2000;
 
-      // Paths: draw-in effect (stroke-dashoffset)
+      // Paths: draw-in effect (stroke-dashoffset) only
       let paths = svgEl.querySelectorAll('path');
       paths.forEach(p => {
         let len = p.getTotalLength();
@@ -491,27 +493,38 @@
         p.style.strokeDashoffset = len;
       });
 
-      // Circles and rects (and groups): fade-in + scale up
-      let shapesToReveal = svgEl.querySelectorAll('circle, rect, g');
-      shapesToReveal.forEach(el => {
-        el.style.opacity = '0';
-        el.style.transform = 'scale(0.6)';
-        el.style.transformOrigin = 'center center';
-      });
-
       function step(ts) {
         if (!start) start = ts;
         let t = Math.min((ts - start) / duration, 1);
-        let ease = 1 - (1 - t) * (1 - t); // ease out quad
+        let ease = 1 - (1 - t) * (1 - t);
         paths.forEach(p => {
           let len = p.getTotalLength();
           p.style.strokeDashoffset = len * (1 - ease);
         });
-        shapesToReveal.forEach(el => {
-          el.style.opacity = String(ease);
-          el.style.transform = `scale(${0.6 + 0.4 * ease})`;
-        });
-        if (t < 1) requestAnimationFrame(step);
+        if (t < 1) {
+          requestAnimationFrame(step);
+        } else {
+          startWalk(svgEl);
+        }
+      }
+      if (paths.length > 0) requestAnimationFrame(step);
+      else startWalk(svgEl);
+    }
+
+    function startWalk(svgEl) {
+      let walkRoot = svgEl.querySelector('#walkRoot');
+      if (!walkRoot) return;
+      const viewBoxWidth = 600;
+      const bobAmplitude = 6;
+      const bobFreq = 2;
+      const driftSpeed = 40;
+      let startTime = Date.now();
+      function step() {
+        let t = (Date.now() - startTime) / 1000;
+        let x = (driftSpeed * t) % viewBoxWidth;
+        let y = -bobAmplitude * Math.sin(2 * Math.PI * bobFreq * t);
+        walkRoot.style.transform = `translate(${x}px, ${y}px)`;
+        requestAnimationFrame(step);
       }
       requestAnimationFrame(step);
     }
