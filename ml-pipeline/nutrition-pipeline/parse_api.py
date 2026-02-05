@@ -12,9 +12,9 @@ import json
 import re
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from pb_client import get_token, insert_ingredient, delete_ingredient, delete_non_food_logs_for_meal, build_user_context_prompt, add_learned_confusion, add_common_food, add_portion_preference, add_to_pantry, is_branded_or_specific, lookup_pantry_match, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date, fetch_ingredients_by_meal_id, get_learned_patterns_for_user, remove_learned_pattern
+from pb_client import get_token, insert_ingredient, delete_ingredient, delete_non_food_logs_for_meal, build_user_context_prompt, add_learned_confusion, add_common_food, add_portion_preference, add_to_pantry, is_branded_or_specific, lookup_pantry_match, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date, fetch_ingredients_by_meal_id, get_learned_patterns_for_user, remove_learned_pattern, check_learned_correction
 from parser_gpt import parse_ingredients, parse_ingredients_from_image, correction_chat, get_image_base64, gpt_estimate_nutrition
-from lookup_usda import usda_lookup, usda_lookup_by_fdc_id, usda_lookup_valid_for_portion, usda_search_options, scale_nutrition, get_piece_grams, validate_scaled_calories
+from lookup_usda import usda_lookup, usda_lookup_by_fdc_id, usda_lookup_valid_for_portion, usda_search_options, scale_nutrition, get_piece_grams, validate_scaled_calories, validate_scaled_protein, UNIT_TO_GRAMS
 from log_classifier import classify_log, classify_log_with_image
 import requests
 import os
@@ -954,8 +954,17 @@ def parse_meal(meal_id):
         # Parse with GPT
         parsed = []
         no_parse_reason = None  # for "No ingredients detected" response so dashboard can show why
+        _log_path = "/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log"
         print(f"   📝 Text used for parse: {repr((text or '')[:100])}")
-        
+        # #region agent log
+        try:
+            import time as _t
+            _line = json.dumps({"timestamp": _t.time()*1000, "location": "parse_api.py:before_parse", "message": "before_parse", "data": {"text_len": len(text or ""), "text_preview": (text or "")[:200], "has_image": bool(image_field)}, "hypothesisId": "H1", "sessionId": "debug-session"}) + "\n"
+            open(_log_path, "a").write(_line)
+        except Exception:
+            pass
+        # #endregion
+
         # Caption "1 serving" etc. is not a food name — parse image only so we don't get [] from text and waste a call
         generic_caption = (text or "").strip().lower() in ("1 serving", "serving", "one serving", "")
         if text and image_field and not generic_caption:
@@ -987,7 +996,15 @@ def parse_meal(meal_id):
             print("🧠 GPT: Parsing text...")
             parsed = parse_ingredients(text, user_context)
             source = "gpt_text"
-        
+            # #region agent log
+            try:
+                import time as _t
+                _line = json.dumps({"timestamp": _t.time()*1000, "location": "parse_api.py:after_parse_text", "message": "after_parse_text", "data": {"parsed_len": len(parsed), "source": source}, "hypothesisId": "H2", "sessionId": "debug-session"}) + "\n"
+                open(_log_path, "a").write(_line)
+            except Exception:
+                pass
+            # #endregion
+
         if not parsed:
             print(f"⚠️ No ingredients detected: had_text={bool(text)}, had_image={bool(image_field)}, source={source}")
             msg = "No ingredients detected"
@@ -1000,6 +1017,14 @@ def parse_meal(meal_id):
                 reason += "; had recent_meals context"
             else:
                 reason += "; no recent_meals today (or fetch failed)"
+            # #region agent log
+            try:
+                import time as _t
+                _line = json.dumps({"timestamp": _t.time()*1000, "location": "parse_api.py:no_ingredients_return", "message": "no_ingredients_return", "data": {"text_preview": (text or "")[:200], "reason": reason, "no_parse_reason": no_parse_reason}, "hypothesisId": "H3", "sessionId": "debug-session"}) + "\n"
+                open(_log_path, "a").write(_line)
+            except Exception:
+                pass
+            # #endregion
             return jsonify({
                 "ingredients": [],
                 "count": 0,
@@ -1023,6 +1048,28 @@ def parse_meal(meal_id):
             ing = normalize_quantity(ing)
             quantity = ing.get("quantity", 1)
             unit = ing.get("unit", "serving")
+            # Apply learned correction so pantry/USDA see the corrected name and portion
+            learned = check_learned_correction(ing.get("name", ""), user_id) if user_id else {}
+            if learned.get("should_correct"):
+                old_name = ing.get("name")
+                ing["name"] = learned["corrected_name"]
+                if learned.get("corrected_quantity") is not None:
+                    quantity = learned["corrected_quantity"]
+                if learned.get("corrected_unit"):
+                    unit = learned["corrected_unit"]
+                name = ing["name"].lower().strip()
+                print(f"   🧠 LEARNED: '{old_name}' → '{ing['name']}' ({learned.get('reason', '')})")
+            else:
+                # Fallback: parsed name may be substring of a learned "actual" (e.g. "wegmans bone broth" → "wegmans organic chicken bone broth")
+                patterns = get_learned_patterns_for_user(user_id) if user_id else []
+                parsed_lower = (ing.get("name") or "").lower()
+                for p in patterns:
+                    actual = (p.get("learned") or "").strip()
+                    if actual and parsed_lower in actual.lower():
+                        ing["name"] = actual
+                        name = actual.lower().strip()
+                        print(f"   🧠 LEARNED (fallback): '{parsed_lower}' → '{actual}'")
+                        break
             
             # Prefer nutrition from visible label when GPT read it
             label_nutrition = ing.get("nutritionFromLabel")
@@ -1056,11 +1103,27 @@ def parse_meal(meal_id):
                 label_used = False
             
             if not scaled_nutrition:
-                # Pantry: check if user has logged this before with a specific USDA match
+                # Pantry: prefer stored nutrition from corrections (e.g. 20g protein); else USDA by code
                 usda = None
+                pantry_match = None
                 if user_id:
                     pantry_match = lookup_pantry_match(user_id, name)
-                    if pantry_match and pantry_match.get("usdaCode"):
+                    # Use pantry's stored nutrition when available (e.g. from your 20g protein correction)
+                    pn = pantry_match.get("nutrition") if pantry_match else None
+                    if isinstance(pn, list) and len(pn) > 0 and any(n.get("nutrientName") == "Energy" for n in pn):
+                        stored_qty = pantry_match.get("lastQuantity", 1)
+                        stored_unit = (pantry_match.get("lastUnit") or "serving").lower()
+                        unit_lower = (unit or "serving").lower()
+                        stored_grams = stored_qty * UNIT_TO_GRAMS.get(stored_unit, 100.0)
+                        current_grams = quantity * UNIT_TO_GRAMS.get(unit_lower, 100.0)
+                        if stored_grams > 0:
+                            mult = current_grams / stored_grams
+                            scaled_nutrition = []
+                            for n in pn:
+                                scaled_nutrition.append({**n, "value": round((n.get("value") or 0) * mult, 2)})
+                            source_ing = "pantry"
+                            print(f"   🏪 Pantry nutrition: using stored for '{pantry_match.get('name', name)}' (scaled {mult:.2f}x)")
+                    if not scaled_nutrition and pantry_match and pantry_match.get("usdaCode"):
                         usda = usda_lookup_by_fdc_id(pantry_match["usdaCode"])
                         if usda:
                             print(f"   🏪 Pantry match: using USDA for '{pantry_match.get('name', name)}'")
@@ -1089,7 +1152,6 @@ def parse_meal(meal_id):
                         print(f"   ⚠️ Rejected USDA (calorie sanity): {reason}")
                         usda = None
                         scaled_nutrition = []
-                        # Try alternative USDA queries (e.g. "orange raw") before GPT
                         usda = usda_lookup_valid_for_portion(name, quantity, unit)
                         if usda:
                             serving_size = usda.get("serving_size_g", 100.0)
@@ -1102,16 +1164,54 @@ def parse_meal(meal_id):
                                 usda.get("nutrition", []),
                                 quantity,
                                 unit,
-                                serving_size
+                                serving_size,
                             )
                             source_ing = "usda"
-                            portion_grams = round(quantity * (serving_size if unit_lower in ("serving", "piece", "pieces") else
-                                                      28.35 if unit == "oz" else
-                                                      240 if unit == "cup" else
-                                                      15 if unit == "tbsp" else 100), 1)
+                            portion_grams = round(
+                                quantity
+                                * (
+                                    serving_size
+                                    if unit_lower in ("serving", "piece", "pieces")
+                                    else 28.35 if unit == "oz" else 240 if unit == "cup" else 15 if unit == "tbsp" else 100
+                                ),
+                                1,
+                            )
                             print(f"   ✅ Better USDA match: {usda.get('name')}")
                     else:
-                        print(f"   ✅ USDA match found: {usda.get('name')}")
+                        # Beverage/broth: reject if scaled protein too high (concentrate matched with wrong serving size)
+                        is_protein_ok, protein_reason = validate_scaled_protein(name, scaled_nutrition)
+                        if not is_protein_ok:
+                            print(f"   ⚠️ Rejected USDA (scaled protein): {protein_reason}")
+                            usda = None
+                            scaled_nutrition = []
+                            usda = usda_lookup_valid_for_portion(name, quantity, unit)
+                            if usda:
+                                serving_size = usda.get("serving_size_g", 100.0)
+                                unit_lower = (unit or "").lower()
+                                if unit_lower in ("piece", "pieces"):
+                                    piece_g = get_piece_grams(name)
+                                    if piece_g is not None:
+                                        serving_size = piece_g
+                                scaled_nutrition = scale_nutrition(
+                                    usda.get("nutrition", []),
+                                    quantity,
+                                    unit,
+                                    serving_size,
+                                )
+                                source_ing = "usda"
+                                portion_grams = round(
+                                    quantity
+                                    * (
+                                        serving_size
+                                        if unit_lower in ("serving", "piece", "pieces")
+                                        else 28.35 if unit == "oz" else 240 if unit == "cup" else 15 if unit == "tbsp" else 100
+                                    ),
+                                    1,
+                                )
+                                print(f"   ✅ Better USDA match (portion): {usda.get('name')}")
+                        else:
+                            # Passed both calorie and protein checks — use original USDA
+                            print(f"   ✅ USDA match found: {usda.get('name')}")
                         # If we had partial label, overlay label values onto USDA (label overrides where present)
                         if partial_label and partial_label_array:
                             scaled_nutrition = merge_label_onto_usda(scaled_nutrition, partial_label_array)
@@ -1166,7 +1266,8 @@ def parse_meal(meal_id):
             if result:
                 saved.append(result)
                 print(f"   ✅ Saved: {ing['name']}")
-                if user_id and is_branded_or_specific(ing.get("name", "")):
+                # Add to pantry when branded/specific OR when we have a USDA match (so matcha, coffee, etc. are reused)
+                if user_id and (is_branded_or_specific(ing.get("name", "")) or result.get("usdaCode")):
                     try:
                         add_to_pantry(
                             user_id,
@@ -1174,6 +1275,8 @@ def parse_meal(meal_id):
                             usda_code=result.get("usdaCode"),
                             nutrition=result.get("nutrition"),
                             source="parse",
+                            last_quantity=quantity,
+                            last_unit=unit,
                         )
                         print(f"   🏪 Added to pantry: {ing['name']}")
                     except Exception as e:
@@ -1682,6 +1785,8 @@ def save_correction(ingredient_id):
                         usda_code=updated.get("usdaCode"),
                         nutrition=updated.get("nutrition"),
                         source="correction",
+                        last_quantity=updated.get("quantity"),
+                        last_unit=updated.get("unit"),
                     )
                     print(f"   🏪 Added to pantry: {final_name}")
                 except Exception as e:

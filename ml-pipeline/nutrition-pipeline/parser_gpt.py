@@ -37,6 +37,7 @@ def parse_ingredients(text: str, user_context: str = ""):
     DO NOT return composite foods like "burrito" or "sandwich" - break them down!
     AVOID vague terms: "pizza toppings", "salad stuff", "sandwich fillings", "leftover food". Prefer specific items: "pepperoni pizza slice", "2 slices cheese pizza", "lettuce, tomato, dressing", "turkey sandwich".
     Simple items stay as-is: "apple", "coffee", "eggs", "chicken breast"
+    Single food/drink phrases must return one item: "iced matcha" → one drink (e.g. name "matcha", category "drink"); "green tea", "matcha latte", "oat milk" → one item each. Do NOT return [] when the input is clearly a single food or drink.
     
     Return ONLY a JSON array (no markdown, no explanation).
     Each item must have:
@@ -62,7 +63,7 @@ def parse_ingredients(text: str, user_context: str = ""):
       Protein uses OZ-EQUIVALENTS (MyPlate): 1 oz meat = 1, so 4 oz chicken = 4, 1 egg = 1, 1/4 cup beans = 1.
       E.g. broccoli 1 cup → {{ "vegetables": 2 }}; chicken breast 4 oz → {{ "protein": 4 }}; 1 egg → {{ "protein": 1 }}.
     
-    Return empty array [] if no food/drinks/supplements found.
+    Return empty array [] only if the input clearly contains no food/drink/supplement (e.g. empty, or only metadata like "tap to edit").
     """
 
     resp = client.chat.completions.create(
@@ -81,6 +82,15 @@ def parse_ingredients(text: str, user_context: str = ""):
 
     try:
         out = json.loads(raw)
+        # #region agent log
+        if not out and text:
+            try:
+                _path = "/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log"
+                _payload = {"timestamp": __import__("time").time()*1000, "location": "parser_gpt.py:parse_ingredients", "message": "gpt_returned_empty", "data": {"text_preview": (text or "")[:150], "raw_preview": (raw or "")[:300]}, "hypothesisId": "H2", "sessionId": "debug-session"}
+                open(_path, "a").write(__import__("json").dumps(_payload) + "\n")
+            except Exception:
+                pass
+        # #endregion
         if not out:
             print("Parser text returned [] for input:", repr(text[:60]) if text else "")
         return out

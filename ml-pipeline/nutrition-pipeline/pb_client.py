@@ -1052,10 +1052,11 @@ def is_branded_or_specific(name: str) -> bool:
     return len(words) >= 3
 
 
-def add_to_pantry(user_id: str, name: str, usda_code: str = None, nutrition: list = None, source: str = "parse") -> bool:
+def add_to_pantry(user_id: str, name: str, usda_code: str = None, nutrition: list = None, source: str = "parse", last_quantity: float = None, last_unit: str = None) -> bool:
     """
     Add or bump an item in user's pantry (branded/specific items, most recent first).
     Cap at 50 items; evict oldest when full.
+    last_quantity/last_unit: when nutrition is stored, record the portion so we can scale on reuse.
     """
     if not name or not isinstance(name, str) or not name.strip():
         return False
@@ -1078,6 +1079,10 @@ def add_to_pantry(user_id: str, name: str, usda_code: str = None, nutrition: lis
             item["usdaCode"] = usda_code if usda_code is not None else item.get("usdaCode")
             if nutrition is not None:
                 item["nutrition"] = nutrition
+            if last_quantity is not None:
+                item["lastQuantity"] = last_quantity
+            if last_unit is not None:
+                item["lastUnit"] = last_unit
             item["source"] = source
             found = True
             break
@@ -1088,6 +1093,8 @@ def add_to_pantry(user_id: str, name: str, usda_code: str = None, nutrition: lis
             "nutrition": nutrition,
             "lastUsed": now,
             "source": source,
+            "lastQuantity": last_quantity,
+            "lastUnit": last_unit,
         })
 
     # Sort by lastUsed desc, cap at 50

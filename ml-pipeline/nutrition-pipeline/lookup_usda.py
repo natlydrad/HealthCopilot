@@ -234,6 +234,38 @@ def validate_scaled_calories(
     return True, ""
 
 
+# Beverage/broth-type ingredients: per-serving protein should stay low (catches powder/concentrate scaled wrong)
+VERY_LOW_PROTEIN_INGREDIENTS = (
+    "broth", "soup", "stock", "tea", "coffee", "water", "juice", "matcha",
+    "green tea", "herbal tea", "espresso", "soda", "cola", "lemonade",
+)
+
+
+def validate_scaled_protein(
+    ingredient_name: str, scaled_nutrition: list, max_protein_g: float = 8.0
+) -> tuple[bool, str]:
+    """
+    For beverage/broth-type ingredients, reject if scaled total protein is too high.
+    Use after scaling: concentrates (e.g. matcha powder, broth paste) can have high
+    protein per 100g but a normal serving should have low total protein.
+    Returns (is_valid, reason_if_invalid).
+    """
+    name_lower = (ingredient_name or "").lower()
+    if not any(f in name_lower for f in VERY_LOW_PROTEIN_INGREDIENTS):
+        return True, ""
+    protein_val = 0.0
+    for n in scaled_nutrition or []:
+        if (n.get("nutrientName") or "").strip() == "Protein":
+            protein_val = float(n.get("value") or 0)
+            break
+    if protein_val <= max_protein_g:
+        return True, ""
+    return False, (
+        f"Beverage/broth '{ingredient_name[:30]}' has {protein_val:.1f}g protein per portion "
+        f"(expected ≤{max_protein_g}g); likely matched to concentrate/powder with wrong serving size"
+    )
+
+
 # Expected calories per 100g by food category — prefer USDA matches in this range
 # Format: (search_terms, (lo, hi)) — first match wins
 EXPECTED_CAL_PER_100G = [
@@ -297,21 +329,17 @@ def validate_usda_match(ingredient_name: str, matched_name: str, macros: dict) -
         "powder"  # most powders (matcha, cocoa, etc.) are low protein
     ]
     
-    # Very low protein foods (<5g per 100g expected)
-    very_low_protein = ["broth", "soup", "stock", "tea", "coffee", "water", "juice", "matcha"]
-    
-    protein_per_100g = macros.get("protein", 0)
-    
-    # Check 1: Very strict for very low protein foods (broth, tea, etc.)
+    # Beverage/broth/concentrates: don't reject on protein per 100g here.
+    # Allow powder/concentrate matches; we validate after scaling (validate_scaled_protein).
+    very_low_protein = list(VERY_LOW_PROTEIN_INGREDIENTS)
     is_very_low_protein = any(food in ingredient_lower for food in very_low_protein)
-    if is_very_low_protein and protein_per_100g > 10:
-        return False, f"Suspicious: {ingredient_name} matched to {matched_name} with {protein_per_100g:.1f}g protein/100g (expected <10g for beverages/broth)"
-    
-    # Check 2: Non-meat foods shouldn't exceed 15g per 100g
+
+    protein_per_100g = macros.get("protein", 0)
     is_meat = any(food in ingredient_lower for food in meat_foods)
     is_low_protein_food = any(food in ingredient_lower for food in low_protein_foods)
-    
-    if not is_meat and protein_per_100g > 15:
+
+    # Non-meat, non-beverage: shouldn't exceed 15g per 100g (beverages allowed to match concentrates)
+    if not is_meat and not is_very_low_protein and protein_per_100g > 15:
         return False, f"Suspicious: {ingredient_name} matched to {matched_name} with {protein_per_100g:.1f}g protein/100g (non-meat expected <15g)"
     
     # Check 3: Meat foods shouldn't exceed 40g per 100g (unless it's pure protein powder)
@@ -404,6 +432,41 @@ def usda_lookup(ingredient_name):
                     "macros_per_100g": macros,
                     "serving_size_g": f.get("servingSize", 100),
                 }
+            # First query had results but none passed validation — try alternative queries (e.g. "matcha" → "matcha beverage")
+            for alt_q in _alternative_usda_queries(ingredient_name):
+                if alt_q == ingredient_name:
+                    continue
+                print(f"   🔄 Trying alternative query: '{alt_q}'")
+                r2 = requests.get(USDA_URL, params={"query": alt_q, "api_key": USDA_KEY, "pageSize": 10})
+                if r2.status_code != 200:
+                    continue
+                foods2 = r2.json().get("foods", [])
+                if not foods2:
+                    continue
+                valid2 = []
+                for f in foods2:
+                    raw_nutrients = f.get("foodNutrients", [])
+                    macros = extract_macros(raw_nutrients)
+                    matched_name = f["description"]
+                    is_valid, _ = validate_usda_match(ingredient_name, matched_name, macros)
+                    if not is_valid:
+                        continue
+                    cal_100 = macros.get("calories", 0) or 0
+                    expected_range = get_expected_cal_range(ingredient_name)
+                    cal_score = score_calorie_fit(cal_100, expected_range[0], expected_range[1]) if expected_range else 0
+                    valid2.append((cal_score, f, macros, matched_name, raw_nutrients))
+                if valid2:
+                    valid2.sort(key=lambda x: x[0])
+                    _, f, macros, matched_name, raw_nutrients = valid2[0]
+                    cal_100 = macros.get("calories", 0)
+                    print(f"   ✅ Matched (alt): '{matched_name}' (fdcId: {f['fdcId']}) — {cal_100:.0f} cal/100g")
+                    return {
+                        "usdaCode": f["fdcId"],
+                        "name": matched_name,
+                        "nutrition": raw_nutrients,
+                        "macros_per_100g": macros,
+                        "serving_size_g": f.get("servingSize", 100),
+                    }
         else:
             print(f"   ⚠️ No USDA results for '{ingredient_name}'")
             return None
@@ -502,6 +565,12 @@ def _alternative_usda_queries(ingredient_name: str) -> list[str]:
         queries.append("black coffee brewed")
     if "tea" in lower and "green" not in lower and "herbal" not in lower:
         queries.append("tea brewed")
+    # Beverage/broth-type: try "beverage" or "ready to drink" so we get prepared form, not just powder/concentrate
+    if any(f in lower for f in VERY_LOW_PROTEIN_INGREDIENTS):
+        base = name.split(",")[0].strip()
+        if "beverage" not in lower and "drink" not in lower:
+            queries.append(f"{base} beverage")
+        queries.append(f"beverages {base}")
     return queries
 
 
