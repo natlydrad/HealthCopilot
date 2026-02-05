@@ -80,6 +80,37 @@ export async function fetchMealsForDateRange(startDate, endDate) {
   }
 }
 
+// Create a new meal (text-only, for web dashboard Add Meal)
+export async function createMeal(text, timestamp) {
+  if (!authToken) throw new Error("Not logged in");
+  const userId = getCurrentUserId();
+  if (!userId) throw new Error("User not found");
+
+  const localId = "web-" + Date.now() + "-" + Math.random().toString(36).slice(2, 9);
+  const ts = timestamp instanceof Date ? timestamp : new Date(timestamp);
+  const iso = ts.toISOString();
+
+  const res = await fetch(`${PB_BASE}/api/collections/meals/records`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${authToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      user: userId,
+      text: (text || "").trim(),
+      timestamp: iso,
+      localId,
+    }),
+  });
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(`Failed to create meal: ${error}`);
+  }
+
+  return res.json();
+}
 
 export async function fetchIngredients(mealId) {
   // Prefer Parse API: fetches with admin token, includes full nutrition (bypasses PocketBase rules)

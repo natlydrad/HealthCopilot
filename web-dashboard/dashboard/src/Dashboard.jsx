@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchMealsForDateRange, fetchIngredients } from "./api";
+import { fetchMealsForDateRange, fetchIngredients, createMeal, parseAndSaveMeal } from "./api";
 import { computeServingsByFramework } from "./utils/foodFrameworks";
 
 /** Normalize nutrition from ingredient - same as DayDetail: handles nutrition, scaled_nutrition, string */
@@ -19,6 +19,12 @@ export default function Dashboard() {
   const [ingredients, setIngredients] = useState({});
   const [loading, setLoading] = useState(true);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [showAddMeal, setShowAddMeal] = useState(false);
+  const [addMealText, setAddMealText] = useState("");
+  const [addMealTimestamp, setAddMealTimestamp] = useState("");
+  const [addingMeal, setAddingMeal] = useState(false);
+  const [addMealError, setAddMealError] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   
   // Load weekOffset from localStorage, default to 0 (current week)
   const [weekOffset, setWeekOffset] = useState(() => {
@@ -86,7 +92,7 @@ export default function Dashboard() {
       }
     }
     loadWeek();
-  }, [weekOffset]); // Only re-run when weekOffset changes
+  }, [weekOffset, refreshTrigger]); // Also re-run when refreshTrigger changes (e.g. after Add Meal)
 
   // Get week label
   const getWeekLabel = () => {
@@ -97,6 +103,48 @@ export default function Dashboard() {
     const startDate = new Date(days[0] + "T12:00:00");
     const endDate = new Date(days[6] + "T12:00:00");
     return `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+  };
+
+  // Open Add Meal modal with sensible default timestamp (local time, not UTC)
+  const openAddMeal = () => {
+    const now = new Date();
+    let defaultTs;
+    if (weekOffset < 0 && days[0]) {
+      defaultTs = days[0] + "T12:00";
+    } else {
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, "0");
+      const d = String(now.getDate()).padStart(2, "0");
+      const h = String(now.getHours()).padStart(2, "0");
+      const min = String(now.getMinutes()).padStart(2, "0");
+      defaultTs = `${y}-${m}-${d}T${h}:${min}`;
+    }
+    setAddMealTimestamp(defaultTs);
+    setAddMealText("");
+    setAddMealError(null);
+    setShowAddMeal(true);
+  };
+
+  const handleAddMeal = async () => {
+    const text = addMealText.trim();
+    if (!text) {
+      setAddMealError("Describe the meal first.");
+      return;
+    }
+    setAddingMeal(true);
+    setAddMealError(null);
+    try {
+      const newMeal = await createMeal(text, addMealTimestamp || new Date());
+      await parseAndSaveMeal(newMeal);
+      setShowAddMeal(false);
+      setAddMealText("");
+      setAddMealTimestamp("");
+      setRefreshTrigger((t) => t + 1);
+    } catch (err) {
+      setAddMealError(err?.message || "Failed to add meal");
+    } finally {
+      setAddingMeal(false);
+    }
   };
 
   // Jump to a specific date
@@ -265,14 +313,66 @@ export default function Dashboard() {
           )}
         </div>
         
-        <button
-          onClick={() => setWeekOffset(w => w + 1)}
-          className="px-3 py-2 bg-slate-200 rounded-lg hover:bg-slate-300 transition-colors"
-          disabled={weekOffset >= 0}
-        >
-          Next →
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={openAddMeal}
+            className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            Add Meal
+          </button>
+          <button
+            onClick={() => setWeekOffset(w => w + 1)}
+            className="px-3 py-2 bg-slate-200 rounded-lg hover:bg-slate-300 transition-colors"
+            disabled={weekOffset >= 0}
+          >
+            Next →
+          </button>
+        </div>
       </div>
+
+      {/* Add Meal Modal */}
+      {showAddMeal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-4">
+            <div className="flex justify-between items-center mb-3">
+              <h2 className="text-lg font-semibold text-slate-800">Add Meal</h2>
+              <button
+                onClick={() => { setShowAddMeal(false); setAddMealError(null); }}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            </div>
+            <textarea
+              value={addMealText}
+              onChange={(e) => setAddMealText(e.target.value)}
+              placeholder="Describe meal…"
+              className="w-full p-3 border border-slate-300 rounded-lg min-h-[100px] resize-y mb-3"
+              disabled={addingMeal}
+            />
+            <div className="mb-3">
+              <label className="block text-sm text-slate-600 mb-1">When</label>
+              <input
+                type="datetime-local"
+                value={addMealTimestamp}
+                onChange={(e) => setAddMealTimestamp(e.target.value)}
+                className="w-full p-2 border border-slate-300 rounded-lg"
+                disabled={addingMeal}
+              />
+            </div>
+            {addMealError && (
+              <p className="text-red-600 text-sm mb-3">{addMealError}</p>
+            )}
+            <button
+              onClick={handleAddMeal}
+              disabled={addingMeal}
+              className="w-full py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
+            >
+              {addingMeal ? "Adding…" : "Add Meal"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Calendar Picker */}
       {showCalendar && (
