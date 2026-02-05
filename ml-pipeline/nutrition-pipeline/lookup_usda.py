@@ -6,6 +6,7 @@ load_dotenv()   # make sure env vars are loaded
 
 USDA_KEY = os.getenv("USDA_KEY")
 USDA_URL = "https://api.nal.usda.gov/fdc/v1/foods/search"
+USDA_FOOD_URL = "https://api.nal.usda.gov/fdc/v1/food"
 
 
 # Unit to grams conversion table
@@ -412,6 +413,45 @@ def usda_lookup(ingredient_name):
         return None
     except Exception as e:
         print(f"   ❌ USDA lookup error: {e}")
+        return None
+
+
+def usda_lookup_by_fdc_id(fdc_id, serving_size_g: float = 100.0) -> dict | None:
+    """
+    Fetch food details by FDC ID (for pantry reuse).
+    Returns same format as usda_lookup: {usdaCode, name, nutrition, macros_per_100g, serving_size_g}.
+    """
+    if not fdc_id or not USDA_KEY:
+        return None
+    url = f"{USDA_FOOD_URL}/{fdc_id}"
+    try:
+        r = requests.get(url, params={"api_key": USDA_KEY})
+        if r.status_code != 200:
+            return None
+        f = r.json()
+        raw_nutrients = f.get("foodNutrients", [])
+        if not raw_nutrients:
+            return None
+        macros = extract_macros(raw_nutrients)
+        name = f.get("description") or f.get("additionalDescriptions") or ""
+        if isinstance(name, list):
+            name = name[0] if name else ""
+        name = (name or "Unknown").strip()
+        serving = serving_size_g
+        if "servingSize" in f and f["servingSize"]:
+            serving = float(f["servingSize"])
+        elif "foodPortions" in f and f["foodPortions"]:
+            p = f["foodPortions"][0]
+            serving = float(p.get("gramWeight", 100))
+        return {
+            "usdaCode": str(fdc_id),
+            "name": name,
+            "nutrition": raw_nutrients,
+            "macros_per_100g": macros,
+            "serving_size_g": serving,
+        }
+    except Exception as e:
+        print(f"   ⚠️ usda_lookup_by_fdc_id({fdc_id}) failed: {e}")
         return None
 
 

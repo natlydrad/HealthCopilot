@@ -58,8 +58,9 @@ def parse_ingredients(text: str, user_context: str = ""):
       e.g., "standard coffee cup size" or "typical chicken breast portion"
     - foodGroupServings (object, optional) - serving equivalents for food-group counting.
       Format: {{ "grains": 0, "protein": 0, "vegetables": 0, "fruits": 0, "dairy": 0, "fats": 0 }}.
-      One serving ≈ 1 slice bread, 1 oz meat, 1/2 cup veg, 1 piece fruit, 1 cup milk, 1 tsp oil.
-      E.g. broccoli 1 cup → {{ "vegetables": 1, ... }}; chicken breast 4 oz → {{ "protein": 1, ... }}; 1 egg → {{ "protein": 1, ... }}.
+      Grains: 1 slice bread = 1. Vegetables: 1/2 cup = 1. Fruits: 1 piece/small fruit = 1. Dairy: 1 cup milk = 1.
+      Protein uses OZ-EQUIVALENTS (MyPlate): 1 oz meat = 1, so 4 oz chicken = 4, 1 egg = 1, 1/4 cup beans = 1.
+      E.g. broccoli 1 cup → {{ "vegetables": 2 }}; chicken breast 4 oz → {{ "protein": 4 }}; 1 egg → {{ "protein": 1 }}.
     
     Return empty array [] if no food/drinks/supplements found.
     """
@@ -225,7 +226,7 @@ def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = No
         - category (string) - "food", "drink", or "supplement"
         - reasoning (string) - brief explanation
         - nutritionFromLabel (object, optional) - only when a Nutrition Facts label is visible for this item
-        - foodGroupServings (object, optional) - estimated serving equivalents for food-group counting. Use when you can infer composition (e.g. sandwich = bread + protein + veg). Format: {{ "grains": 1, "protein": 1, "vegetables": 0.25, "fruits": 0, "dairy": 0, "fats": 0.5 }}. Use 0 for missing groups. One serving ≈ 1 slice bread, 1 oz meat, 1/2 cup veg, 1 piece fruit, 1 cup milk, 1 tsp oil.
+        - foodGroupServings (object, optional) - estimated serving equivalents. Format: {{ "grains": 1, "protein": 4, "vegetables": 0.5, "fruits": 0, "dairy": 0, "fats": 0.5 }}. Protein = OZ-EQUIVALENTS: 4 oz chicken = 4, 1 egg = 1. Vegetables: 1/2 cup = 1. Grains: 1 slice = 1. Dairy: 1 cup = 1.
         
         If no edible items are visible, return an empty array [].
         """
@@ -312,7 +313,7 @@ CURRENT INGREDIENT:
 - Name: {ingredient.get('name')}
 - Quantity: {ingredient.get('quantity')} {ingredient.get('unit')}
 - Source: {ingredient.get('source', 'unknown')}
-- Original reasoning: {ingredient.get('parsingMetadata', {}).get('reasoning', 'not recorded')}
+- Original reasoning: {(ingredient.get('parsingMetadata') or {}).get('reasoning', 'not recorded')}
 """ + (f"""
 OTHER MEALS LOGGED TODAY (most recent first) — use this when user says "same as earlier", "same meal", "50% of what I had", etc.:
 {recent_meals_context}
@@ -348,7 +349,7 @@ RULES:
 - Set "learned" ONLY when shouldLearn is true
 - Set "complete": true when the correction is finalized
 - Set correction fields to null if they shouldn't change
-- When correctionReason is "poor_usda_match", ALWAYS set correction.forceUseGptEstimate = true. If user says "~2 cal", "about 2 calories", "replace with 2 cal", etc., add correction.targetCalories = 2
+- When correctionReason is "poor_usda_match", ALWAYS set correction.forceUseGptEstimate = true. If user says "~2 cal", "about 2 calories", "replace with 2 cal", etc., add correction.targetCalories = 2. If user says "20g protein", "should be ~20g protein", etc., add correction.targetProtein = 20
 - If unsure about the reason, ASK before setting complete=true"""
 
         # Build messages

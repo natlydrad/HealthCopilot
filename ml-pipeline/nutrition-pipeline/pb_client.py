@@ -1022,6 +1022,113 @@ def add_common_food(user_id: str, food_name: str, default_portion: str = None, a
     return update_user_food_profile(profile["id"], {"foods": foods})
 
 
+# Brand-like tokens for pantry (branded/specific items)
+_PANTRY_KNOWN_BRANDS = {
+    "chipotle", "starbucks", "mcdonalds", "mcdonald's", "subway",
+    "chick-fil-a", "chickfila", "wendys", "wendy's", "taco bell",
+    "panera", "sweetgreen", "cava", "shake shack", "five guys",
+    "in-n-out", "popeyes", "kfc", "dominos", "pizza hut",
+    "whole foods", "trader joes", "trader joe's", "costco",
+    "wegmans", "oatly", "kirkland", "aldi", "safeway", "kroger",
+}
+
+
+def is_branded_or_specific(name: str) -> bool:
+    """
+    Heuristic: ingredient name looks branded or specific enough for pantry.
+    Returns True if we should add to pantry (e.g. Wegmans bone broth, Oatly oat milk).
+    """
+    if not name or not isinstance(name, str):
+        return False
+    n = name.lower().strip()
+    if len(n) < 4:
+        return False
+    # Contains known brand
+    for brand in _PANTRY_KNOWN_BRANDS:
+        if brand in n:
+            return True
+    # Longer multi-word name (likely specific, e.g. "organic unsweetened soy milk")
+    words = n.split()
+    return len(words) >= 3
+
+
+def add_to_pantry(user_id: str, name: str, usda_code: str = None, nutrition: list = None, source: str = "parse") -> bool:
+    """
+    Add or bump an item in user's pantry (branded/specific items, most recent first).
+    Cap at 50 items; evict oldest when full.
+    """
+    if not name or not isinstance(name, str) or not name.strip():
+        return False
+    if _looks_like_unit_or_quantity(name):
+        return False
+    profile = get_or_create_user_food_profile(user_id)
+    if not profile:
+        return False
+
+    pantry = profile.get("pantry", []) or []
+    now = __import__("datetime").datetime.utcnow().isoformat() + "Z"
+    name_norm = name.strip()
+    name_lower = name_norm.lower()
+
+    # Update existing or add new
+    found = False
+    for item in pantry:
+        if (item.get("name") or "").lower() == name_lower:
+            item["lastUsed"] = now
+            item["usdaCode"] = usda_code if usda_code is not None else item.get("usdaCode")
+            if nutrition is not None:
+                item["nutrition"] = nutrition
+            item["source"] = source
+            found = True
+            break
+    if not found:
+        pantry.append({
+            "name": name_norm,
+            "usdaCode": usda_code,
+            "nutrition": nutrition,
+            "lastUsed": now,
+            "source": source,
+        })
+
+    # Sort by lastUsed desc, cap at 50
+    pantry.sort(key=lambda x: x.get("lastUsed", ""), reverse=True)
+    pantry = pantry[:50]
+
+    return update_user_food_profile(profile["id"], {"pantry": pantry}) is not None
+
+
+def get_pantry(user_id: str, limit: int = 20) -> list:
+    """
+    Get user's pantry items sorted by most recent first.
+    Returns list of {name, usdaCode, nutrition, lastUsed, source}.
+    """
+    profile = get_user_food_profile(user_id)
+    if not profile:
+        return []
+    pantry = profile.get("pantry", []) or []
+    pantry = sorted(pantry, key=lambda x: x.get("lastUsed", ""), reverse=True)
+    return pantry[:limit]
+
+
+def lookup_pantry_match(user_id: str, name: str) -> dict | None:
+    """
+    Check pantry for a matching ingredient name (normalized).
+    Returns pantry item if found, else None.
+    """
+    if not name or not user_id:
+        return None
+    name_lower = name.lower().strip()
+    pantry = get_pantry(user_id, limit=50)
+    for item in pantry:
+        item_name = (item.get("name") or "").lower()
+        if item_name == name_lower:
+            return item
+        # Partial match: parsed name contained in pantry name or vice versa
+        if name_lower in item_name or item_name in name_lower:
+            return item
+    return None
+
+
 def build_user_context_prompt(user_id: str) -> str:
     """
     Build a context string for GPT prompts based on user's food profile.
@@ -1048,6 +1155,15 @@ def build_user_context_prompt(user_id: str) -> str:
         if frequent_foods:
             context_parts.append(f"USER FREQUENTLY EATS: {', '.join(frequent_foods)}")
             context_parts.append("(Consider these as possibilities when identifying ambiguous items)")
+    
+    # Pantry - branded/specific items user has logged recently (for identification hints)
+    pantry = get_pantry(user_id, limit=10)
+    if pantry:
+        pantry_names = [p.get("name") for p in pantry if p.get("name")]
+        if pantry_names:
+            context_parts.append("")
+            context_parts.append(f"USER'S RECENT BRANDED ITEMS: {', '.join(pantry_names[:8])}")
+            context_parts.append("(User has logged these specific items before - prefer these when they match)")
     
     # Confusion pairs - ONLY include if count >= 3 (reliable pattern)
     # Frame as QUESTIONS/POSSIBILITIES, not assertions

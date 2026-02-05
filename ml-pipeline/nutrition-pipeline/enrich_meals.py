@@ -5,10 +5,12 @@ from pb_client import (
     lookup_brand_food, search_brand_foods,
     lookup_meal_template, lookup_similar_meal_in_history,
     # Tier 2: Learning from corrections
-    check_learned_correction, get_all_learned_patterns
+    check_learned_correction, get_all_learned_patterns,
+    # Pantry
+    add_to_pantry, is_branded_or_specific, lookup_pantry_match,
 )
 from parser_gpt import parse_ingredients, parse_ingredients_from_image
-from lookup_usda import usda_lookup
+from lookup_usda import usda_lookup, usda_lookup_by_fdc_id
 import os
 import argparse
 
@@ -322,7 +324,15 @@ def enrich_meals(skip_usda=False, limit=None, since_date=None):
             
             if not skip_usda:
                 try:
-                    usda = usda_lookup(ing["name"])
+                    usda = None
+                    if user_id:
+                        pantry_match = lookup_pantry_match(user_id, ing["name"])
+                        if pantry_match and pantry_match.get("usdaCode"):
+                            usda = usda_lookup_by_fdc_id(pantry_match["usdaCode"])
+                            if usda:
+                                print(f"   🏪 Pantry match: using USDA for '{ing['name']}'")
+                    if not usda:
+                        usda = usda_lookup(ing["name"])
                     if usda and usda.get("macros_per_100g"):
                         # Calculate actual macros based on quantity eaten
                         grams = estimate_grams(ing.get("quantity", 1), ing.get("unit", "serving"))
@@ -368,6 +378,18 @@ def enrich_meals(skip_usda=False, limit=None, since_date=None):
             try:
                 result = insert_ingredient(ingredient)
                 print(f"✅ {result['name']} ({ing.get('quantity')} {ing.get('unit')})")
+                if user_id and is_branded_or_specific(ing["name"]):
+                    try:
+                        add_to_pantry(
+                            user_id,
+                            ingredient["name"],
+                            usda_code=ingredient.get("usdaCode"),
+                            nutrition=ingredient.get("nutrition"),
+                            source="parse",
+                        )
+                        print(f"   🏪 Added to pantry: {ing['name']}")
+                    except Exception as pe:
+                        print(f"   ⚠️ Could not add to pantry: {pe}")
             except Exception as e:
                 print(f"❌ Failed to insert {ing['name']}: {e}")
                 errors += 1

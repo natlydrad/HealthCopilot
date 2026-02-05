@@ -12,9 +12,9 @@ import json
 import re
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from pb_client import get_token, insert_ingredient, delete_ingredient, delete_non_food_logs_for_meal, build_user_context_prompt, add_learned_confusion, add_common_food, add_portion_preference, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date, fetch_ingredients_by_meal_id, get_learned_patterns_for_user, remove_learned_pattern
+from pb_client import get_token, insert_ingredient, delete_ingredient, delete_non_food_logs_for_meal, build_user_context_prompt, add_learned_confusion, add_common_food, add_portion_preference, add_to_pantry, is_branded_or_specific, lookup_pantry_match, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date, fetch_ingredients_by_meal_id, get_learned_patterns_for_user, remove_learned_pattern
 from parser_gpt import parse_ingredients, parse_ingredients_from_image, correction_chat, get_image_base64, gpt_estimate_nutrition
-from lookup_usda import usda_lookup, usda_lookup_valid_for_portion, usda_search_options, scale_nutrition, get_piece_grams, validate_scaled_calories
+from lookup_usda import usda_lookup, usda_lookup_by_fdc_id, usda_lookup_valid_for_portion, usda_search_options, scale_nutrition, get_piece_grams, validate_scaled_calories
 from log_classifier import classify_log, classify_log_with_image
 import requests
 import os
@@ -498,6 +498,35 @@ def _process_and_insert_parsed_ingredient(ing, meal_id, user_context, source="ad
     return result
 
 
+@app.route("/ingredients/<meal_id>", methods=["GET"])
+def get_ingredients(meal_id):
+    """
+    Fetch ingredients for a meal using admin token (bypasses PocketBase user rules).
+    Verifies the requesting user owns the meal. Use when direct PocketBase fetch
+    returns incomplete data (e.g. missing nutrition field).
+    """
+    auth = request.headers.get("Authorization")
+    if not auth or not auth.startswith("Bearer "):
+        return jsonify({"error": "Authorization required"}), 401
+    user_id = _user_id_from_bearer()
+    if not user_id:
+        return jsonify({"error": "Invalid or missing user token"}), 401
+    try:
+        token = get_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        meal_resp = requests.get(f"{PB_URL}/api/collections/meals/records/{meal_id}", headers=headers)
+        if meal_resp.status_code != 200:
+            return jsonify({"error": "Meal not found"}), 404
+        meal = meal_resp.json()
+        meal_user = _resolve_id(meal.get("user"))
+        if meal_user != user_id:
+            return jsonify({"error": "Not authorized to view this meal's ingredients"}), 403
+        ingredients = fetch_ingredients_by_meal_id(meal_id)
+        return jsonify({"items": ingredients})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/add-ingredients/<meal_id>", methods=["POST"])
 def add_ingredients(meal_id):
     """
@@ -552,6 +581,15 @@ def add_ingredients(meal_id):
                         default_portion = f"{qty} {unit}" if qty and unit else None
                         add_common_food(meal_user, name, default_portion=default_portion)
                         print(f"   📝 Learned: user added '{name}'")
+                        if is_branded_or_specific(name) and meal_user:
+                            add_to_pantry(
+                                meal_user,
+                                name,
+                                usda_code=result.get("usdaCode"),
+                                nutrition=result.get("nutrition"),
+                                source="add_ingredients",
+                            )
+                            print(f"   🏪 Added to pantry: {name}")
                 except Exception as e:
                     print(f"   ⚠️ Could not record user-added food: {e}")
         return jsonify({
@@ -1002,9 +1040,17 @@ def parse_meal(meal_id):
                 label_used = False
             
             if not scaled_nutrition:
-                # USDA lookup
-                print(f"🔎 Looking up USDA nutrition for: '{name}'")
-                usda = usda_lookup(name)
+                # Pantry: check if user has logged this before with a specific USDA match
+                usda = None
+                if user_id:
+                    pantry_match = lookup_pantry_match(user_id, name)
+                    if pantry_match and pantry_match.get("usdaCode"):
+                        usda = usda_lookup_by_fdc_id(pantry_match["usdaCode"])
+                        if usda:
+                            print(f"   🏪 Pantry match: using USDA for '{pantry_match.get('name', name)}'")
+                if not usda:
+                    print(f"🔎 Looking up USDA nutrition for: '{name}'")
+                    usda = usda_lookup(name)
                 if usda:
                     # Use food-specific piece weight when unit is piece/pieces (fixes chicken wings etc.)
                     serving_size = usda.get("serving_size_g", 100.0)
@@ -1104,6 +1150,18 @@ def parse_meal(meal_id):
             if result:
                 saved.append(result)
                 print(f"   ✅ Saved: {ing['name']}")
+                if user_id and is_branded_or_specific(ing.get("name", "")):
+                    try:
+                        add_to_pantry(
+                            user_id,
+                            result.get("name", ing["name"]),
+                            usda_code=result.get("usdaCode"),
+                            nutrition=result.get("nutrition"),
+                            source="parse",
+                        )
+                        print(f"   🏪 Added to pantry: {ing['name']}")
+                    except Exception as e:
+                        print(f"   ⚠️ Could not add to pantry: {e}")
         
         return jsonify({
             "ingredients": saved,
@@ -1558,7 +1616,7 @@ def save_correction(ingredient_id):
                 )
                 if meal_resp.status_code == 200:
                     meal_data = meal_resp.json()
-                    user_id = meal_data.get("user")
+                    user_id = _resolve_id(meal_data.get("user"))
                     meal_text = meal_data.get("text", "")
             except:
                 pass
@@ -1568,7 +1626,7 @@ def save_correction(ingredient_id):
             print(f"🧠 Learning (shouldLearn=true): {learned['mistaken']} → {learned['actual']}")
             
             # Extract context for smarter learning
-            visual_context = original.get("parsingMetadata", {}).get("reasoning", "")
+            visual_context = (original.get("parsingMetadata") or {}).get("reasoning", "")
             meal_context = meal_text[:50] if meal_text else None  # First 50 chars of meal description
             
             # Save to user_food_profile (the new learning system)
@@ -1587,6 +1645,30 @@ def save_correction(ingredient_id):
                     print(f"   ⚠️ Could not update user food profile: {e}")
         elif learned:
             print(f"📝 Correction logged but NOT learning (reason: {correction_reason})")
+
+        # Broaden profile: add_common_food for brand_specific and poor_usda_match (e.g. soy milk -> unsweetened)
+        if user_id and correction_reason in ("brand_specific", "poor_usda_match") and correction.get("name"):
+            try:
+                add_common_food(user_id, correction["name"])
+                print(f"   📝 Added to common foods (reason: {correction_reason}): {correction['name']}")
+            except Exception as e:
+                print(f"   ⚠️ Could not add to common foods: {e}")
+
+        # Add to pantry when brand_specific or poor_usda_match (final corrected item for reuse)
+        if user_id and correction_reason in ("brand_specific", "poor_usda_match"):
+            final_name = updated.get("name") or correction.get("name")
+            if final_name and is_branded_or_specific(final_name):
+                try:
+                    add_to_pantry(
+                        user_id,
+                        final_name,
+                        usda_code=updated.get("usdaCode"),
+                        nutrition=updated.get("nutrition"),
+                        source="correction",
+                    )
+                    print(f"   🏪 Added to pantry: {final_name}")
+                except Exception as e:
+                    print(f"   ⚠️ Could not add to pantry: {e}")
 
         # Learn portion preferences when quantity/unit changed (same food, different amount)
         quantity_changed = correction.get("quantity") is not None and correction.get("quantity") != original.get("quantity")
