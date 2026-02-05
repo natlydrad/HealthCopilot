@@ -20,6 +20,8 @@
     #svgSection h3 { margin: 0 0 8px 0; font-size: 16px; }
     #svgPreview { background: #2a2a2a; border-radius: 8px; padding: 16px; min-height: 120px; }
     #svgPreview svg { max-width: 100%; max-height: 280px; display: block; }
+    .walk-view-wrap { perspective: 800px; transform-style: preserve-3d; display: inline-block; }
+    .walk-view-wrap svg { transform-style: preserve-3d; }
     #svgPreview svg path { fill: none; stroke: #6cf; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .hint { font-size: 12px; color: #888; margin-top: 4px; }
     .tool-group { display: flex; align-items: center; gap: 4px; }
@@ -46,8 +48,16 @@
     <button class="secondary" id="btnClear">Clear</button>
     <button class="primary" id="btnGroupAI">Group with AI</button>
     <button class="primary" id="btnExport">Export SVG &amp; Animate</button>
+    <div class="tool-group">
+      <label for="walkViewSelect">Walk view</label>
+      <select id="walkViewSelect">
+        <option value="front">Front</option>
+        <option value="sideTilt">Side (tilt)</option>
+        <option value="sideHalf">Side (half)</option>
+      </select>
+    </div>
     <span id="groupStatus" class="hint" style="display: none;"></span>
-    <span class="hint">Pen, Rect, Circle, Move, Transform. Group with AI then Export for rigging-ready SVG.</span>
+    <span class="hint">Pen, Rect, Circle, Move, Transform. Walk view applies when you Export.</span>
   </div>
   <div class="paste-section">
     <label for="pasteSvgTa">Or paste existing SVG code (circles, rects, paths) and load:</label>
@@ -74,6 +84,7 @@
     let transformSelectedIndex = -1;
     let transformHandle = null;
     let aiGroups = null;
+    let walkViewMode = 'front';
     const HANDLE_SIZE = 10;
     let cw = 600, ch = 400;
 
@@ -81,6 +92,25 @@
       [100, 200, 255], [255, 100, 120], [100, 220, 140], [255, 200, 80],
       [180, 140, 255], [255, 255, 255], [60, 60, 80], [255, 150, 180]
     ];
+
+    const DRAFT_KEY = 'healthcopilot_5js_draft';
+
+    function loadDraft() {
+      try {
+        const raw = localStorage.getItem(DRAFT_KEY);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (Array.isArray(data.shapes)) shapes = data.shapes;
+        if (Array.isArray(data.strokes)) strokes = data.strokes;
+        if (data.aiGroups && typeof data.aiGroups === 'object') aiGroups = data.aiGroups;
+      } catch (_) {}
+    }
+
+    function saveDraft() {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ shapes, strokes, aiGroups }));
+      } catch (_) {}
+    }
 
     function setup() {
       // #region agent log
@@ -177,14 +207,57 @@
         }
       };
 
+      function applyWalkView(svgEl) {
+        if (!svgEl) return;
+        const preview = svgEl.closest('#svgPreview') || svgEl.parentElement;
+        if (!preview) return;
+        if (walkViewMode === 'sideTilt') {
+          if (!svgEl.closest('.walk-view-wrap')) {
+            const wrap = document.createElement('div');
+            wrap.className = 'walk-view-wrap';
+            preview.insertBefore(wrap, svgEl);
+            wrap.appendChild(svgEl);
+          }
+          const wrap = svgEl.closest('.walk-view-wrap');
+          if (wrap) {
+            wrap.style.transform = 'rotateY(-25deg)';
+            wrap.style.transformStyle = 'preserve-3d';
+          }
+        } else if (walkViewMode === 'sideHalf') {
+          const walkRoot = svgEl.querySelector('#walkRoot');
+          if (walkRoot) {
+            walkRoot.querySelectorAll('g[id]').forEach(g => {
+              const id = (g.getAttribute('id') || '').toLowerCase();
+              if (id.includes('left')) {
+                g.style.visibility = 'hidden';
+              } else {
+                try {
+                  const b = g.getBBox();
+                  const cx = b.x + b.width / 2;
+                  g.style.transform = `translate(${300 - cx}px, 0)`;
+                } catch (_) {}
+              }
+            });
+          }
+        }
+      }
+
       document.getElementById('btnExport').onclick = () => {
         if (strokes.length === 0 && shapes.length === 0) return;
+        saveDraft();
+        walkViewMode = document.getElementById('walkViewSelect').value;
         let svg = toSVG();
         let preview = document.getElementById('svgPreview');
         preview.innerHTML = svg;
         document.getElementById('svgCode').textContent = svg;
         document.getElementById('svgSection').style.display = 'block';
-        animatePaths(preview.querySelector('svg'));
+        let svgEl = preview.querySelector('svg');
+        applyWalkView(svgEl);
+        animatePaths(svgEl);
+      };
+
+      document.getElementById('walkViewSelect').onchange = () => {
+        walkViewMode = document.getElementById('walkViewSelect').value;
       };
 
       document.getElementById('btnLoadSvg').onclick = () => {
@@ -199,6 +272,7 @@
         strokes = [];
         aiGroups = null;
         let loaded = loadFromSvg(raw);
+        if (loaded) saveDraft();
         status.style.display = 'inline';
         status.textContent = loaded ? `Loaded ${loaded} elements. Paths are in data but only circles/rects draw on canvas.` : 'No circle/rect/path found in pasted SVG.';
       };
@@ -518,12 +592,52 @@
       const bobAmplitude = 6;
       const bobFreq = 2;
       const driftSpeed = 40;
+      const legSwingDeg = 10;
+      const bodyTiltDeg = 3;
       let startTime = Date.now();
+
+      // Phase 2: find groups by id for leg swing and body tilt
+      let leftLegEl = null, rightLegEl = null, bodyEl = null;
+      walkRoot.querySelectorAll('g[id]').forEach(g => {
+        let id = (g.getAttribute('id') || '').toLowerCase();
+        if ((id.includes('left') && id.includes('leg')) || id === 'leftleg') leftLegEl = g;
+        else if ((id.includes('right') && id.includes('leg')) || id === 'rightleg') rightLegEl = g;
+        else if (id === 'body') bodyEl = g;
+      });
+
+      // Side (tilt) uses the wrapper div for rotateY; SVG #walkRoot only gets 2D translate (3D on SVG is poorly supported)
       function step() {
         let t = (Date.now() - startTime) / 1000;
         let x = (driftSpeed * t) % viewBoxWidth;
         let y = -bobAmplitude * Math.sin(2 * Math.PI * bobFreq * t);
         walkRoot.style.transform = `translate(${x}px, ${y}px)`;
+        let phase = 2 * Math.PI * bobFreq * t;
+        let swing = Math.sin(phase) * legSwingDeg;
+        let tilt = Math.sin(phase) * bodyTiltDeg;
+        if (leftLegEl) {
+          try {
+            let b = leftLegEl.getBBox();
+            let ox = b.x + b.width / 2, oy = b.y;
+            leftLegEl.style.transformOrigin = `${ox}px ${oy}px`;
+            leftLegEl.style.transform = `rotate(${swing}deg)`;
+          } catch (_) {}
+        }
+        if (rightLegEl) {
+          try {
+            let b = rightLegEl.getBBox();
+            let ox = b.x + b.width / 2, oy = b.y;
+            rightLegEl.style.transformOrigin = `${ox}px ${oy}px`;
+            rightLegEl.style.transform = `rotate(${-swing}deg)`;
+          } catch (_) {}
+        }
+        if (bodyEl) {
+          try {
+            let b = bodyEl.getBBox();
+            let ox = b.x + b.width / 2, oy = b.y + b.height / 2;
+            bodyEl.style.transformOrigin = `${ox}px ${oy}px`;
+            bodyEl.style.transform = `rotate(${tilt}deg)`;
+          } catch (_) {}
+        }
         requestAnimationFrame(step);
       }
       requestAnimationFrame(step);
