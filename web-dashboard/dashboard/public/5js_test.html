@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Draw → SVG → Animate</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 12px; margin: 0; background: #1a1a1a; color: #eee; }
+    .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+    button { padding: 8px 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+    button.primary { background: #4a9; color: #fff; }
+    button.secondary { background: #444; color: #ddd; }
+    button:hover { filter: brightness(1.1); }
+    #canvasContainer { margin-bottom: 16px; }
+    #svgSection { margin-top: 20px; }
+    #svgSection h3 { margin: 0 0 8px 0; font-size: 16px; }
+    #svgPreview { background: #2a2a2a; border-radius: 8px; padding: 16px; min-height: 120px; }
+    #svgPreview svg { max-width: 100%; max-height: 280px; display: block; }
+    #svgPreview svg path { fill: none; stroke: #6cf; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .hint { font-size: 12px; color: #888; margin-top: 4px; }
+    .tool-group { display: flex; align-items: center; gap: 4px; }
+    .tool-group label { font-size: 12px; color: #999; }
+    .color-swatch { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; }
+    .color-swatch.active { border-color: #fff; box-shadow: 0 0 0 1px #1a1a1a; }
+    .color-swatch:hover { transform: scale(1.1); }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <div class="tool-group">
+      <label>Tool</label>
+      <button class="secondary tool-btn active" data-tool="pen">Pen</button>
+      <button class="secondary tool-btn" data-tool="rect">Rectangle</button>
+      <button class="secondary tool-btn" data-tool="circle">Circle</button>
+      <button class="secondary tool-btn" data-tool="move">Move</button>
+      <button class="secondary tool-btn" data-tool="transform">Transform</button>
+    </div>
+    <div class="tool-group">
+      <label>Color</label>
+      <div id="colorPalette"></div>
+    </div>
+    <button class="secondary" id="btnClear">Clear</button>
+    <button class="primary" id="btnExport">Export SVG &amp; Animate</button>
+    <span class="hint">Pen, Rect, Circle, Move, Transform (resize). Click shape in Transform, then drag handles.</span>
+  </div>
+  <div id="canvasContainer"></div>
+  <div id="svgSection" style="display: none;">
+    <h3>Exported SVG (animated)</h3>
+    <div id="svgPreview"></div>
+    <pre id="svgCode" style="margin: 8px 0 0 0; font-size: 11px; overflow: auto; max-height: 180px; background: #222; padding: 10px; border-radius: 6px;"></pre>
+  </div>
+
+  <script>
+    let strokes = [];
+    let shapes = [];
+    let currentStroke = null;
+    let currentTool = 'pen';
+    let currentColor = [100, 200, 255];
+    let dragStart = null;
+    let selectedShapeIndex = null;
+    let moveOffset = null;
+    let transformSelectedIndex = -1;
+    let transformHandle = null;
+    const HANDLE_SIZE = 10;
+    let cw = 600, ch = 400;
+
+    const PALETTE = [
+      [100, 200, 255], [255, 100, 120], [100, 220, 140], [255, 200, 80],
+      [180, 140, 255], [255, 255, 255], [60, 60, 80], [255, 150, 180]
+    ];
+
+    function setup() {
+      let canvas = createCanvas(cw, ch);
+      canvas.parent('canvasContainer');
+      background(28, 28, 28);
+
+      document.querySelectorAll('.tool-btn').forEach(btn => {
+        btn.onclick = () => {
+          document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentTool = btn.dataset.tool;
+          transformSelectedIndex = -1;
+          transformHandle = null;
+        };
+      });
+
+      const paletteEl = document.getElementById('colorPalette');
+      PALETTE.forEach((col, i) => {
+        let swatch = document.createElement('div');
+        swatch.className = 'color-swatch' + (i === 0 ? ' active' : '');
+        swatch.style.background = `rgb(${col[0]},${col[1]},${col[2]})`;
+        swatch.onclick = () => {
+          document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+          swatch.classList.add('active');
+          currentColor = col;
+        };
+        paletteEl.appendChild(swatch);
+      });
+
+      document.getElementById('btnClear').onclick = () => {
+        strokes = [];
+        shapes = [];
+        currentStroke = null;
+        dragStart = null;
+        selectedShapeIndex = null;
+        moveOffset = null;
+        transformSelectedIndex = -1;
+        transformHandle = null;
+        background(28, 28, 28);
+        document.getElementById('svgSection').style.display = 'none';
+      };
+
+      document.getElementById('btnExport').onclick = () => {
+        if (strokes.length === 0 && shapes.length === 0) return;
+        let svg = toSVG();
+        let preview = document.getElementById('svgPreview');
+        preview.innerHTML = svg;
+        document.getElementById('svgCode').textContent = svg;
+        document.getElementById('svgSection').style.display = 'block';
+        animatePaths(preview.querySelector('svg'));
+      };
+    }
+
+    function draw() {
+      if (frameCount === 1) return;
+      background(28, 28, 28);
+      shapes.forEach(s => {
+        fill(s.color[0], s.color[1], s.color[2]);
+        noStroke();
+        if (s.type === 'rect') rect(s.x, s.y, s.w, s.h);
+        else if (s.type === 'circle') ellipse(s.x, s.y, s.r * 2, s.r * 2);
+      });
+      strokes.forEach(s => {
+        if (s.length < 2) return;
+        let c = s[0].color || currentColor;
+        stroke(c[0], c[1], c[2]);
+        strokeWeight(3);
+        noFill();
+        for (let i = 1; i < s.length; i++) line(s[i - 1].x, s[i - 1].y, s[i].x, s[i].y);
+      });
+      if (currentStroke && currentStroke.length > 1) {
+        stroke(currentColor[0], currentColor[1], currentColor[2]);
+        strokeWeight(3);
+        noFill();
+        for (let i = 1; i < currentStroke.length; i++)
+          line(currentStroke[i - 1].x, currentStroke[i - 1].y, currentStroke[i].x, currentStroke[i].y);
+      }
+      if (dragStart && (currentTool === 'rect' || currentTool === 'circle')) {
+        fill(currentColor[0], currentColor[1], currentColor[2]);
+        noStroke();
+        if (currentTool === 'rect') {
+          let x = min(mouseX, dragStart.x), y = min(mouseY, dragStart.y);
+          let w = abs(mouseX - dragStart.x), h = abs(mouseY - dragStart.y);
+          rect(x, y, w, h);
+        } else if (currentTool === 'circle') {
+          let r = dist(dragStart.x, dragStart.y, mouseX, mouseY);
+          ellipse(dragStart.x, dragStart.y, r * 2, r * 2);
+        }
+      }
+      if (currentTool === 'transform' && transformSelectedIndex >= 0) {
+        let s = shapes[transformSelectedIndex];
+        noFill();
+        stroke(255, 220, 80);
+        strokeWeight(1);
+        if (s.type === 'rect') rect(s.x - 2, s.y - 2, s.w + 4, s.h + 4);
+        else if (s.type === 'circle') ellipse(s.x, s.y, (s.r + 4) * 2, (s.r + 4) * 2);
+        fill(255, 220, 80);
+        noStroke();
+        getHandlePositions(transformSelectedIndex).forEach(h => rect(h.x - HANDLE_SIZE/2, h.y - HANDLE_SIZE/2, HANDLE_SIZE, HANDLE_SIZE));
+      }
+    }
+
+    function getHandlePositions(shapeIndex) {
+      let s = shapes[shapeIndex];
+      if (!s) return [];
+      if (s.type === 'rect') return [
+        { x: s.x, y: s.y }, { x: s.x + s.w, y: s.y }, { x: s.x + s.w, y: s.y + s.h }, { x: s.x, y: s.y + s.h }
+      ];
+      if (s.type === 'circle') return [
+        { x: s.x + s.r, y: s.y }, { x: s.x, y: s.y + s.r }, { x: s.x - s.r, y: s.y }, { x: s.x, y: s.y - s.r }
+      ];
+      return [];
+    }
+
+    function hitTestHandle(px, py) {
+      if (transformSelectedIndex < 0) return null;
+      let handles = getHandlePositions(transformSelectedIndex);
+      for (let i = 0; i < handles.length; i++) {
+        let h = handles[i];
+        if (px >= h.x - HANDLE_SIZE/2 && px <= h.x + HANDLE_SIZE/2 && py >= h.y - HANDLE_SIZE/2 && py <= h.y + HANDLE_SIZE/2)
+          return { shapeIndex: transformSelectedIndex, handleId: i };
+      }
+      return null;
+    }
+
+    function hitTestShape(px, py) {
+      for (let i = shapes.length - 1; i >= 0; i--) {
+        let s = shapes[i];
+        if (s.type === 'rect' && px >= s.x && px <= s.x + s.w && py >= s.y && py <= s.y + s.h) return i;
+        if (s.type === 'circle' && dist(px, py, s.x, s.y) <= s.r) return i;
+      }
+      return -1;
+    }
+
+    function mousePressed() {
+      if (mouseX < 0 || mouseX > width || mouseY < 0 || mouseY > height) return;
+      if (currentTool === 'pen') {
+        currentStroke = [{ x: mouseX, y: mouseY, color: [...currentColor] }];
+        strokes.push(currentStroke);
+      } else if (currentTool === 'move') {
+        let i = hitTestShape(mouseX, mouseY);
+        if (i >= 0) {
+          let s = shapes[i];
+          selectedShapeIndex = i;
+          moveOffset = { x: mouseX - s.x, y: mouseY - s.y };
+        }
+      } else if (currentTool === 'transform') {
+        let handleHit = hitTestHandle(mouseX, mouseY);
+        if (handleHit) {
+          transformHandle = handleHit;
+        } else {
+          let i = hitTestShape(mouseX, mouseY);
+          transformSelectedIndex = i >= 0 ? i : -1;
+        }
+      } else {
+        dragStart = { x: mouseX, y: mouseY };
+      }
+    }
+
+    function mouseDragged() {
+      if (currentTool === 'pen' && currentStroke) {
+        currentStroke.push({ x: mouseX, y: mouseY });
+      } else if (currentTool === 'move' && selectedShapeIndex !== null && moveOffset !== null) {
+        let s = shapes[selectedShapeIndex];
+        s.x = mouseX - moveOffset.x;
+        s.y = mouseY - moveOffset.y;
+      } else if (currentTool === 'transform' && transformHandle !== null) {
+        let s = shapes[transformHandle.shapeIndex];
+        if (s.type === 'rect') {
+          let x2 = s.x + s.w, y2 = s.y + s.h;
+          let x1 = s.x, y1 = s.y;
+          if (transformHandle.handleId === 0) { x1 = mouseX; y1 = mouseY; }
+          else if (transformHandle.handleId === 1) { x2 = mouseX; y1 = mouseY; }
+          else if (transformHandle.handleId === 2) { x2 = mouseX; y2 = mouseY; }
+          else if (transformHandle.handleId === 3) { x1 = mouseX; y2 = mouseY; }
+          s.x = min(x1, x2); s.y = min(y1, y2);
+          s.w = abs(x2 - x1); s.h = abs(y2 - y1);
+          if (s.w < 4) s.w = 4;
+          if (s.h < 4) s.h = 4;
+        } else if (s.type === 'circle') {
+          let r = dist(mouseX, mouseY, s.x, s.y);
+          if (r >= 5) s.r = r;
+        }
+      }
+    }
+
+    function mouseReleased() {
+      if (currentTool === 'rect' && dragStart) {
+        let x = min(mouseX, dragStart.x), y = min(mouseY, dragStart.y);
+        let w = abs(mouseX - dragStart.x), h = abs(mouseY - dragStart.y);
+        if (w > 2 && h > 2) shapes.push({ type: 'rect', x, y, w, h, color: [...currentColor] });
+        dragStart = null;
+      } else if (currentTool === 'circle' && dragStart) {
+        let r = dist(dragStart.x, dragStart.y, mouseX, mouseY);
+        if (r > 2) shapes.push({ type: 'circle', x: dragStart.x, y: dragStart.y, r, color: [...currentColor] });
+        dragStart = null;
+      }
+      if (currentTool === 'pen') currentStroke = null;
+      if (currentTool === 'move') { selectedShapeIndex = null; moveOffset = null; }
+      if (currentTool === 'transform') transformHandle = null;
+    }
+
+    function toSVG() {
+      const w = cw, h = ch;
+      const hex = (r, g, b) => '#' + [r, g, b].map(x => ('0' + x.toString(16)).slice(-2)).join('');
+      let parts = [];
+      shapes.forEach(s => {
+        if (s.type === 'rect')
+          parts.push(`<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${hex(s.color[0], s.color[1], s.color[2])}" />`);
+        else if (s.type === 'circle')
+          parts.push(`<circle cx="${s.x}" cy="${s.y}" r="${s.r}" fill="${hex(s.color[0], s.color[1], s.color[2])}" />`);
+      });
+      strokes.forEach(s => {
+        if (s.length < 2) return;
+        let d = `M ${s[0].x} ${s[0].y}`;
+        for (let i = 1; i < s.length; i++) d += ` L ${s[i].x} ${s[i].y}`;
+        let sc = s[0].color || currentColor;
+        parts.push(`<path d="${d}" fill="none" stroke="${hex(sc[0], sc[1], sc[2])}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />`);
+      });
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
+  ${parts.join('\n  ')}
+</svg>`;
+    }
+
+    function animatePaths(svgEl) {
+      if (!svgEl) return;
+      let paths = svgEl.querySelectorAll('path');
+      let start = null;
+      const duration = 2000;
+      paths.forEach(p => {
+        let len = p.getTotalLength();
+        p.style.strokeDasharray = len;
+        p.style.strokeDashoffset = len;
+      });
+      function step(ts) {
+        if (!start) start = ts;
+        let t = Math.min((ts - start) / duration, 1);
+        t = 1 - (1 - t) * (1 - t);
+        paths.forEach(p => {
+          let len = p.getTotalLength();
+          p.style.strokeDashoffset = len * (1 - t);
+        });
+        if (t < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
+  </script>
+</body>
+</html>
