@@ -121,7 +121,7 @@ def convert_to_grams(quantity: float, unit: str, serving_size_g: float = 100.0) 
     return quantity * grams_per_unit
 
 
-def scale_nutrition(nutrients: list, quantity: float, unit: str, serving_size_g: float = 100.0) -> list:
+def scale_nutrition(nutrients: list, quantity: float, unit: str, serving_size_g: float = 100.0, quiet: bool = False) -> list:
     """
     Scale USDA nutrition values (per 100g) to the actual portion size.
     
@@ -130,6 +130,7 @@ def scale_nutrition(nutrients: list, quantity: float, unit: str, serving_size_g:
         quantity: Amount of food
         unit: Unit of measurement
         serving_size_g: USDA serving size for this food
+        quiet: If True, do not print scaling message
     
     Returns:
         New list with scaled nutrient values
@@ -137,7 +138,8 @@ def scale_nutrition(nutrients: list, quantity: float, unit: str, serving_size_g:
     grams = convert_to_grams(quantity, unit, serving_size_g)
     scale_factor = grams / 100.0  # USDA data is per 100g
     
-    print(f"   📊 Scaling: {quantity} {unit} = {grams:.1f}g (scale factor: {scale_factor:.2f}x)")
+    if not quiet:
+        print(f"   📊 Scaling: {quantity} {unit} = {grams:.1f}g (scale factor: {scale_factor:.2f}x)")
     
     scaled = []
     for n in nutrients:
@@ -264,6 +266,53 @@ def validate_scaled_protein(
         f"Beverage/broth '{ingredient_name[:30]}' has {protein_val:.1f}g protein per portion "
         f"(expected ≤{max_protein_g}g); likely matched to concentrate/powder with wrong serving size"
     )
+
+
+def _normalize_usda_nutrient(n: dict) -> dict | None:
+    """
+    Normalize a single USDA foodNutrient to {nutrientName, unitName, value}.
+    Handles both API shapes: value/nutrientName (already flat) and amount/nutrient.name (raw FDC).
+    """
+    if not n or not isinstance(n, dict):
+        return None
+    name = n.get("nutrientName") or (n.get("nutrient") or {}).get("name")
+    unit = n.get("unitName") or (n.get("nutrient") or {}).get("unitName") or ""
+    val = n.get("value")
+    if val is None and "amount" in n:
+        try:
+            val = float(n["amount"])
+        except (TypeError, ValueError):
+            return None
+    if name is None or val is None:
+        return None
+    return {"nutrientName": name.strip(), "unitName": (unit or "").strip(), "value": round(float(val), 2)}
+
+
+def normalize_usda_food_nutrients(raw_list: list) -> list:
+    """
+    Normalize USDA foodNutrients (raw API or already flat) to list of {nutrientName, unitName, value}.
+    Use this before scale_nutrition when the source may be raw FDC API response.
+    """
+    out = []
+    for n in raw_list or []:
+        norm = _normalize_usda_nutrient(n)
+        if norm:
+            out.append(norm)
+    return out
+
+
+def extract_caffeine_mg_per_100g(nutrients: list) -> float | None:
+    """
+    Extract Caffeine (mg per 100g) from USDA nutrient list (raw or normalized).
+    Returns None if not present.
+    """
+    for n in nutrients or []:
+        if not isinstance(n, dict):
+            continue
+        norm = _normalize_usda_nutrient(n)
+        if norm and (norm.get("nutrientName") or "").strip().lower() == "caffeine":
+            return float(norm.get("value", 0))
+    return None
 
 
 def zero_calorie_nutrition_array() -> list:

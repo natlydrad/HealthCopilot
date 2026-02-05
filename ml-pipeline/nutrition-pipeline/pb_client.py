@@ -73,6 +73,23 @@ def fetch_ingredients_by_meal_id(meal_id: str, per_page: int = 500):
         return all_items
 
 
+def fetch_meal_by_id(meal_id: str, fields: str = "id,text") -> dict | None:
+    """Fetch a single meal by id. Returns record dict or None if not found."""
+    if not meal_id:
+        return None
+    url = f"{PB_URL}/api/collections/meals/records/{meal_id}"
+    if fields:
+        url += f"?fields={fields}"
+    headers = {"Authorization": f"Bearer {get_token()}"}
+    try:
+        r = requests.get(url, headers=headers)
+        if r.status_code != 200:
+            return None
+        return r.json()
+    except Exception:
+        return None
+
+
 def insert_ingredient(ingredient):
     url = f"{PB_URL}/api/collections/ingredients/records"
     headers = {"Authorization": f"Bearer {get_token()}"}
