@@ -345,7 +345,7 @@ IMPORTANT: Always end your response with a JSON block:
 ```
 
 RULES:
-- Set "shouldLearn": true ONLY for "misidentified" (and sometimes "brand_specific" if visually distinct)
+- Set "shouldLearn": true for "misidentified" AND for "brand_specific" when user specifies a brand or specific type (e.g. "Wegmans bone broth", "steel cut oats", "focaccia"). Also for corrections that refine a generic term to a specific type (e.g. bread -> focaccia, oatmeal -> steel cut oats, sauce -> Frank's RedHot).
 - Set "learned" ONLY when shouldLearn is true
 - Set "complete": true when the correction is finalized
 - Set correction fields to null if they shouldn't change

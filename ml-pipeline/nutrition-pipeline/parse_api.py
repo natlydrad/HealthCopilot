@@ -1654,10 +1654,11 @@ def save_correction(ingredient_id):
             except Exception as e:
                 print(f"   ⚠️ Could not add to common foods: {e}")
 
-        # Add to pantry when brand_specific or poor_usda_match (final corrected item for reuse)
-        if user_id and correction_reason in ("brand_specific", "poor_usda_match"):
+        # Add to pantry when name changed (any correction that refines the ingredient name)
+        name_changed_for_pantry = (correction.get("name") or "").strip().lower() != (original.get("name") or "").strip().lower()
+        if user_id and name_changed_for_pantry:
             final_name = updated.get("name") or correction.get("name")
-            if final_name and is_branded_or_specific(final_name):
+            if final_name:
                 try:
                     add_to_pantry(
                         user_id,
