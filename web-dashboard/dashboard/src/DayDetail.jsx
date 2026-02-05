@@ -246,7 +246,7 @@ export default function DayDetail() {
               macros.carbs += value;
             } else if (name.includes("total lipid") || name === "fat") {
               macros.fat += value;
-            } else if (key && (name.includes("fiber") || (name.includes("sugars") && name.includes("added")) || name.includes("sodium"))) {
+            } else if (key && (name.includes("fiber") || (name.includes("sugars") && name.includes("added")) || name.includes("sodium") || name.includes("caffeine"))) {
               if (!micros[key]) micros[key] = { value: 0, unit: n.unitName || "" };
               micros[key].value += value;
             }
@@ -331,6 +331,9 @@ export default function DayDetail() {
             })()}
             {totals.micros["Sodium, Na"] && (
               <span>🧂 Na: {Math.round(totals.micros["Sodium, Na"].value)}mg</span>
+            )}
+            {totals.micros["Caffeine"] && (
+              <span>☕ Caffeine: {Math.round(totals.micros["Caffeine"].value)}mg</span>
             )}
           </div>
         )}

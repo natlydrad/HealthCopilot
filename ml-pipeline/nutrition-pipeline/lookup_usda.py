@@ -276,6 +276,7 @@ def zero_calorie_nutrition_array() -> list:
         {"nutrientName": "Protein", "unitName": "G", "value": 0},
         {"nutrientName": "Carbohydrate, by difference", "unitName": "G", "value": 0},
         {"nutrientName": "Total lipid (fat)", "unitName": "G", "value": 0},
+        {"nutrientName": "Caffeine", "unitName": "MG", "value": 0},
     ]
 
 

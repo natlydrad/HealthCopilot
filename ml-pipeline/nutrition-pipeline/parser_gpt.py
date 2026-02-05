@@ -225,7 +225,7 @@ def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = No
         NUTRITION FACTS LABEL: When you return ONE packaged product (Step 1), only add "nutritionFromLabel" if the FULL label is visible and you can read at least Calories and Serving size. Use:
         - servingSizeG (number) - serving size in grams if shown (e.g. 30, 42)
         - calories (number) - Calories (required; if you cannot read it, omit nutritionFromLabel)
-        - protein, totalCarb, totalFat, sodium, etc. (optional)
+        - protein, totalCarb, totalFat, sodium, caffeine (mg), etc. (optional)
         If the label is cut off, folded, or only partially visible so you cannot read Calories, do NOT include nutritionFromLabel — leave it out so the system will use USDA instead. Do not guess or infer calories.
         
         Return ONLY a JSON array (no markdown, no explanation).

@@ -130,6 +130,8 @@ def nutrition_from_label_to_array(label: dict, quantity: float, serving_size_g: 
         out.append({"nutrientName": "Fatty acids, total saturated", "unitName": "G", "value": round((label["saturatedFat"] or 0) * scale, 2)})
     if label.get("sodium") is not None:
         out.append({"nutrientName": "Sodium, Na", "unitName": "MG", "value": round((label["sodium"] or 0) * scale, 2)})
+    if label.get("caffeine") is not None:
+        out.append({"nutrientName": "Caffeine", "unitName": "MG", "value": round((label["caffeine"] or 0) * scale, 2)})
     return out
 
 
