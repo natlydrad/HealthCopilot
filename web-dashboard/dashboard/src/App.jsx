@@ -3,6 +3,10 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Dashboard from "./Dashboard";
 import DayDetail from "./DayDetail";
 import Insights from "./Insights";
+import PlaygroundLayout from "./playground/PlaygroundLayout";
+import PlaygroundDashboard from "./playground/PlaygroundDashboard";
+import PlaygroundDayDetail from "./playground/PlaygroundDayDetail";
+import PlaygroundInsights from "./playground/PlaygroundInsights";
 import { login, signup } from "./auth";
 import { setAuthToken } from "./api";
 
@@ -91,6 +95,11 @@ export default function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/day/:date" element={<DayDetail />} />
         <Route path="/insights" element={<Insights />} />
+        <Route path="/play" element={<PlaygroundLayout />}>
+          <Route index element={<PlaygroundDashboard />} />
+          <Route path="day/:date" element={<PlaygroundDayDetail />} />
+          <Route path="insights" element={<PlaygroundInsights />} />
+        </Route>
       </Routes>
     </BrowserRouter>
   );

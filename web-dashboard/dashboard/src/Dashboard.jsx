@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { fetchMealsForDateRange, fetchIngredients, createMeal, parseAndSaveMeal } from "./api";
 import { computeServingsByFramework } from "./utils/foodFrameworks";
 
@@ -327,6 +327,12 @@ export default function Dashboard() {
           >
             Next →
           </button>
+          <Link
+            to="/play"
+            className="px-3 py-2 text-sm text-slate-600 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition-colors"
+          >
+            Playground
+          </Link>
         </div>
       </div>
 
