@@ -172,6 +172,9 @@ export default function DayDetail() {
       const sortedMeals = [...dayMeals].sort((a, b) => parseTimestamp(a.timestamp) - parseTimestamp(b.timestamp));
       console.log(`📅 ${date}: ${sortedMeals.length} meals loaded`);
       setMeals(sortedMeals);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/b81179ea-362a-4b1e-9962-8572fc6e73fd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DayDetail.jsx:load_entry',message:'DayDetail load',data:{date,sortedMealsCount:sortedMeals.length,mealIds:sortedMeals.map(m=>m.id)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4'})}).catch(()=>{});
+      // #endregion
 
       const macros = { calories: 0, protein: 0, carbs: 0, fat: 0 };
       const micros = {};
@@ -233,6 +236,14 @@ export default function DayDetail() {
           }
 
           const nutritionData = getNutritionArray(ing);
+          // #region agent log
+          const isMatcha = (ing.name || "").toLowerCase().includes("matcha");
+          if (isMatcha) {
+            const nutrientNames = (nutritionData || []).map(n => n.nutrientName);
+            const caffeineNut = (nutritionData || []).find(n => (n.nutrientName || "").toLowerCase().includes("caffeine"));
+            fetch('http://127.0.0.1:7242/ingest/b81179ea-362a-4b1e-9962-8572fc6e73fd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DayDetail.jsx:matcha_ing',message:'Matcha ingredient nutrition',data:{ingName:ing.name,mealId:meal.id,nutritionLength:nutritionData.length,nutrientNames,hasCaffeine:!!caffeineNut,caffeineValue:caffeineNut?.value,caffeineKey:caffeineNut?.nutrientName},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1_H2_H3_H5'})}).catch(()=>{});
+          }
+          // #endregion
           if (nutritionData.length === 0) continue;
           for (const n of nutritionData) {
             const name = (n.nutrientName || "").toLowerCase();
@@ -253,6 +264,9 @@ export default function DayDetail() {
           }
         }
       }
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/b81179ea-362a-4b1e-9962-8572fc6e73fd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DayDetail.jsx:micros_final',message:'Totals micros after aggregation',data:{caffeineValue:micros['Caffeine']?.value,caffeineKeyPresent:!!micros['Caffeine'],microsKeys:Object.keys(micros)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H5'})}).catch(()=>{});
+      // #endregion
       const frameworks = computeServingsByFramework(allIngredients);
       setTotals({ macros, micros, foodGroups, frameworks });
     }
@@ -1177,7 +1191,10 @@ What would you like to change? You can tell me naturally, like "that's actually 
   };
 
   const handleSubmit = (e) => {
-    e?.preventDefault?.();
+    if (e != null) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     const msg = inputValue.trim();
     if (msg) {
       setInputValue("");
@@ -1429,8 +1446,8 @@ What would you like to change? You can tell me naturally, like "that's actually 
             </button>
           </div>
 
-          {/* Text input - always available */}
-          <form onSubmit={handleSubmit} className="flex gap-2">
+          {/* Text input - always available; prevent any native submit from reloading the page */}
+          <form onSubmit={handleSubmit} action="javascript:void(0)" className="flex gap-2">
             <input
               ref={inputRef}
               type="text"
