@@ -1,0 +1,16 @@
+---
+description: After any change to the SVG Group API, restart it yourself; never ask the user
+alwaysApply: true
+---
+
+# SVG Group API: Always restart yourself
+
+When you make changes that affect the SVG Group API (e.g. in `web-dashboard/svg-group-api/`), **restart the SVG Group API yourself**. Do not ask the user to restart.
+
+Run in the background from repo root:
+
+```bash
+cd web-dashboard/svg-group-api && python app.py
+```
+
+Use `is_background: true`. Do not say "please restart the SVG Group API" or "you may need to restart"—just run the command.

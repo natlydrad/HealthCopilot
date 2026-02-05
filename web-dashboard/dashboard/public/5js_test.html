@@ -12,6 +12,9 @@
     button.primary { background: #4a9; color: #fff; }
     button.secondary { background: #444; color: #ddd; }
     button:hover { filter: brightness(1.1); }
+    .paste-section { margin-bottom: 12px; }
+    .paste-section label { display: block; font-size: 12px; color: #999; margin-bottom: 4px; }
+    #pasteSvgTa { width: 100%; min-height: 100px; font-family: monospace; font-size: 11px; background: #222; color: #ddd; border: 1px solid #444; border-radius: 6px; padding: 8px; box-sizing: border-box; }
     #canvasContainer { margin-bottom: 16px; }
     #svgSection { margin-top: 20px; }
     #svgSection h3 { margin: 0 0 8px 0; font-size: 16px; }
@@ -41,8 +44,16 @@
       <div id="colorPalette"></div>
     </div>
     <button class="secondary" id="btnClear">Clear</button>
+    <button class="primary" id="btnGroupAI">Group with AI</button>
     <button class="primary" id="btnExport">Export SVG &amp; Animate</button>
-    <span class="hint">Pen, Rect, Circle, Move, Transform (resize). Click shape in Transform, then drag handles.</span>
+    <span id="groupStatus" class="hint" style="display: none;"></span>
+    <span class="hint">Pen, Rect, Circle, Move, Transform. Group with AI then Export for rigging-ready SVG.</span>
+  </div>
+  <div class="paste-section">
+    <label for="pasteSvgTa">Or paste existing SVG code (circles, rects, paths) and load:</label>
+    <textarea id="pasteSvgTa" placeholder="Paste SVG here, e.g. &lt;svg&gt;...&lt;circle cx=.../&gt;...&lt;/svg&gt;"></textarea>
+    <button type="button" class="secondary" id="btnLoadSvg" style="margin-top: 6px;">Load from SVG</button>
+    <span id="pasteStatus" class="hint" style="display: none;"></span>
   </div>
   <div id="canvasContainer"></div>
   <div id="svgSection" style="display: none;">
@@ -62,6 +73,7 @@
     let moveOffset = null;
     let transformSelectedIndex = -1;
     let transformHandle = null;
+    let aiGroups = null;
     const HANDLE_SIZE = 10;
     let cw = 600, ch = 400;
 
@@ -71,8 +83,20 @@
     ];
 
     function setup() {
+      // #region agent log
+      const log = (msg, data, hid) => fetch('http://127.0.0.1:7242/ingest/b81179ea-362a-4b1e-9962-8572fc6e73fd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'5js_test.html:setup',message:msg,data:data||{},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:hid||'canvas'})}).catch(()=>{});
+      const container = document.getElementById('canvasContainer');
+      log('setup start', { hasContainer: !!container, cw, ch }, 'H1');
+      // #endregion
       let canvas = createCanvas(cw, ch);
+      // #region agent log
+      log('after createCanvas', { width: width, height: height }, 'H2');
+      // #endregion
       canvas.parent('canvasContainer');
+      // #region agent log
+      const parentEl = canvas.elt && canvas.elt.parentElement;
+      log('after parent()', { parentId: parentEl ? parentEl.id : null }, 'H2');
+      // #endregion
       background(28, 28, 28);
 
       document.querySelectorAll('.tool-btn').forEach(btn => {
@@ -107,8 +131,50 @@
         moveOffset = null;
         transformSelectedIndex = -1;
         transformHandle = null;
+        aiGroups = null;
         background(28, 28, 28);
         document.getElementById('svgSection').style.display = 'none';
+        document.getElementById('groupStatus').style.display = 'none';
+      };
+
+      document.getElementById('btnGroupAI').onclick = async () => {
+        let elements = buildElementsForAPI();
+        if (elements.length === 0) {
+          alert('Draw some shapes first.');
+          return;
+        }
+        let btn = document.getElementById('btnGroupAI');
+        let status = document.getElementById('groupStatus');
+        btn.disabled = true;
+        status.style.display = 'inline';
+        status.textContent = 'Grouping...';
+        try {
+          let res = await fetch('/svg-api/group-svg', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ elements }),
+          });
+          let text = await res.text();
+          let data = {};
+          try { data = JSON.parse(text); } catch (_) {}
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/b81179ea-362a-4b1e-9962-8572fc6e73fd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'5js_test.html:GroupAI',message:'group-svg response',data:{status:res.status,statusText:res.statusText,bodyError:data.error,textPreview:(text||'').slice(0,200),elementsCount:elements.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'server500'})}).catch(()=>{});
+          // #endregion
+          if (!res.ok) {
+            status.textContent = 'Error: ' + (data.error || text.slice(0, 80) || res.statusText);
+            return;
+          }
+          aiGroups = data.groups || null;
+          let names = aiGroups ? Object.keys(aiGroups).join(', ') : '';
+          status.textContent = names ? 'Grouped: ' + names : 'No groups returned';
+        } catch (e) {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/b81179ea-362a-4b1e-9962-8572fc6e73fd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'5js_test.html:GroupAI catch',message:'fetch exception',data:{message:e.message},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'server500'})}).catch(()=>{});
+          // #endregion
+          status.textContent = 'Error: ' + e.message;
+        } finally {
+          btn.disabled = false;
+        }
       };
 
       document.getElementById('btnExport').onclick = () => {
@@ -120,10 +186,95 @@
         document.getElementById('svgSection').style.display = 'block';
         animatePaths(preview.querySelector('svg'));
       };
+
+      document.getElementById('btnLoadSvg').onclick = () => {
+        let raw = (document.getElementById('pasteSvgTa').value || '').trim();
+        let status = document.getElementById('pasteStatus');
+        if (!raw) {
+          status.style.display = 'inline';
+          status.textContent = 'Paste SVG code first.';
+          return;
+        }
+        shapes = [];
+        strokes = [];
+        aiGroups = null;
+        let loaded = loadFromSvg(raw);
+        status.style.display = 'inline';
+        status.textContent = loaded ? `Loaded ${loaded} elements. Paths are in data but only circles/rects draw on canvas.` : 'No circle/rect/path found in pasted SVG.';
+      };
+    }
+
+    function parseColorToRgb(cssColor) {
+      if (!cssColor) return [100, 100, 100];
+      let m = cssColor.match(/^#([0-9a-fA-F]{6})$/);
+      if (m) {
+        let h = m[1];
+        return [parseInt(h.slice(0,2), 16), parseInt(h.slice(2,4), 16), parseInt(h.slice(4,6), 16)];
+      }
+      m = cssColor.match(/^#([0-9a-fA-F]{3})$/);
+      if (m) {
+        let h = m[1];
+        return [parseInt(h[0]+h[0],16), parseInt(h[1]+h[1],16), parseInt(h[2]+h[2],16)];
+      }
+      m = cssColor.match(/rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+      if (m) return [parseInt(m[1],10), parseInt(m[2],10), parseInt(m[3],10)];
+      return [100, 100, 100];
+    }
+
+    function loadFromSvg(svgString) {
+      try {
+        let parser = new DOMParser();
+        let s = svgString.replace(/<\?xml[^>]*\?>\s*/i, '').trim();
+        if (!s.includes('<svg')) s = '<svg xmlns="http://www.w3.org/2000/svg">' + s + '</svg>';
+        let doc = parser.parseFromString(s, 'image/svg+xml');
+        let svg = doc.querySelector('svg');
+        if (!svg) svg = doc.documentElement;
+        let count = 0;
+        const loadOrder = [];
+        const tagSet = new Set(['circle', 'rect', 'path']);
+        for (let child of svg.children) {
+          const tag = (child.tagName || '').toLowerCase();
+          if (!tagSet.has(tag)) continue;
+          if (tag === 'circle') {
+            let cx = parseFloat(child.getAttribute('cx')) || 0;
+            let cy = parseFloat(child.getAttribute('cy')) || 0;
+            let r = parseFloat(child.getAttribute('r')) || 10;
+            let fill = child.getAttribute('fill') || '#64dc8c';
+            shapes.push({ type: 'circle', x: cx, y: cy, r, color: parseColorToRgb(fill) });
+            loadOrder.push({ type: 'circle', fill });
+            count++;
+          } else if (tag === 'rect') {
+            let x = parseFloat(child.getAttribute('x')) || 0;
+            let y = parseFloat(child.getAttribute('y')) || 0;
+            let w = parseFloat(child.getAttribute('width')) || 20;
+            let h = parseFloat(child.getAttribute('height')) || 20;
+            let fill = child.getAttribute('fill') || '#64dc8c';
+            shapes.push({ type: 'rect', x, y, w, h, color: parseColorToRgb(fill) });
+            loadOrder.push({ type: 'rect', fill });
+            count++;
+          } else if (tag === 'path') {
+            let d = child.getAttribute('d');
+            if (!d) continue;
+            let stroke = child.getAttribute('stroke') || child.getAttribute('fill') || '#646464';
+            shapes.push({ type: 'path', d, stroke, color: parseColorToRgb(stroke) });
+            loadOrder.push({ type: 'path' });
+            count++;
+          }
+        }
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/b81179ea-362a-4b1e-9962-8572fc6e73fd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'5js_test.html:loadFromSvg',message:'load order',data:{count,loadOrder:loadOrder.slice(0,20)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'zorder'})}).catch(()=>{});
+        // #endregion
+        return count;
+      } catch (e) {
+        console.error('loadFromSvg', e);
+        return 0;
+      }
     }
 
     function draw() {
-      if (frameCount === 1) return;
+      // #region agent log
+      if (frameCount === 1) { fetch('http://127.0.0.1:7242/ingest/b81179ea-362a-4b1e-9962-8572fc6e73fd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'5js_test.html:draw',message:'first frame',data:{frameCount:1},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H3'})}).catch(()=>{}); return; }
+      // #endregion
       background(28, 28, 28);
       shapes.forEach(s => {
         fill(s.color[0], s.color[1], s.color[2]);
@@ -271,46 +422,94 @@
       if (currentTool === 'transform') transformHandle = null;
     }
 
-    function toSVG() {
-      const w = cw, h = ch;
+    function buildElementsForAPI() {
       const hex = (r, g, b) => '#' + [r, g, b].map(x => ('0' + x.toString(16)).slice(-2)).join('');
-      let parts = [];
+      let elements = [];
       shapes.forEach(s => {
         if (s.type === 'rect')
-          parts.push(`<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${hex(s.color[0], s.color[1], s.color[2])}" />`);
+          elements.push({ type: 'rect', x: s.x, y: s.y, width: s.w, height: s.h, fill: hex(s.color[0], s.color[1], s.color[2]) });
         else if (s.type === 'circle')
-          parts.push(`<circle cx="${s.x}" cy="${s.y}" r="${s.r}" fill="${hex(s.color[0], s.color[1], s.color[2])}" />`);
+          elements.push({ type: 'circle', cx: s.x, cy: s.y, r: s.r, fill: hex(s.color[0], s.color[1], s.color[2]) });
+        else if (s.type === 'path')
+          elements.push({ type: 'path', d: s.d, stroke: s.stroke || hex(s.color[0], s.color[1], s.color[2]) });
       });
       strokes.forEach(s => {
         if (s.length < 2) return;
         let d = `M ${s[0].x} ${s[0].y}`;
         for (let i = 1; i < s.length; i++) d += ` L ${s[i].x} ${s[i].y}`;
         let sc = s[0].color || currentColor;
-        parts.push(`<path d="${d}" fill="none" stroke="${hex(sc[0], sc[1], sc[2])}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />`);
+        elements.push({ type: 'path', d, stroke: hex(sc[0], sc[1], sc[2]) });
       });
+      return elements;
+    }
+
+    function toSVG() {
+      const w = cw, h = ch;
+      const hex = (r, g, b) => '#' + [r, g, b].map(x => ('0' + x.toString(16)).slice(-2)).join('');
+      let indexToPart = [];
+      shapes.forEach(s => {
+        if (s.type === 'rect')
+          indexToPart.push(`<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${hex(s.color[0], s.color[1], s.color[2])}" />`);
+        else if (s.type === 'circle')
+          indexToPart.push(`<circle cx="${s.x}" cy="${s.y}" r="${s.r}" fill="${hex(s.color[0], s.color[1], s.color[2])}" />`);
+        else if (s.type === 'path')
+          indexToPart.push(`<path d="${(s.d || '').replace(/"/g, '&quot;')}" fill="none" stroke="${s.stroke || hex(s.color[0], s.color[1], s.color[2])}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`);
+      });
+      strokes.forEach(s => {
+        if (s.length < 2) return;
+        let d = `M ${s[0].x} ${s[0].y}`;
+        for (let i = 1; i < s.length; i++) d += ` L ${s[i].x} ${s[i].y}`;
+        let sc = s[0].color || currentColor;
+        indexToPart.push(`<path d="${d}" fill="none" stroke="${hex(sc[0], sc[1], sc[2])}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />`);
+      });
+      let indexToGroup = null;
+      if (aiGroups && Object.keys(aiGroups).length) {
+        indexToGroup = {};
+        for (let name of Object.keys(aiGroups))
+          for (let i of aiGroups[name]) indexToGroup[i] = name;
+      }
+      let inner = indexToPart.map((part, i) => {
+        let group = indexToGroup && indexToGroup[i];
+        return group ? `<g id="${group}">\n    ${part}\n  </g>` : part;
+      }).join('\n  ');
       return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
-  ${parts.join('\n  ')}
+  ${inner}
 </svg>`;
     }
 
     function animatePaths(svgEl) {
       if (!svgEl) return;
-      let paths = svgEl.querySelectorAll('path');
       let start = null;
       const duration = 2000;
+
+      // Paths: draw-in effect (stroke-dashoffset)
+      let paths = svgEl.querySelectorAll('path');
       paths.forEach(p => {
         let len = p.getTotalLength();
         p.style.strokeDasharray = len;
         p.style.strokeDashoffset = len;
       });
+
+      // Circles and rects (and groups): fade-in + scale up
+      let shapesToReveal = svgEl.querySelectorAll('circle, rect, g');
+      shapesToReveal.forEach(el => {
+        el.style.opacity = '0';
+        el.style.transform = 'scale(0.6)';
+        el.style.transformOrigin = 'center center';
+      });
+
       function step(ts) {
         if (!start) start = ts;
         let t = Math.min((ts - start) / duration, 1);
-        t = 1 - (1 - t) * (1 - t);
+        let ease = 1 - (1 - t) * (1 - t); // ease out quad
         paths.forEach(p => {
           let len = p.getTotalLength();
-          p.style.strokeDashoffset = len * (1 - t);
+          p.style.strokeDashoffset = len * (1 - ease);
+        });
+        shapesToReveal.forEach(el => {
+          el.style.opacity = String(ease);
+          el.style.transform = `scale(${0.6 + 0.4 * ease})`;
         });
         if (t < 1) requestAnimationFrame(step);
       }
