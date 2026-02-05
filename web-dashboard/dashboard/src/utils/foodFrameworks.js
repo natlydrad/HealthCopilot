@@ -134,7 +134,7 @@ function processIngredient(ing) {
     matched = 'Berries';
   } else if (OTHER_FRUITS.some(f => name.includes(f))) {
     if (unit === 'cup' || unit === 'cups') { dd.otherFruits = qty * 2; mp.fruits = qty; lg.fruits = qty; }
-    else if (unit === 'piece' || unit === 'pieces') { dd.otherFruits = qty; mp.fruits = qty * 0.5; lg.fruits = qty * 0.5; }
+    else if (unit === 'piece' || unit === 'pieces') { dd.otherFruits = qty; mp.fruits = qty; lg.fruits = qty; }
     else { dd.otherFruits = grams / 120; mp.fruits = grams / 150; lg.fruits = grams / 150; }
     matched = 'Other fruits';
   } else if (CRUCIFEROUS.some(c => name.includes(c))) {

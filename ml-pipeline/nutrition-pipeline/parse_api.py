@@ -398,6 +398,22 @@ def update_ingredient_portion(ingredient_id):
                 scaled.append(s)
             update["nutrition"] = scaled
 
+        # Scale foodGroupServings so fruit/veg/protein/dairy servings update when quantity changes
+        pm = original.get("parsingMetadata")
+        if pm and isinstance(pm, dict):
+            pm = dict(pm)
+            fg = pm.get("foodGroupServings")
+            if fg and isinstance(fg, dict):
+                fg = dict(fg)
+                for k in ("grains", "vegetables", "fruits", "protein", "dairy"):
+                    if k in fg and fg[k] is not None:
+                        try:
+                            fg[k] = round(float(fg[k]) * multiplier, 2)
+                        except (TypeError, ValueError):
+                            pass
+                pm["foodGroupServings"] = fg
+                update["parsingMetadata"] = pm
+
         patch_resp = requests.patch(
             f"{PB_URL}/api/collections/ingredients/records/{ingredient_id}",
             headers=headers,
