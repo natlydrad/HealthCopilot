@@ -38,14 +38,23 @@ def validate_existing_ingredients(dry_run=True, since_date=None):
         # Only check ingredients with USDA data
         if ing.get("source") != "usda":
             continue
-        
+
+        ingredient_name = ing.get("name", "")
+        matched_name = ing.get("rawUSDA", {}).get("name", "") or ing.get("name", "unknown")
+
         nutrition = ing.get("nutrition", [])
         if not isinstance(nutrition, list) or not nutrition:
+            bad_matches.append({
+                "id": ing["id"],
+                "name": ingredient_name,
+                "matched": matched_name,
+                "protein_per_100g": 0,
+                "reason": "USDA match has no nutrition data (empty)",
+                "timestamp": ing.get("timestamp", "")[:10]
+            })
             continue
-        
+
         macros = extract_macros(nutrition)
-        ingredient_name = ing.get("name", "")
-        matched_name = ing.get("rawUSDA", {}).get("name", "") or "unknown"
         
         # Validate
         is_valid, reason = validate_usda_match(ingredient_name, matched_name, macros)

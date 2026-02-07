@@ -372,6 +372,11 @@ def validate_usda_match(ingredient_name: str, matched_name: str, macros: dict) -
     Validate if USDA match seems reasonable.
     Returns (is_valid, reason_if_invalid)
     """
+    # Reject USDA matches with no nutrition data (empty or all zeros)
+    total_macros = (macros.get("calories") or 0) + (macros.get("protein") or 0) + (macros.get("carbs") or 0) + (macros.get("fat") or 0)
+    if total_macros <= 0:
+        return False, "USDA match has no nutrition data"
+
     ingredient_lower = ingredient_name.lower()
     matched_lower = matched_name.lower()
     
@@ -579,6 +584,10 @@ def usda_lookup_by_fdc_id(fdc_id, serving_size_g: float = 100.0) -> dict | None:
         if not raw_nutrients:
             return None
         macros = extract_macros(raw_nutrients)
+        # Reject zero-data entries (e.g. USDA placeholder records)
+        total_macros = (macros.get("calories") or 0) + (macros.get("protein") or 0) + (macros.get("carbs") or 0) + (macros.get("fat") or 0)
+        if total_macros <= 0:
+            return None
         name = f.get("description") or f.get("additionalDescriptions") or ""
         if isinstance(name, list):
             name = name[0] if name else ""
