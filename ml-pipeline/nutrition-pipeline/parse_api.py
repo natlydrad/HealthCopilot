@@ -2136,6 +2136,18 @@ def save_correction(ingredient_id):
             )
             if corr_resp.status_code in (200, 201):
                 print(f"   ✅ Saved correction record")
+                # Every 10 corrections: run learn_rules in background (GPT updates common_sense_rules.yaml)
+                try:
+                    from learn_rules_from_corrections import get_correction_count, run_learn_from_corrections
+                    import threading
+                    count = get_correction_count(user_id or meal_id)
+                    if count > 0 and count % 10 == 0:
+                        def _run():
+                            run_learn_from_corrections(since_days=14)
+                        threading.Thread(target=_run, daemon=True).start()
+                        print(f"   📋 Triggered learn_rules (correction #{count})")
+                except Exception as e:
+                    print(f"   ⚠️ learn_rules trigger failed: {e}")
             else:
                 print(f"   ⚠️ Correction record save failed: {corr_resp.status_code} - {corr_resp.text[:200]}")
         except Exception as e:

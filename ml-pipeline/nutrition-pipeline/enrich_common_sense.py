@@ -12,6 +12,12 @@ RULES_PATH = Path(__file__).parent / "common_sense_rules.yaml"
 _rules_cache = None
 
 
+def clear_rules_cache():
+    """Clear cached rules so next parse picks up file changes."""
+    global _rules_cache
+    _rules_cache = None
+
+
 def _load_rules() -> dict:
     global _rules_cache
     if _rules_cache is not None:

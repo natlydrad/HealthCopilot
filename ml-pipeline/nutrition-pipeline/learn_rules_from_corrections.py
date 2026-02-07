@@ -158,6 +158,64 @@ def merge_proposed_into_rules(existing: dict, proposed: dict) -> dict:
     return existing
 
 
+def get_correction_count(user_id: str = None) -> int:
+    """Get total correction count, or count for user if user_id provided."""
+    import urllib.parse
+    headers = {"Authorization": f"Bearer {_get_token()}"}
+    base = f"{PB_URL}/api/collections/ingredient_corrections/records"
+    if user_id:
+        filt = urllib.parse.quote(f"user='{user_id}'")
+        url = f"{base}?filter={filt}&perPage=1"
+    else:
+        url = f"{base}?perPage=1"
+    try:
+        r = requests.get(url, headers=headers)
+        if r.status_code != 200:
+            return 0
+        data = r.json()
+        return data.get("totalItems", 0)
+    except Exception:
+        return 0
+
+
+def run_learn_from_corrections(since_days: int = 7, dry_run: bool = False) -> bool:
+    """
+    Run the full learn-from-corrections flow. Returns True if rules were updated.
+    Call from parse_api in a background thread.
+    """
+    corrections = fetch_recent_corrections(limit=80, since_days=since_days)
+    if not corrections:
+        return False
+    summary = build_summary_for_gpt(corrections)
+    existing_yaml = RULES_PATH.read_text() if RULES_PATH.exists() else ""
+    existing = yaml.safe_load(existing_yaml) or {} if existing_yaml else {}
+    try:
+        proposed = propose_rules_via_gpt(summary, existing_yaml)
+    except Exception as e:
+        print(f"   ⚠️ learn_rules GPT failed: {e}")
+        return False
+    added = sum(len(v) for k, v in proposed.items() if isinstance(v, (list, dict)) and v)
+    if added == 0:
+        return False
+    merged = merge_proposed_into_rules(existing, proposed)
+    yaml_str = yaml.dump(merged, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    header = """# Deterministic common-sense enrichment rules
+# Auto-updated by learn_rules_from_corrections (every 10 corrections)
+
+"""
+    if dry_run:
+        return False
+    RULES_PATH.write_text(header + yaml_str)
+    # Clear cache so next parse uses new rules
+    try:
+        from enrich_common_sense import clear_rules_cache
+        clear_rules_cache()
+    except Exception:
+        pass
+    print(f"   📋 Rules updated from corrections ({added} new entries)")
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser(description="Learn rules from corrections via GPT")
     parser.add_argument("--dry-run", action="store_true", help="Propose rules but don't write")
