@@ -1,0 +1,173 @@
+# Deterministic common-sense enrichment rules
+# Applied at parse time BEFORE GPT common_sense_check
+# Edit manually or run bootstrap_common_sense_rules.py to expand via GPT
+
+zero_calorie:
+  patterns:
+  - water
+  - ice
+  - black coffee
+  - plain coffee
+  - plain tea
+  - unsweetened tea
+  - unsweetened coffee
+  - herbal tea
+  - diet soda
+  - diet coke
+  - diet pepsi
+  - zero calorie
+  - zero sugar soda
+  - sparkling water
+  - seltzer
+  - club soda
+  - mineral water
+  - black tea
+  - green tea
+  - oolong tea
+  - white tea
+  - broth
+  - bone broth
+  - sugar-free syrup
+  - plain sparkling water
+  - plain seltzer
+  - flavored seltzer
+  - lemon water
+  - lime water
+caffeine_mg_per_serving:
+  green tea: 30
+  black tea: 47
+  white tea: 28
+  oolong tea: 37
+  matcha: 70
+  matcha latte: 70
+  coffee: 95
+  black coffee: 95
+  brewed coffee: 95
+  cold brew: 100
+  espresso: 64
+  espresso shot: 64
+  americano: 95
+  chai: 40
+  chai tea: 40
+  yerba mate: 85
+  energy drink: 80
+  red bull: 80
+  monster: 80
+  coke: 34
+  cola: 34
+  pepsi: 35
+  dr pepper: 41
+  mountain dew: 54
+  hot chocolate: 5
+  cocoa: 5
+  decaf coffee: 2
+  decaffeinated coffee: 2
+  decaf tea: 0
+  decaffeinated tea: 0
+  herbal tea: 0
+  peppermint tea: 0
+  chamomile tea: 0
+  rooibos: 0
+  decaf espresso: 2
+  decaf caffe latte: 2
+  decaf cappuccino: 2
+  decaf americano: 2
+portion_fixes:
+  matcha:
+    quantity: 1
+    unit: serving
+    serving_size_g: 2
+  matcha powder:
+    quantity: 1
+    unit: serving
+    serving_size_g: 2
+  espresso:
+    quantity: 1
+    unit: shot
+    serving_size_g: 30
+  espresso shot:
+    quantity: 1
+    unit: shot
+    serving_size_g: 30
+  black coffee:
+    quantity: 1
+    unit: cup
+    serving_size_g: 240
+  brewed coffee:
+    quantity: 1
+    unit: cup
+    serving_size_g: 240
+  nut butter:
+    quantity: 1
+    unit: tablespoon
+    serving_size_g: 16
+  peanut butter:
+    quantity: 1
+    unit: tablespoon
+    serving_size_g: 16
+  almond butter:
+    quantity: 1
+    unit: tablespoon
+    serving_size_g: 16
+  hummus:
+    quantity: 1
+    unit: tablespoon
+    serving_size_g: 15
+  olive oil:
+    quantity: 1
+    unit: tablespoon
+    serving_size_g: 14
+fiber_g_per_serving:
+  oatmeal: 4
+  oats: 4
+  steel cut oats: 4
+  brown rice: 2
+  quinoa: 3
+  lentils: 8
+  black beans: 7
+  chickpeas: 6
+  kidney beans: 6
+  broccoli: 3
+  avocado: 7
+  raspberries: 8
+  blackberries: 8
+  chia seeds: 5
+  flaxseed: 3
+  whole wheat bread: 2
+  almond: 4
+  almonds: 4
+  sweet potato: 4
+  artichoke: 7
+  navy beans: 9
+  pinto beans: 7
+  popcorn: 4
+  brussels sprouts: 4
+  pear: 5
+  apple: 4
+  banana: 3
+added_sugar_g_per_serving:
+  sweetened yogurt: 15
+  flavored yogurt: 15
+  vanilla yogurt: 15
+  fruit yogurt: 15
+  cereal: 10
+  sweetened cereal: 12
+  granola: 10
+  sweetened granola: 12
+  sweetened oat milk: 7
+  sweetened almond milk: 7
+  sweetened soy milk: 6
+  latte: 12
+  flavored latte: 15
+  iced coffee sweetened: 20
+  sweet tea: 25
+  lemonade: 25
+  sports drink: 14
+  gatorade: 14
+  baked goods: 10
+  muffin: 12
+  cookie: 8
+  cake: 20
+  frosting: 15
+  syrup: 15
+  sweetened tea: 20

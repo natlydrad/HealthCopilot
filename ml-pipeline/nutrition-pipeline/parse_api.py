@@ -17,6 +17,7 @@ from parser_gpt import parse_ingredients, parse_ingredients_from_image, correcti
 from lookup_usda import usda_lookup, usda_lookup_by_fdc_id, usda_lookup_valid_for_portion, usda_search_options, scale_nutrition, get_piece_grams, validate_scaled_calories, validate_scaled_protein, UNIT_TO_GRAMS, zero_calorie_nutrition_array
 from log_classifier import classify_log, classify_log_with_image
 from common_sense import common_sense_check
+from enrich_common_sense import apply_deterministic_rules
 import requests
 import os
 from dotenv import load_dotenv
@@ -789,6 +790,53 @@ def _trace_append(trace, step, message, detail=None):
     trace.append({"step": step, "message": message, "detail": detail or {}})
 
 
+def _apply_single_correction(pending, corr, scale_nutrition_fn, zero_calorie_nutrition_array_fn, merge_micro_fn, trace, source_label):
+    """Apply one correction to the matching pending item. source_label: 'rules' or 'common_sense'."""
+    name_key = (corr.get("name") or "").strip().lower()
+    if not name_key:
+        return
+    for p in pending:
+        if (p["payload"].get("name") or "").strip().lower() != name_key:
+            continue
+        if corr.get("zero_calories"):
+            p["payload"]["nutrition"] = zero_calorie_nutrition_array_fn()
+            _trace_append(trace, source_label, f"{source_label}: {p['payload']['name']} -> 0 cal")
+            print(f"   📋 {source_label}: {p['payload']['name']} -> 0 cal")
+        if "quantity" in corr or "unit" in corr or "serving_size_g" in corr:
+            new_qty = corr.get("quantity", p["payload"]["quantity"])
+            new_unit = corr.get("unit", p["payload"]["unit"])
+            new_serving_g = corr.get("serving_size_g") if "serving_size_g" in corr else p.get("serving_size_g")
+            p["payload"]["quantity"] = new_qty
+            p["payload"]["unit"] = new_unit
+            if p.get("usda") and p["usda"].get("nutrition") and new_serving_g is not None:
+                p["payload"]["nutrition"] = scale_nutrition_fn(
+                    p["usda"]["nutrition"],
+                    new_qty,
+                    new_unit,
+                    new_serving_g,
+                )
+                _trace_append(trace, source_label, f"{source_label}: {p['payload']['name']} -> {new_qty} {new_unit} ({new_serving_g}g)")
+                print(f"   📋 {source_label}: {p['payload']['name']} -> {new_qty} {new_unit} ({new_serving_g}g)")
+            else:
+                _trace_append(trace, source_label, f"{source_label}: {p['payload']['name']} -> {new_qty} {new_unit}")
+                print(f"   📋 {source_label}: {p['payload']['name']} -> {new_qty} {new_unit}")
+        micro_vals = [corr.get("added_sugar_g"), corr.get("caffeine_mg"), corr.get("fiber_g"), corr.get("sodium_mg")]
+        if any(v is not None and isinstance(v, (int, float)) and v >= 0 for v in micro_vals):
+            nut = p["payload"].get("nutrition") or []
+            p["payload"]["nutrition"] = merge_micro_fn(
+                nut,
+                added_sugar_g=corr.get("added_sugar_g"),
+                caffeine_mg=corr.get("caffeine_mg"),
+                fiber_g=corr.get("fiber_g"),
+                sodium_mg=corr.get("sodium_mg"),
+            )
+            _trace_append(trace, source_label, f"{source_label} micros: {p['payload']['name']}", {
+                k: corr.get(k) for k in ("added_sugar_g", "caffeine_mg", "fiber_g", "sodium_mg") if corr.get(k) is not None
+            })
+            print(f"   📋 {source_label} micros: {p['payload']['name']}")
+        break
+
+
 @app.route("/parse/<meal_id>", methods=["POST"])
 def parse_meal(meal_id):
     """
@@ -1437,6 +1485,7 @@ def parse_meal(meal_id):
                 "category": ing.get("category", ""),
                 "nutrition": scaled_nutrition,
                 "usdaCode": usda.get("usdaCode") if usda else None,
+                "rawUSDA": {"usdaCode": usda["usdaCode"], "name": usda["name"], "nutrition": usda.get("nutrition", []), "serving_size_g": usda.get("serving_size_g")} if usda else None,
                 "source": source_ing if source_ing in ("usda", "gpt") else "gpt",  # avoid unknown enum "label"
                 "parsingStrategy": "recipe_expansion" if recipe_for else "gpt",
                 "parsingMetadata": {
@@ -1463,7 +1512,7 @@ def parse_meal(meal_id):
                 "unit": unit,
             })
         
-        # Common-sense check: one GPT call per meal to fix water/ice calories, matcha/coffee serving, etc.
+        # Common-sense: (1) deterministic rules first, (2) then GPT for edge cases
         try:
             minimal = []
             for p in pending:
@@ -1479,56 +1528,27 @@ def parse_meal(meal_id):
                     "nutrition": p["payload"].get("nutrition"),
                     "calories": cal,
                 })
+            # Step 1: Deterministic rules (zero-cal, caffeine, portion fixes, fiber, etc.)
+            det_corrections = apply_deterministic_rules(minimal)
+            for corr in det_corrections:
+                _apply_single_correction(pending, corr, scale_nutrition, zero_calorie_nutrition_array, merge_micro_overrides_into_nutrition, trace, "rules")
+            # Rebuild minimal after deterministic so GPT sees corrected state
+            for i, p in enumerate(pending):
+                nut = p["payload"].get("nutrition") or []
+                energy_vals = [n.get("value", 0) for n in nut if (n.get("nutrientName") or "").lower() == "energy"]
+                if not energy_vals:
+                    energy_vals = [n.get("value", 0) for n in nut if "energy" in (n.get("nutrientName") or "").lower()]
+                minimal[i]["nutrition"] = p["payload"].get("nutrition")
+                minimal[i]["calories"] = energy_vals[0] if energy_vals else None
+                minimal[i]["quantity"] = p["payload"]["quantity"]
+                minimal[i]["unit"] = p["payload"]["unit"]
+            # Step 2: GPT common-sense for edge cases
             corrections = common_sense_check(text, minimal)
             for corr in corrections:
-                name_key = (corr.get("name") or "").strip().lower()
-                if not name_key:
-                    continue
-                for p in pending:
-                    if (p["payload"].get("name") or "").strip().lower() == name_key:
-                        if corr.get("zero_calories"):
-                            p["payload"]["nutrition"] = zero_calorie_nutrition_array()
-                            _trace_append(trace, "common_sense", f"Common sense: {p['payload']['name']} -> 0 cal")
-                            print(f"   🧠 Common sense: {p['payload']['name']} -> 0 cal")
-                        if "quantity" in corr or "unit" in corr or "serving_size_g" in corr:
-                            new_qty = corr.get("quantity") if "quantity" in corr else p["payload"]["quantity"]
-                            new_unit = corr.get("unit") if "unit" in corr else p["payload"]["unit"]
-                            new_serving_g = corr.get("serving_size_g") if "serving_size_g" in corr else p.get("serving_size_g")
-                            p["payload"]["quantity"] = new_qty
-                            p["payload"]["unit"] = new_unit
-                            if p.get("usda") and p["usda"].get("nutrition") and new_serving_g is not None:
-                                p["payload"]["nutrition"] = scale_nutrition(
-                                    p["usda"]["nutrition"],
-                                    new_qty,
-                                    new_unit,
-                                    new_serving_g,
-                                )
-                                _trace_append(trace, "common_sense", f"Common sense: {p['payload']['name']} -> {new_qty} {new_unit} ({new_serving_g}g)")
-                                print(f"   🧠 Common sense: {p['payload']['name']} -> {new_qty} {new_unit} ({new_serving_g}g)")
-                            else:
-                                _trace_append(trace, "common_sense", f"Common sense: {p['payload']['name']} -> {new_qty} {new_unit}")
-                                print(f"   🧠 Common sense: {p['payload']['name']} -> {new_qty} {new_unit}")
-                        # Micronutrient overrides (added_sugar_g, caffeine_mg, fiber_g, sodium_mg)
-                        micro_vals = [
-                            corr.get("added_sugar_g"),
-                            corr.get("caffeine_mg"),
-                            corr.get("fiber_g"),
-                            corr.get("sodium_mg"),
-                        ]
-                        if any(v is not None and isinstance(v, (int, float)) and v >= 0 for v in micro_vals):
-                            nut = p["payload"].get("nutrition") or []
-                            p["payload"]["nutrition"] = merge_micro_overrides_into_nutrition(
-                                nut,
-                                added_sugar_g=corr.get("added_sugar_g"),
-                                caffeine_mg=corr.get("caffeine_mg"),
-                                fiber_g=corr.get("fiber_g"),
-                                sodium_mg=corr.get("sodium_mg"),
-                            )
-                            _trace_append(trace, "common_sense", f"Common sense micros: {p['payload']['name']}", {
-                                k: corr.get(k) for k in ("added_sugar_g", "caffeine_mg", "fiber_g", "sodium_mg") if corr.get(k) is not None
-                            })
-                            print(f"   🧠 Common sense micros: {p['payload']['name']}")
-                        break
+                _apply_single_correction(
+                    pending, corr, scale_nutrition, zero_calorie_nutrition_array,
+                    merge_micro_overrides_into_nutrition, trace, "common_sense"
+                )
         except Exception as e:
             print(f"   ⚠️ Common sense step failed, inserting as-is: {e}")
         
