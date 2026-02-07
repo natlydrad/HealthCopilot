@@ -12,8 +12,8 @@ import json
 import re
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from pb_client import get_token, insert_ingredient, delete_ingredient, delete_non_food_logs_for_meal, build_user_context_prompt, add_learned_confusion, add_common_food, add_portion_preference, add_to_pantry, is_branded_or_specific, lookup_pantry_match, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date, fetch_ingredients_by_meal_id, get_learned_patterns_for_user, remove_learned_pattern, check_learned_correction
-from parser_gpt import parse_ingredients, parse_ingredients_from_image, correction_chat, get_image_base64, gpt_estimate_nutrition
+from pb_client import get_token, insert_ingredient, delete_ingredient, delete_non_food_logs_for_meal, build_user_context_prompt, add_learned_confusion, add_common_food, add_portion_preference, add_to_pantry, is_branded_or_specific, lookup_pantry_match, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date, fetch_ingredients_by_meal_id, fetch_meal_by_id, get_learned_patterns_for_user, remove_learned_pattern, check_learned_correction, delete_corrections_for_user_with_corrected_names, remove_learned_patterns_for_names
+from parser_gpt import parse_ingredients, parse_ingredients_from_image, correction_chat, get_image_base64, gpt_estimate_nutrition, expand_recipe
 from lookup_usda import usda_lookup, usda_lookup_by_fdc_id, usda_lookup_valid_for_portion, usda_search_options, scale_nutrition, get_piece_grams, validate_scaled_calories, validate_scaled_protein, UNIT_TO_GRAMS, zero_calorie_nutrition_array
 from log_classifier import classify_log, classify_log_with_image
 from common_sense import common_sense_check
@@ -62,6 +62,12 @@ BANNED_INGREDIENTS = {
     "rug", "round rug", "grey round rug", "thermo mug", 
     "counter", "countertop", "kitchen", "placemat", "towel",
 }
+
+# Composite dishes we expand into a recipe (GPT) then USDA per ingredient
+RECIPE_DISH_PHRASES = (
+    "banana bread", "zucchini bread", "pumpkin bread", "carrot cake", "coffee cake",
+    "casserole", "meatloaf",
+)
 
 
 def normalize_quantity(ing):
@@ -152,6 +158,41 @@ def merge_label_onto_usda(usda_nutrition: list, label_nutrition: list) -> list:
             by_key[key]["value"] = n.get("value")
         else:
             by_key[key] = dict(n)
+    return list(by_key.values())
+
+
+# Map common-sense micro field names to (nutrientName, unitName) for merge
+_MICRO_OVERRIDES = {
+    "added_sugar_g": ("Sugars, added", "G"),
+    "caffeine_mg": ("Caffeine", "MG"),
+    "fiber_g": ("Fiber, total dietary", "G"),
+    "sodium_mg": ("Sodium, Na", "MG"),
+}
+
+
+def merge_micro_overrides_into_nutrition(
+    nutrition: list,
+    added_sugar_g=None,
+    caffeine_mg=None,
+    fiber_g=None,
+    sodium_mg=None,
+) -> list:
+    """Merge optional micro overrides into nutrition list (by nutrientName + unitName). Returns new list."""
+    by_key = {}
+    for n in nutrition or []:
+        if isinstance(n, dict):
+            key = (n.get("nutrientName"), n.get("unitName"))
+            by_key[key] = {**n, "value": n.get("value")}
+    overrides = [
+        ("added_sugar_g", added_sugar_g, _MICRO_OVERRIDES["added_sugar_g"]),
+        ("caffeine_mg", caffeine_mg, _MICRO_OVERRIDES["caffeine_mg"]),
+        ("fiber_g", fiber_g, _MICRO_OVERRIDES["fiber_g"]),
+        ("sodium_mg", sodium_mg, _MICRO_OVERRIDES["sodium_mg"]),
+    ]
+    for _field, val, (nutrient_name, unit_name) in overrides:
+        if val is not None and isinstance(val, (int, float)) and val >= 0:
+            key = (nutrient_name, unit_name)
+            by_key[key] = {"nutrientName": nutrient_name, "unitName": unit_name, "value": round(float(val), 2)}
     return list(by_key.values())
 
 
@@ -257,6 +298,12 @@ def clear_meal_ingredients(meal_id):
     if not auth or not auth.startswith("Bearer "):
         return jsonify({"error": "Authorization required"}), 401
     try:
+        meal = fetch_meal_by_id(meal_id, "id,user")
+        user_id = None
+        if meal:
+            u = meal.get("user")
+            user_id = u if isinstance(u, str) else (u.get("id") if isinstance(u, dict) else None)
+        names_cleared = set()
         total_deleted = 0
         max_rounds = 20  # prevent infinite loop if deletes fail
         for _ in range(max_rounds):
@@ -272,6 +319,9 @@ def clear_meal_ingredients(meal_id):
             # #endregion
             if not ingredients:
                 break
+            for ing in ingredients:
+                if ing.get("name"):
+                    names_cleared.add(ing["name"])
             deleted_this_round = 0
             for ing in ingredients:
                 ing_id = ing.get("id")
@@ -286,6 +336,17 @@ def clear_meal_ingredients(meal_id):
             if deleted_this_round == 0 and ingredients:
                 print(f"   ⚠️ No deletes succeeded for {len(ingredients)} ingredients (403?)")
                 break
+        if user_id and names_cleared:
+            delete_corrections_for_user_with_corrected_names(user_id, names_cleared)
+            remove_learned_patterns_for_names(user_id, names_cleared)
+        # #region agent log
+        try:
+            import time as _t
+            _line = json.dumps({"timestamp": _t.time() * 1000, "location": "parse_api.py:clear_success", "message": "clear_meal_ingredients success", "data": {"meal_id": meal_id, "total_deleted": total_deleted}, "sessionId": "debug-session", "hypothesisId": "H1"}) + "\n"
+            open(_log_path, "a").write(_line)
+        except Exception:
+            pass
+        # #endregion
         print(f"   🗑️ Cleared {total_deleted} ingredients for meal {meal_id}")
         return jsonify({"deleted": total_deleted}), 200
     except Exception as e:
@@ -1057,6 +1118,44 @@ def parse_meal(meal_id):
                 pass
             # #endregion
 
+            # Recipe expansion: single composite dish (e.g. homemade banana bread) -> typical recipe, then USDA per ingredient
+            if not image_field and len(parsed) == 1:
+                single = parsed[0]
+                name_lower = (single.get("name") or "").strip().lower()
+                text_lower = (text or "").strip().lower()
+                is_recipe_dish = any(phrase in name_lower for phrase in RECIPE_DISH_PHRASES)
+                if is_recipe_dish:
+                    expanded = expand_recipe(text, single)
+                    if expanded and expanded.get("ingredients") and expanded.get("servingsPerBatch"):
+                        qty = single.get("quantity", 1)
+                        unit = (single.get("unit") or "serving").lower().strip()
+                        n_serv = max(1, float(expanded["servingsPerBatch"]))
+                        if unit in ("slice", "slices", "piece", "pieces", "serving", "servings"):
+                            multiplier = qty / n_serv
+                        elif unit in ("loaf", "loaves", "batch"):
+                            multiplier = qty
+                        else:
+                            multiplier = 1.0 / n_serv
+                        composite_name = single.get("name") or "dish"
+                        new_list = []
+                        for r in expanded["ingredients"]:
+                            r_name = r.get("name") or ""
+                            r_qty = float(r.get("quantity") or 0) * multiplier
+                            r_unit = (r.get("unit") or "serving").strip()
+                            if not r_name or r_qty <= 0:
+                                continue
+                            new_list.append({
+                                "name": r_name,
+                                "quantity": r_qty,
+                                "unit": r_unit,
+                                "category": "food",
+                                "reasoning": f"Recipe ingredient for {composite_name}.",
+                                "_recipeFor": composite_name,
+                            })
+                        if new_list:
+                            parsed = new_list
+                            _trace_append(trace, "recipe_expansion", f"Expanded to {len(parsed)} ingredients", {"composite": composite_name})
+
         _trace_append(trace, "parse_done", f"Parsing done ({source})", {"parsedCount": len(parsed)})
 
         if not parsed:
@@ -1327,16 +1426,19 @@ def parse_meal(meal_id):
             except Exception:
                 pass
             # #endregion
+            recipe_for = ing.get("_recipeFor")
+            # Prefer USDA match name over user's words when we have a USDA match
+            display_name = usda.get("name", ing["name"]) if usda else ing["name"]
             payload = {
                 "mealId": meal_id,
-                "name": ing["name"],
+                "name": display_name,
                 "quantity": quantity,
                 "unit": unit,
                 "category": ing.get("category", ""),
                 "nutrition": scaled_nutrition,
                 "usdaCode": usda.get("usdaCode") if usda else None,
                 "source": source_ing if source_ing in ("usda", "gpt") else "gpt",  # avoid unknown enum "label"
-                "parsingStrategy": "gpt",
+                "parsingStrategy": "recipe_expansion" if recipe_for else "gpt",
                 "parsingMetadata": {
                     "source": source_ing,
                     "parsingSource": source,
@@ -1347,6 +1449,7 @@ def parse_meal(meal_id):
                     "fromLabel": label_used,
                     "partialLabel": partial_label,
                     "foodGroupServings": ing.get("foodGroupServings") if isinstance(ing.get("foodGroupServings"), dict) else None,
+                    **({"recipeFor": recipe_for} if recipe_for else {}),
                 }
             }
             
@@ -1405,6 +1508,26 @@ def parse_meal(meal_id):
                             else:
                                 _trace_append(trace, "common_sense", f"Common sense: {p['payload']['name']} -> {new_qty} {new_unit}")
                                 print(f"   🧠 Common sense: {p['payload']['name']} -> {new_qty} {new_unit}")
+                        # Micronutrient overrides (added_sugar_g, caffeine_mg, fiber_g, sodium_mg)
+                        micro_vals = [
+                            corr.get("added_sugar_g"),
+                            corr.get("caffeine_mg"),
+                            corr.get("fiber_g"),
+                            corr.get("sodium_mg"),
+                        ]
+                        if any(v is not None and isinstance(v, (int, float)) and v >= 0 for v in micro_vals):
+                            nut = p["payload"].get("nutrition") or []
+                            p["payload"]["nutrition"] = merge_micro_overrides_into_nutrition(
+                                nut,
+                                added_sugar_g=corr.get("added_sugar_g"),
+                                caffeine_mg=corr.get("caffeine_mg"),
+                                fiber_g=corr.get("fiber_g"),
+                                sodium_mg=corr.get("sodium_mg"),
+                            )
+                            _trace_append(trace, "common_sense", f"Common sense micros: {p['payload']['name']}", {
+                                k: corr.get(k) for k in ("added_sugar_g", "caffeine_mg", "fiber_g", "sodium_mg") if corr.get(k) is not None
+                            })
+                            print(f"   🧠 Common sense micros: {p['payload']['name']}")
                         break
         except Exception as e:
             print(f"   ⚠️ Common sense step failed, inserting as-is: {e}")
