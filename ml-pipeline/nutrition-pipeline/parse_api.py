@@ -79,6 +79,20 @@ def normalize_quantity(ing):
     return ing
 
 
+def _usda_display_name_ok(parsed_name: str, usda_name: str) -> bool:
+    """Require at least one significant word from parsed name in USDA name. Rejects e.g. pork -> Oolong tea."""
+    if not parsed_name or not usda_name:
+        return bool(usda_name)
+    pl = parsed_name.lower()
+    ul = (usda_name or "").lower()
+    words = set(re.findall(r"[a-z0-9]{2,}", pl))
+    stop = {"the", "and", "with", "for", "raw", "cooked", "half", "other", "same", "cup", "cups", "oz"}
+    significant = [w for w in words if w not in stop]
+    if not significant:
+        return True
+    return any(w in ul for w in significant)
+
+
 def _parse_repeat_intent(raw: str) -> tuple[bool, float]:
     """
     Detect 'repeat previous meal' intent from caption. Returns (is_repeat, multiplier).
@@ -539,6 +553,14 @@ def update_ingredient_portion(ingredient_id):
 
 def _process_and_insert_parsed_ingredient(ing, meal_id, user_context, source="add_ingredients"):
     """Process one parsed ingredient (USDA lookup, GPT fallback) and insert. Returns created record or None."""
+    # #region agent log
+    try:
+        _log_path = "/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log"
+        _line = json.dumps({"timestamp": __import__("time").time()*1000, "location": "parse_api.py:_process_ing_entry", "message": "process_ingredient_entry", "data": {"parsed_name": ing.get("name"), "meal_id": meal_id}, "hypothesisId": "H5", "sessionId": "debug-session"}) + "\n"
+        open(_log_path, "a").write(_line)
+    except Exception:
+        pass
+    # #endregion
     name = ing.get("name", "").lower().strip()
     if name in BANNED_INGREDIENTS or len(name) < 2:
         print(f"   ⏭️ Skipping banned/short: {name}")
@@ -584,6 +606,14 @@ def _process_and_insert_parsed_ingredient(ing, meal_id, user_context, source="ad
         if gpt_nutrition:
             scaled_nutrition = gpt_nutrition
             source_ing = "gpt"
+    # #region agent log
+    try:
+        _log_path = "/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log"
+        _line = json.dumps({"timestamp": __import__("time").time()*1000, "location": "parse_api.py:_process_ing_insert", "message": "process_ingredient_insert", "data": {"name_being_saved": ing.get("name")}, "hypothesisId": "H5", "sessionId": "debug-session"}) + "\n"
+        open(_log_path, "a").write(_line)
+    except Exception:
+        pass
+    # #endregion
     payload = {
         "mealId": meal_id,
         "name": ing["name"],
@@ -634,6 +664,15 @@ def get_ingredients(meal_id):
         if meal_user != user_id:
             return jsonify({"error": "Not authorized to view this meal's ingredients"}), 403
         ingredients = fetch_ingredients_by_meal_id(meal_id)
+        # #region agent log
+        try:
+            _log_path = "/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log"
+            _names = [x.get("name") for x in (ingredients or []) if isinstance(x, dict)]
+            _line = json.dumps({"timestamp": __import__("time").time()*1000, "location": "parse_api.py:get_ingredients", "message": "ingredients_returned", "data": {"meal_id": meal_id, "count": len(ingredients or []), "names": _names[:10]}, "hypothesisId": "H4", "sessionId": "debug-session"}) + "\n"
+            open(_log_path, "a").write(_line)
+        except Exception:
+            pass
+        # #endregion
         return jsonify({"items": ingredients})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -865,6 +904,14 @@ def parse_meal(meal_id):
         image_field = meal.get("image")
         user_id = _resolve_id(meal.get("user"))
         timestamp = meal.get("timestamp")
+        # #region agent log
+        try:
+            _log_path = "/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log"
+            _line = json.dumps({"timestamp": __import__("time").time()*1000, "location": "parse_api.py:parse_meal_entry", "message": "parse_meal_start", "data": {"meal_id": meal_id, "text_preview": (text or "")[:100]}, "hypothesisId": "H3", "sessionId": "debug-session"}) + "\n"
+            open(_log_path, "a").write(_line)
+        except Exception:
+            pass
+        # #endregion
         _trace_append(trace, "meal_fetched", "Fetched meal from DB", {"hasText": bool(text), "hasImage": bool(image_field)})
         
         if not text and not image_field:
@@ -935,6 +982,14 @@ def parse_meal(meal_id):
         is_food = "food" in categories
         food_portion = classification.get("food_portion")
         non_food_portions = classification.get("non_food_portions", {})
+        # #region agent log
+        try:
+            _log_path = "/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log"
+            _line = json.dumps({"timestamp": __import__("time").time()*1000, "location": "parse_api.py:after_classify", "message": "classification_result", "data": {"food_portion_preview": (food_portion or "")[:80] if food_portion else None, "categories": categories}, "hypothesisId": "H3", "sessionId": "debug-session"}) + "\n"
+            open(_log_path, "a").write(_line)
+        except Exception:
+            pass
+        # #endregion
         _trace_append(trace, "classify_done", "Classification result", {"isFood": is_food, "categories": categories})
 
         print(f"   isFood: {is_food}")
@@ -997,16 +1052,42 @@ def parse_meal(meal_id):
         source_meal_id = None  # id of the meal we're referencing (same as before)
         copy_multiplier = 1.0  # e.g. "another 2" -> 2x quantities
         use_recent_meal = not image_field  # never override with recent meal when user sent a photo of something new
-        # If mixed entry, use just the food portion for parsing
+        # #region agent log — trace which branch sets source_meal_id
+        _log_path = "/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log"
+        try:
+            import time as _t
+            _is_mixed = bool(food_portion and len(categories) > 1)
+            _line = json.dumps({"timestamp": _t.time()*1000, "location": "parse_api.py:source_meal_branch", "message": "Branch check", "data": {"categories": categories, "len_categories": len(categories), "food_portion_preview": (food_portion or "")[:80], "text_preview": (text or "")[:80], "is_mixed": _is_mixed, "has_recent_meals": bool(recent_meals), "has_recent_context": bool(recent_meals_context)}, "hypothesisId": "H3", "sessionId": "debug-session"}) + "\n"
+            open(_log_path, "a").write(_line)
+        except Exception:
+            pass
+        # #endregion
+        # If mixed entry, use just the food portion for parsing.
+        # Do NOT set source_meal_id here — mixed means "food + supplement/non-food", not "same as before".
+        # Copy-from-previous should only apply when user explicitly says "same"/"another"/"repeat".
         if food_portion and len(categories) > 1:
             _trace_append(trace, "food_portion", f"Using food portion: {(food_portion or '')[:60]}{'...' if len(food_portion or '') > 60 else ''}")
             print(f"   🔀 Mixed entry, parsing food portion: {food_portion}")
+            # #region agent log
+            try:
+                _log_path = "/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log"
+                _line = json.dumps({"timestamp": __import__("time").time()*1000, "location": "parse_api.py:text_replaced_by_food_portion", "message": "text_replaced", "data": {"food_portion_preview": (food_portion or "")[:100]}, "hypothesisId": "H3", "sessionId": "debug-session"}) + "\n"
+                open(_log_path, "a").write(_line)
+            except Exception:
+                pass
+            # #endregion
             text = food_portion
-            if use_recent_meal and recent_meals and len(recent_meals) > 0:
-                source_meal_id = recent_meals[0].get("id")
         # If classifier inferred "same as before" from caption, use it — only when no image
         elif is_food and food_portion and food_portion.strip() and use_recent_meal and recent_meals:
             is_repeat_c, copy_multiplier = _parse_repeat_intent(text or "")
+            # #region agent log
+            try:
+                import time as _t2
+                _line = json.dumps({"timestamp": _t2.time()*1000, "location": "parse_api.py:classifier_repeat_check", "message": "Classifier branch", "data": {"is_repeat_c": is_repeat_c, "text_len": len(text or "")}, "hypothesisId": "H3", "sessionId": "debug-session"}) + "\n"
+                open(_log_path, "a").write(_line)
+            except Exception:
+                pass
+            # #endregion
             if is_repeat_c:
                 print(f"   🔀 Using classifier food_portion for parsing: {food_portion}")
                 text = food_portion
@@ -1015,6 +1096,14 @@ def parse_meal(meal_id):
         elif use_recent_meal and is_food and recent_meals_context:
             raw = (text or "").strip().lower()
             is_repeat, copy_multiplier = _parse_repeat_intent(raw)
+            # #region agent log
+            try:
+                import time as _t2
+                _line = json.dumps({"timestamp": _t2.time()*1000, "location": "parse_api.py:fallback_repeat_check", "message": "Fallback branch", "data": {"is_repeat": is_repeat, "raw_len": len(raw), "raw_preview": raw[:50]}, "hypothesisId": "H3", "sessionId": "debug-session"}) + "\n"
+                open(_log_path, "a").write(_line)
+            except Exception:
+                pass
+            # #endregion
             if is_repeat:
                 if recent_meals and len(recent_meals) > 0:
                     source_meal_id = recent_meals[0].get("id")
@@ -1032,8 +1121,25 @@ def parse_meal(meal_id):
         
         # Copy ingredients from source meal if we're "same as before" and that meal already has ingredients (no re-parse)
         if source_meal_id and source_meal_id != meal_id:
+            # #region agent log
+            try:
+                import time as _t
+                _line = json.dumps({"timestamp": _t.time()*1000, "location": "parse_api.py:repeat_triggered", "message": "Repeat triggered", "data": {"source_meal_id": source_meal_id, "meal_id": meal_id}, "hypothesisId": "H3", "sessionId": "debug-session"}) + "\n"
+                open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
+            except Exception:
+                pass
+            # #endregion
             existing = fetch_ingredients_by_meal_id(source_meal_id)
             if existing:
+                # #region agent log
+                try:
+                    _log_path = "/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log"
+                    _copy_names = [x.get("name") for x in existing if isinstance(x, dict)]
+                    _line = json.dumps({"timestamp": __import__("time").time()*1000, "location": "parse_api.py:copy_ingredients", "message": "copy_from_previous", "data": {"source_meal_id": source_meal_id, "target_meal_id": meal_id, "copied_names": _copy_names}, "hypothesisId": "H1", "sessionId": "debug-session"}) + "\n"
+                    open(_log_path, "a").write(_line)
+                except Exception:
+                    pass
+                # #endregion
                 mult = copy_multiplier
                 print(f"   📋 Copying {len(existing)} ingredients from previous meal (no re-parse)" + (f" x{mult}" if mult != 1.0 else ""))
                 saved = []
@@ -1115,16 +1221,7 @@ def parse_meal(meal_id):
         # Parse with GPT
         parsed = []
         no_parse_reason = None  # for "No ingredients detected" response so dashboard can show why
-        _log_path = "/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log"
         print(f"   📝 Text used for parse: {repr((text or '')[:100])}")
-        # #region agent log
-        try:
-            import time as _t
-            _line = json.dumps({"timestamp": _t.time()*1000, "location": "parse_api.py:before_parse", "message": "before_parse", "data": {"text_len": len(text or ""), "text_preview": (text or "")[:200], "has_image": bool(image_field)}, "hypothesisId": "H1", "sessionId": "debug-session"}) + "\n"
-            open(_log_path, "a").write(_line)
-        except Exception:
-            pass
-        # #endregion
 
         # Caption "1 serving" etc. is not a food name — parse image only so we don't get [] from text and waste a call
         generic_caption = (text or "").strip().lower() in ("1 serving", "serving", "one serving", "")
@@ -1159,8 +1256,9 @@ def parse_meal(meal_id):
             source = "gpt_text"
             # #region agent log
             try:
-                import time as _t
-                _line = json.dumps({"timestamp": _t.time()*1000, "location": "parse_api.py:after_parse_text", "message": "after_parse_text", "data": {"parsed_len": len(parsed), "source": source}, "hypothesisId": "H2", "sessionId": "debug-session"}) + "\n"
+                _log_path = "/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log"
+                _names = [x.get("name") for x in (parsed or []) if isinstance(x, dict)]
+                _line = json.dumps({"timestamp": __import__("time").time()*1000, "location": "parse_api.py:after_gpt_text", "message": "parsed_after_gpt_text", "data": {"text_preview": (text or "")[:80], "parsed_names": _names}, "hypothesisId": "H2", "sessionId": "debug-session"}) + "\n"
                 open(_log_path, "a").write(_line)
             except Exception:
                 pass
@@ -1218,14 +1316,6 @@ def parse_meal(meal_id):
                 reason += "; had recent_meals context"
             else:
                 reason += "; no recent_meals today (or fetch failed)"
-            # #region agent log
-            try:
-                import time as _t
-                _line = json.dumps({"timestamp": _t.time()*1000, "location": "parse_api.py:no_ingredients_return", "message": "no_ingredients_return", "data": {"text_preview": (text or "")[:200], "reason": reason, "no_parse_reason": no_parse_reason}, "hypothesisId": "H3", "sessionId": "debug-session"}) + "\n"
-                open(_log_path, "a").write(_line)
-            except Exception:
-                pass
-            # #endregion
             _trace_append(trace, "no_ingredients", "No ingredients detected", {"reason": reason})
             return jsonify({
                 "ingredients": [],
@@ -1244,14 +1334,6 @@ def parse_meal(meal_id):
         for ing in parsed:
             serving_size_g_used = None
             name = ing.get("name", "").lower().strip()
-            # #region agent log
-            try:
-                import time as _t
-                _line = json.dumps({"timestamp": _t.time() * 1000, "location": "parse_api.py:parsed_ing", "message": "GPT parsed ingredient", "data": {"name": ing.get("name"), "quantity": ing.get("quantity"), "unit": ing.get("unit")}, "sessionId": "debug-session", "hypothesisId": "H1"}) + "\n"
-                open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
-            except Exception:
-                pass
-            # #endregion
             # Skip banned items
             if name in BANNED_INGREDIENTS or len(name) < 2:
                 print(f"   ⏭️ Skipping: {name}")
@@ -1282,14 +1364,6 @@ def parse_meal(meal_id):
                         name = actual.lower().strip()
                         print(f"   🧠 LEARNED (fallback): '{parsed_lower}' → '{actual}'")
                         break
-            # #region agent log
-            try:
-                import time as _t
-                _line = json.dumps({"timestamp": _t.time() * 1000, "location": "parse_api.py:after_learned", "message": "After learned correction", "data": {"name": name, "quantity": quantity, "unit": unit}, "sessionId": "debug-session", "hypothesisId": "H4"}) + "\n"
-                open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
-            except Exception:
-                pass
-            # #endregion
             # Prefer nutrition from visible label when GPT read it
             label_nutrition = ing.get("nutritionFromLabel")
             usda = None
@@ -1466,17 +1540,41 @@ def parse_meal(meal_id):
             
             # Prepare payload — only send fields that exist on ingredients collection
             # (no parsingSource; use parsingMetadata.parsingSource and parsingStrategy instead)
-            # #region agent log
-            try:
-                import time as _t
-                _line = json.dumps({"timestamp": _t.time() * 1000, "location": "parse_api.py:payload_before_insert", "message": "Payload quantity/unit before insert", "data": {"name": ing["name"], "quantity": quantity, "unit": unit}, "sessionId": "debug-session", "hypothesisId": "H2"}) + "\n"
-                open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
-            except Exception:
-                pass
-            # #endregion
             recipe_for = ing.get("_recipeFor")
-            # Prefer USDA match name over user's words when we have a USDA match
-            display_name = usda.get("name", ing["name"]) if usda else ing["name"]
+            # Prefer USDA match name over user's words when we have a USDA match, but reject USDA names with no word overlap (e.g. pork -> Oolong tea)
+            if usda and _usda_display_name_ok(ing["name"], usda.get("name", "")):
+                usda_name = usda.get("name", ing["name"])
+                # Prefer parsed name when it's one word and USDA name is "Word, extra" (e.g. "Egg, creamed" for "egg")
+                parsed_lower = (ing["name"] or "").lower().strip()
+                usda_lower = (usda_name or "").lower()
+                if parsed_lower and "," in usda_lower:
+                    first_usda = usda_lower.split(",")[0].strip()
+                    if first_usda == parsed_lower or first_usda == parsed_lower.rstrip("s") or first_usda + "s" == parsed_lower:
+                        display_name = ing["name"]
+                    else:
+                        display_name = usda_name
+                else:
+                    display_name = usda_name
+            else:
+                display_name = ing["name"]
+                if usda and usda.get("name") and not _usda_display_name_ok(ing["name"], usda.get("name", "")):
+                    rejected_usda_name = usda.get("name")
+                    print(f"   ⚠️ Rejected USDA display name (no overlap): '{rejected_usda_name}' for parsed '{ing['name']}' — using parsed name and GPT nutrition")
+                    # Also discard wrong USDA nutrition (e.g. tea calories for pork); use GPT estimate
+                    gpt_nutrition = gpt_estimate_nutrition(ing["name"], quantity, unit)
+                    if gpt_nutrition:
+                        scaled_nutrition = gpt_nutrition
+                        source_ing = "gpt"
+                        portion_grams = None
+                    usda = None
+                    # #region agent log
+                    try:
+                        _log_path = "/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log"
+                        _line = json.dumps({"timestamp": __import__("time").time()*1000, "location": "parse_api.py:display_name_rejected", "message": "usda_display_name_rejected", "data": {"parsed_name": ing.get("name"), "usda_name": rejected_usda_name}, "hypothesisId": "H5", "sessionId": "debug-session", "runId": "post-fix"}) + "\n"
+                        open(_log_path, "a").write(_line)
+                    except Exception:
+                        pass
+                    # #endregion
             payload = {
                 "mealId": meal_id,
                 "name": display_name,

@@ -1,8 +1,21 @@
 import os
+import re
 import json
 from openai import OpenAI
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+
+def _repair_json_object(raw: str) -> str:
+    """Extract substring between first '{' and last '}', strip trailing commas before '}' or ']'."""
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return raw
+    s = raw[start : end + 1]
+    s = re.sub(r",\s*}", "}", s)
+    s = re.sub(r",\s*]", "]", s)
+    return s
 
 
 def parse_ingredients(text: str, user_context: str = ""):
@@ -83,9 +96,15 @@ def parse_ingredients(text: str, user_context: str = ""):
     try:
         out = json.loads(raw)
         # #region agent log
+        try:
+            _path = "/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log"
+            _names = [x.get("name") for x in (out or []) if isinstance(x, dict)]
+            _payload = {"timestamp": __import__("time").time()*1000, "location": "parser_gpt.py:parse_ingredients", "message": "gpt_parse_out", "data": {"text_preview": (text or "")[:120], "parsed_names": _names, "parsed_count": len(out or [])}, "hypothesisId": "H2", "sessionId": "debug-session"}
+            open(_path, "a").write(__import__("json").dumps(_payload) + "\n")
+        except Exception:
+            pass
         if not out and text:
             try:
-                _path = "/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log"
                 _payload = {"timestamp": __import__("time").time()*1000, "location": "parser_gpt.py:parse_ingredients", "message": "gpt_returned_empty", "data": {"text_preview": (text or "")[:150], "raw_preview": (raw or "")[:300]}, "hypothesisId": "H2", "sessionId": "debug-session"}
                 open(_path, "a").write(__import__("json").dumps(_payload) + "\n")
             except Exception:
@@ -97,6 +116,68 @@ def parse_ingredients(text: str, user_context: str = ""):
     except Exception as e:
         print("Parser error:", e, "RAW:", raw[:200] if raw else "")
         return []
+
+
+def expand_recipe(meal_text: str, composite_ingredient: dict) -> dict | None:
+    """
+    Ask GPT for a typical recipe for one batch/loaf of the given composite dish.
+    Returns {"ingredients": [{name, quantity, unit}, ...], "servingsPerBatch": N} or None.
+    """
+    name = (composite_ingredient.get("name") or "").strip()
+    if not name:
+        return None
+
+    prompt = f"""For the dish "{name}" (user said: "{meal_text}"), output a typical recipe for ONE standard batch or loaf.
+Output ONLY a JSON object (no markdown, no explanation) with:
+- "ingredients": array of objects, each with "name" (string), "quantity" (number), "unit" (string).
+  Use units the system knows: cup, cups, tbsp, tsp, eggs, piece, pieces, oz, g.
+  Example: flour 2 cups, bananas 3 pieces, sugar 1 cup, eggs 2 eggs, butter 0.5 cup, baking soda 1 tsp, salt 0.5 tsp.
+- "servingsPerBatch": number of servings per batch (e.g. 12 for a loaf = 12 slices).
+
+Example output: {{ "ingredients": [ {{ "name": "all-purpose flour", "quantity": 2, "unit": "cup" }}, {{ "name": "banana", "quantity": 3, "unit": "piece" }} ], "servingsPerBatch": 12 }}"""
+
+    def _strip_markdown(s: str) -> str:
+        s = (s or "").strip()
+        if s.startswith("```"):
+            s = s.strip("`")
+            if s.lower().startswith("json"):
+                s = s[4:]
+            s = s.strip()
+        return s
+
+    def _parse_raw(raw: str) -> dict | None:
+        raw = _strip_markdown(raw)
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            repaired = _repair_json_object(raw)
+            try:
+                return json.loads(repaired)
+            except json.JSONDecodeError:
+                return None
+
+    for attempt in range(2):
+        try:
+            resp = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=800,
+            )
+            raw = (resp.choices[0].message.content or "").strip()
+            out = _parse_raw(raw)
+            if out and isinstance(out.get("ingredients"), list) and isinstance(out.get("servingsPerBatch"), (int, float)):
+                n = len(out["ingredients"])
+                if n > 0 and out["servingsPerBatch"] > 0:
+                    return out
+            if attempt == 0:
+                print(f"   ⚠️ expand_recipe parse failed (raw length={len(raw)}), retrying once...")
+                if raw:
+                    print(f"   Raw (first 400 chars): {raw[:400]!r}")
+        except Exception as e:
+            print(f"   ⚠️ expand_recipe failed: {e}")
+            return None
+    return None
+
 
 import base64
 import requests

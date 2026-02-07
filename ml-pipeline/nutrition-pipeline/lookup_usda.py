@@ -1,4 +1,5 @@
 import os
+import re
 import requests
 from dotenv import load_dotenv
 
@@ -158,9 +159,13 @@ def extract_macros(nutrients: list) -> dict:
     for n in nutrients:
         name = n.get("nutrientName", "").lower()
         value = n.get("value", 0) or 0
+        unit = (n.get("unitName") or "").upper()
         
-        if "energy" in name and n.get("unitName") == "KCAL":
-            macros["calories"] = value
+        if "energy" in name:
+            if unit == "KCAL" or unit == "CAL":
+                macros["calories"] = value
+            elif unit == "KJ" and value > 0:
+                macros["calories"] = round(value / 4.184, 1)
         elif name == "protein":
             macros["protein"] = value
         elif "carbohydrate" in name:
@@ -215,12 +220,22 @@ def validate_scaled_calories(
         "lemon": (10, 40), "lemons": (10, 40), "lime": (10, 40), "limes": (10, 40),
     }
     unit_lower = (unit or "").lower()
-    if unit_lower in ("piece", "pieces") and quantity > 0:
+    # Per-piece/count validation (piece, pieces, or count for small quantities of fruit/berries)
+    count_units = ("piece", "pieces", "count")
+    if unit_lower in count_units and quantity > 0:
         for key, (lo, hi) in piece_bounds.items():
             if key in name_lower:
                 per_piece = scaled_calories / quantity
                 if per_piece > hi:
                     return False, f"Scaled {scaled_calories:.0f} cal for {quantity} {key} = {per_piece:.0f} cal/piece (expected <{hi})"
+                break
+    # "serving" with small count (e.g. 7 strawberries) — treat as count for berries/fruit
+    if unit_lower == "serving" and 1 <= quantity <= 30:
+        for key, (lo, hi) in piece_bounds.items():
+            if key in name_lower:
+                per_piece = scaled_calories / quantity
+                if per_piece > hi:
+                    return False, f"Scaled {scaled_calories:.0f} cal for {quantity} {key} = {per_piece:.0f} cal/serving (expected <{hi}; suggests wrong match)"
                 break
 
     # Zero-cal drinks: black coffee, tea, water, ice, etc. — reject USDA matches with calories
@@ -229,6 +244,22 @@ def validate_scaled_calories(
         if unit_lower in ("oz", "cup", "cups", "serving", "servings") and quantity <= 24:
             if scaled_calories > 15:
                 return False, f"Black coffee/tea should be ~0-5 cal, not {scaled_calories:.0f}"
+
+    # Cup-based sanity for berries and fruits (catches dried or wrong match)
+    berry_fruit_terms = ("strawberry", "strawberries", "blueberry", "blueberries", "raspberry", "raspberries", "blackberry", "blackberries", "cherry", "cherries", "grape", "grapes")
+    if unit_lower in ("cup", "cups") and quantity > 0 and any(t in name_lower for t in berry_fruit_terms):
+        cal_per_cup = scaled_calories / quantity
+        if cal_per_cup > 150:
+            return False, f"Scaled {scaled_calories:.0f} cal for {quantity} cup(s) = {cal_per_cup:.0f} cal/cup (berries/fruit expected <150 cal/cup; suggests dried or wrong match)"
+
+    # Cup-based sanity for oats and rice (catches raw when user meant cooked)
+    grain_terms = ("oat", "oats", "oatmeal", "steel cut", "rice", "brown rice", "white rice")
+    if unit_lower in ("cup", "cups") and quantity > 0 and any(g in name_lower for g in grain_terms):
+        if "raw" not in name_lower and "dry" not in name_lower and "uncooked" not in name_lower:
+            cal_per_cup = scaled_calories / quantity
+            if cal_per_cup > 250:
+                return False, f"Scaled {scaled_calories:.0f} cal for {quantity} cup(s) = {cal_per_cup:.0f} cal/cup (cooked oats/rice expected <250 cal/cup; likely raw when user meant cooked)"
+
     # Whole-meal sanity: single ingredient >1200 cal is suspect (unless bulk)
     if quantity <= 10 and unit_lower in ("piece", "pieces", "oz", "g", "cup", "cups"):
         if scaled_calories > 1200:
@@ -338,6 +369,9 @@ EXPECTED_CAL_PER_100G = [
     (["orange", "oranges"], (40, 55)),
     (["apple", "apples"], (45, 60)),
     (["banana", "bananas"], (85, 105)),
+    (["strawberry", "strawberries"], (28, 40)),
+    (["oatmeal", "oats", "steel cut oats"], (65, 95)),  # cooked
+    (["rice", "brown rice", "white rice"], (110, 140)),  # cooked
     (["chicken wing", "wing", "wings"], (150, 250)),  # per 100g raw
     (["chicken breast", "chicken"], (100, 180)),
     (["egg", "eggs"], (140, 160)),
@@ -420,7 +454,24 @@ def validate_usda_match(ingredient_name: str, matched_name: str, macros: dict) -
     if "bone" in ingredient_lower and "bone" not in matched_lower:
         if protein_per_100g > 15:
             return False, f"Name mismatch: '{ingredient_name}' matched to '{matched_name}' with high protein"
-    
+
+    # Check 4: Require at least one significant word from ingredient to appear in matched name.
+    # Rejects e.g. "pork shoulder steak" -> "Beverages, tea, Oolong, brewed" (no word overlap).
+    words = re.findall(r"[a-z0-9]{2,}", ingredient_lower)
+    stop = {"the", "and", "with", "for", "raw", "cooked", "half", "other", "same", "cup", "cups", "oz"}
+    significant = [w for w in words if w not in stop]
+    if significant and not any(w in matched_lower for w in significant):
+        # #region agent log
+        try:
+            import json
+            import time as _t
+            _line = json.dumps({"timestamp": _t.time()*1000, "location": "lookup_usda.py:validate_no_overlap", "message": "reject_no_keyword_overlap", "data": {"ingredient_name": ingredient_name, "matched_name": matched_name}, "hypothesisId": "H5", "sessionId": "debug-session", "runId": "post-fix"}) + "\n"
+            open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
+        except Exception:
+            pass
+        # #endregion
+        return False, f"Name mismatch: no keyword overlap between '{ingredient_name}' and '{matched_name}'"
+
     return True, ""
 
 
@@ -583,7 +634,9 @@ def usda_lookup_by_fdc_id(fdc_id, serving_size_g: float = 100.0) -> dict | None:
         raw_nutrients = f.get("foodNutrients", [])
         if not raw_nutrients:
             return None
-        macros = extract_macros(raw_nutrients)
+        # Normalize (handles amount/nutrient vs value/nutrientName formats)
+        norm_nutrients = normalize_usda_food_nutrients(raw_nutrients)
+        macros = extract_macros(norm_nutrients)
         # Reject zero-data entries (e.g. USDA placeholder records)
         total_macros = (macros.get("calories") or 0) + (macros.get("protein") or 0) + (macros.get("carbs") or 0) + (macros.get("fat") or 0)
         if total_macros <= 0:
@@ -663,6 +716,15 @@ def _alternative_usda_queries(ingredient_name: str) -> list[str]:
         if "beverage" not in lower and "drink" not in lower:
             queries.append(f"{base} beverage")
         queries.append(f"beverages {base}")
+    # Grains (oats, rice): add "cooked" when user likely means prepared (oatmeal, bowl of oats, etc.)
+    grain_terms = ["oat", "oats", "oatmeal", "steel cut", "rice", "brown rice", "white rice"]
+    if "milk" not in lower and any(g in lower for g in grain_terms) and "raw" not in lower and "dry" not in lower and "uncooked" not in lower:
+        base = name.split(",")[0].strip()
+        queries.append(f"{base} cooked")
+        if "rice" in lower:
+            queries.append("rice cooked")
+        if "brown rice" in lower:
+            queries.append("brown rice cooked")
     return queries
 
 

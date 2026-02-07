@@ -142,12 +142,15 @@ function IngredientBreakdown({ byIngredient, unmatched }) {
 // Determine if an ingredient is low confidence (needs review)
 function isLowConfidence(ing) {
   const name = (ing.name || "").trim();
+  const hasNutrition = getNutritionArray(ing).length > 0;
   // Vague name heuristic: treat known vague terms as low-confidence
   if (VAGUE_NAME_PATTERNS.test(name)) return true;
-  // No USDA match = GPT guessed it
-  if (!ing.usdaCode) return true;
-  // Source is explicitly GPT without USDA validation
-  if (ing.source === "gpt" && getNutritionArray(ing).length === 0) return true;
+  // No USDA and no nutrition = we're guessing, needs review
+  if (!ing.usdaCode && !hasNutrition) return true;
+  // No USDA but we have nutrition (e.g. GPT estimate after rejecting bad USDA match) and a specific name — don't flag
+  if (!ing.usdaCode && hasNutrition) return false;
+  // Source is explicitly GPT without nutrition
+  if (ing.source === "gpt" && !hasNutrition) return true;
   return false;
 }
 
