@@ -8,6 +8,7 @@ function formatTime(ts) {
 
 export default function FlowLogPanel() {
   const [expanded, setExpanded] = useState(false);
+  const [parseApiOnly, setParseApiOnly] = useState(true);
   const [entries, setEntries] = useState(() => flowLog.getEntries());
   const listRef = useRef(null);
 
@@ -51,7 +52,16 @@ export default function FlowLogPanel() {
         >
           <div className="flex items-center justify-between gap-2 p-2 border-b border-slate-600 shrink-0">
             <span className="text-sm font-semibold text-slate-200">Flow log</span>
-            <div className="flex gap-1">
+            <div className="flex gap-1 items-center flex-wrap">
+              <label className="flex items-center gap-1.5 text-xs text-slate-400 shrink-0">
+                <input
+                  type="checkbox"
+                  checked={parseApiOnly}
+                  onChange={(e) => setParseApiOnly(e.target.checked)}
+                  className="rounded"
+                />
+                Parse API only
+              </label>
               <button
                 type="button"
                 onClick={flowLog.clear}
@@ -82,7 +92,7 @@ export default function FlowLogPanel() {
             {entries.length === 0 && (
               <p className="text-slate-500 italic">No entries yet. Parse a meal or load data to see the flow.</p>
             )}
-            {entries.map((e) => (
+            {(parseApiOnly ? entries.filter((e) => e.source === "parse-api") : entries).map((e) => (
               <div
                 key={e.id}
                 className="rounded px-2 py-1 bg-slate-700/50 border border-slate-600/50 break-words"

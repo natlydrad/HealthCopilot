@@ -426,6 +426,7 @@ export async function parseAndSaveMeal(meal) {
       flowLog.add({
         type: "result",
         message: `Parse done: ${count} ingredients, isFood: ${data.isFood !== false}`,
+        source: "parse-api",
         detail: { count, isFood: data.isFood, source: data.source },
       });
       return {
@@ -438,7 +439,7 @@ export async function parseAndSaveMeal(meal) {
       };
     }
   } catch (err) {
-    flowLog.add({ type: "result", message: "Parse API unreachable", detail: { error: err.message } });
+    flowLog.add({ type: "result", message: "Parse API unreachable", source: "parse-api", detail: { error: err.message } });
     console.warn("Parse API unreachable, falling back to simple parser:", err.message);
   }
 
@@ -715,6 +716,9 @@ export async function clearMealIngredients(mealId) {
   }
   const data = await res.json();
   const deleted = data.deleted ?? 0;
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/b81179ea-362a-4b1e-9962-8572fc6e73fd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.js:clearMealIngredients_response',message:'clear response',data:{mealId,deleted,status:res.status},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1_H4'})}).catch(()=>{});
+  // #endregion
   flowLog.add({ type: "result", message: "Cleared ingredients", detail: { mealId, deleted } });
   return deleted;
 }
