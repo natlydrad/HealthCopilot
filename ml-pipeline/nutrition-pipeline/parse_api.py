@@ -1427,16 +1427,19 @@ def parse_meal(meal_id):
                     _trace_append(trace, "usda_lookup", f"USDA lookup: {name}")
                     usda = usda_lookup(name)
                 if usda:
-                    # Use food-specific piece weight when unit is piece/pieces (fixes chicken wings etc.)
+                    # Use food-specific piece weight when unit is piece/pieces, or "serving" with small count (e.g. 7 strawberries)
                     serving_size = usda.get("serving_size_g", 100.0)
                     serving_size_g_used = serving_size
                     unit_lower = (unit or "").lower()
-                    if unit_lower in ("piece", "pieces"):
-                        piece_g = get_piece_grams(name)
-                        if piece_g is not None:
-                            serving_size = piece_g
-                            serving_size_g_used = serving_size
-                            print(f"   📐 Using {serving_size}g per piece for '{name}'")
+                    piece_g = get_piece_grams(name)
+                    if unit_lower in ("piece", "pieces", "count") and piece_g is not None:
+                        serving_size = piece_g
+                        serving_size_g_used = serving_size
+                        print(f"   📐 Using {serving_size}g per piece for '{name}'")
+                    elif unit_lower in ("serving", "servings") and 1 <= quantity <= 30 and piece_g is not None:
+                        serving_size = piece_g
+                        serving_size_g_used = serving_size
+                        print(f"   📐 Using {serving_size}g per serving (countable) for '{name}'")
                     scaled_nutrition = scale_nutrition(
                         usda.get("nutrition", []),
                         quantity,
@@ -1455,11 +1458,13 @@ def parse_meal(meal_id):
                             serving_size = usda.get("serving_size_g", 100.0)
                             serving_size_g_used = serving_size
                             unit_lower = (unit or "").lower()
-                            if unit_lower in ("piece", "pieces"):
-                                piece_g = get_piece_grams(name)
-                                if piece_g is not None:
-                                    serving_size = piece_g
-                                    serving_size_g_used = serving_size
+                            piece_g = get_piece_grams(name)
+                            if unit_lower in ("piece", "pieces", "count") and piece_g is not None:
+                                serving_size = piece_g
+                                serving_size_g_used = serving_size
+                            elif unit_lower in ("serving", "servings") and 1 <= quantity <= 30 and piece_g is not None:
+                                serving_size = piece_g
+                                serving_size_g_used = serving_size
                             scaled_nutrition = scale_nutrition(
                                 usda.get("nutrition", []),
                                 quantity,
@@ -1471,7 +1476,7 @@ def parse_meal(meal_id):
                                 quantity
                                 * (
                                     serving_size
-                                    if unit_lower in ("serving", "piece", "pieces")
+                                    if unit_lower in ("serving", "servings", "piece", "pieces", "count")
                                     else 28.35 if unit == "oz" else 240 if unit == "cup" else 15 if unit == "tbsp" else 100
                                 ),
                                 1,
@@ -1489,11 +1494,13 @@ def parse_meal(meal_id):
                                 serving_size = usda.get("serving_size_g", 100.0)
                                 serving_size_g_used = serving_size
                                 unit_lower = (unit or "").lower()
-                                if unit_lower in ("piece", "pieces"):
-                                    piece_g = get_piece_grams(name)
-                                    if piece_g is not None:
-                                        serving_size = piece_g
-                                        serving_size_g_used = serving_size
+                                piece_g = get_piece_grams(name)
+                                if unit_lower in ("piece", "pieces", "count") and piece_g is not None:
+                                    serving_size = piece_g
+                                    serving_size_g_used = serving_size
+                                elif unit_lower in ("serving", "servings") and 1 <= quantity <= 30 and piece_g is not None:
+                                    serving_size = piece_g
+                                    serving_size_g_used = serving_size
                                 scaled_nutrition = scale_nutrition(
                                     usda.get("nutrition", []),
                                     quantity,
@@ -1505,7 +1512,7 @@ def parse_meal(meal_id):
                                     quantity
                                     * (
                                         serving_size
-                                        if unit_lower in ("serving", "piece", "pieces")
+                                        if unit_lower in ("serving", "servings", "piece", "pieces", "count")
                                         else 28.35 if unit == "oz" else 240 if unit == "cup" else 15 if unit == "tbsp" else 100
                                     ),
                                     1,
@@ -1519,7 +1526,7 @@ def parse_meal(meal_id):
                             scaled_nutrition = merge_label_onto_usda(scaled_nutrition, partial_label_array)
                             print(f"   📋 Overlaid {len(partial_label_array)} label values onto USDA")
                         source_ing = "usda"
-                        portion_grams = round(quantity * (serving_size if unit_lower in ("serving", "piece", "pieces") else
+                        portion_grams = round(quantity * (serving_size if unit_lower in ("serving", "piece", "pieces", "count") else
                                               28.35 if unit == "oz" else
                                               240 if unit == "cup" else
                                               15 if unit == "tbsp" else 100), 1)

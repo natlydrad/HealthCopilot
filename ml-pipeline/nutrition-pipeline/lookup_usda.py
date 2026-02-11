@@ -112,8 +112,8 @@ def convert_to_grams(quantity: float, unit: str, serving_size_g: float = 100.0) 
     """
     unit_lower = unit.lower().strip() if unit else "serving"
     
-    # Special handling for serving/piece - use USDA serving size
-    if unit_lower in ("serving", "servings", "piece", "pieces"):
+    # Special handling for serving/piece/count - use USDA serving size (or piece_g when provided)
+    if unit_lower in ("serving", "servings", "piece", "pieces", "count"):
         return quantity * serving_size_g
     
     # Look up conversion factor
@@ -239,11 +239,16 @@ def validate_scaled_calories(
                 break
 
     # Zero-cal drinks: black coffee, tea, water, ice, etc. — reject USDA matches with calories
-    zero_cal_drinks = ("coffee", "tea", "espresso", "black coffee", "green tea", "herbal tea", "water", "ice")
-    if any(d in name_lower for d in zero_cal_drinks):
-        if unit_lower in ("oz", "cup", "cups", "serving", "servings") and quantity <= 24:
-            if scaled_calories > 15:
-                return False, f"Black coffee/tea should be ~0-5 cal, not {scaled_calories:.0f}"
+    # Skip this check for meats (e.g. "steak" contains "tea" as substring)
+    meat_terms = ("steak", "meat", "pork", "beef", "chicken", "turkey", "lamb", "fish")
+    if any(m in name_lower for m in meat_terms):
+        pass  # skip zero-cal drink check
+    else:
+        zero_cal_drinks = ("coffee", "tea", "espresso", "black coffee", "green tea", "herbal tea", "water", "ice")
+        if any(d in name_lower for d in zero_cal_drinks):
+            if unit_lower in ("oz", "cup", "cups", "serving", "servings") and quantity <= 24:
+                if scaled_calories > 15:
+                    return False, f"Black coffee/tea should be ~0-5 cal, not {scaled_calories:.0f}"
 
     # Cup-based sanity for berries and fruits (catches dried or wrong match)
     berry_fruit_terms = ("strawberry", "strawberries", "blueberry", "blueberries", "raspberry", "raspberries", "blackberry", "blackberries", "cherry", "cherries", "grape", "grapes")
