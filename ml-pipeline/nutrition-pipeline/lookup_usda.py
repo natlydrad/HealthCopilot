@@ -607,9 +607,46 @@ def usda_lookup(ingredient_name):
                         "serving_size_g": serving_g_alt,
                     }
         else:
-            print(f"   ⚠️ No USDA results for '{ingredient_name}'")
+            # Primary query returned no results — try alternative queries (e.g. "pork shoulder steak" → "pork shoulder steak raw")
+            print(f"   ⚠️ No USDA results for '{ingredient_name}', trying alternative queries...")
+            for alt_q in _alternative_usda_queries(ingredient_name):
+                if alt_q == ingredient_name:
+                    continue
+                print(f"   🔄 Trying alternative query: '{alt_q}'")
+                r2 = requests.get(USDA_URL, params={"query": alt_q, "api_key": USDA_KEY, "pageSize": 10})
+                if r2.status_code != 200:
+                    continue
+                foods2 = r2.json().get("foods", [])
+                if not foods2:
+                    continue
+                valid2 = []
+                for f in foods2:
+                    raw_nutrients = f.get("foodNutrients", [])
+                    macros = extract_macros(raw_nutrients)
+                    matched_name = f["description"]
+                    is_valid, _ = validate_usda_match(ingredient_name, matched_name, macros)
+                    if not is_valid:
+                        continue
+                    cal_100 = macros.get("calories", 0) or 0
+                    expected_range = get_expected_cal_range(ingredient_name)
+                    cal_score = score_calorie_fit(cal_100, expected_range[0], expected_range[1]) if expected_range else 0
+                    valid2.append((cal_score, f, macros, matched_name, raw_nutrients))
+                if valid2:
+                    valid2.sort(key=lambda x: x[0])
+                    _, f, macros, matched_name, raw_nutrients = valid2[0]
+                    cal_100 = macros.get("calories", 0)
+                    serving_g_alt = f.get("servingSize", 100)
+                    print(f"   ✅ Matched (alt): '{matched_name}' (fdcId: {f['fdcId']}) — {cal_100:.0f} cal/100g")
+                    return {
+                        "usdaCode": f["fdcId"],
+                        "name": matched_name,
+                        "nutrition": raw_nutrients,
+                        "macros_per_100g": macros,
+                        "serving_size_g": serving_g_alt,
+                    }
+            print(f"   ⚠️ No USDA match after trying alternatives")
             return None
-            
+
     except requests.exceptions.RequestException as e:
         print(f"   ❌ USDA request failed: {e}")
         return None
@@ -842,13 +879,14 @@ def usda_lookup_valid_for_portion(
             continue
         if fdc_id:
             seen_fdc.add(fdc_id)
-        # Scale and validate (use piece grams when unit is piece and we have a known food)
+        # Scale and validate (use piece grams when unit is piece, or when "serving" with small count for countable fruit)
         serving_size = usda.get("serving_size_g", 100.0)
         unit_lower = (unit or "").lower()
-        if unit_lower in ("piece", "pieces"):
-            piece_g = get_piece_grams(ingredient_name)
-            if piece_g is not None:
-                serving_size = piece_g
+        piece_g = get_piece_grams(ingredient_name)
+        if unit_lower in ("piece", "pieces") and piece_g is not None:
+            serving_size = piece_g
+        elif unit_lower in ("serving", "servings") and 1 <= quantity <= 30 and piece_g is not None:
+            serving_size = piece_g  # e.g. 7 "servings" strawberries = 7 * 12g
         scaled = scale_nutrition(
             usda.get("nutrition", []),
             quantity,
