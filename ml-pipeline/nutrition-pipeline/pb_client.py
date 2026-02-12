@@ -154,6 +154,67 @@ def delete_corrections_for_ingredient(ingredient_id: str) -> int:
     return deleted
 
 
+def delete_corrections_for_user_with_corrected_names(user_id: str, corrected_names: set) -> int:
+    """
+    Delete all ingredient_corrections for this user where userCorrection.name is in corrected_names.
+    Used when clearing a meal's ingredients so the "log" (learned names) is cleared and won't re-apply on next parse.
+    Returns number of correction records deleted.
+    """
+    if not user_id or not corrected_names:
+        return 0
+    names_lower = {n.strip().lower() for n in corrected_names if n and isinstance(n, str)}
+    if not names_lower:
+        return 0
+    import urllib.parse
+    filt = f"user='{user_id}'"
+    encoded = urllib.parse.quote(filt)
+    headers = {"Authorization": f"Bearer {get_token()}"}
+    deleted = 0
+    url = f"{PB_URL}/api/collections/ingredient_corrections/records?filter={encoded}&perPage=500"
+    try:
+        r = requests.get(url, headers=headers)
+        if r.status_code != 200:
+            return 0
+        items = r.json().get("items", [])
+        for rec in items:
+            corr = rec.get("userCorrection") or {}
+            target = (corr.get("name") or "").strip().lower()
+            if target in names_lower:
+                rid = rec.get("id")
+                if rid:
+                    dr = requests.delete(f"{PB_URL}/api/collections/ingredient_corrections/records/{rid}", headers=headers)
+                    if dr.status_code in (200, 204):
+                        deleted += 1
+        if deleted:
+            print(f"   📎 Deleted {deleted} correction record(s) for cleared ingredient name(s)")
+    except Exception as e:
+        print(f"   ⚠️ Failed to delete corrections by name: {e}")
+    return deleted
+
+
+def remove_learned_patterns_for_names(user_id: str, ingredient_names: set) -> bool:
+    """
+    Remove from user's food profile any confusion pair or food where the learned/actual name
+    is in ingredient_names. Used when clearing a meal so those names are not re-applied from profile.
+    """
+    if not user_id or not ingredient_names:
+        return True
+    names_lower = {n.strip().lower() for n in ingredient_names if n and isinstance(n, str)}
+    if not names_lower:
+        return True
+    profile = get_user_food_profile(user_id)
+    if not profile:
+        return True
+    confusions = [c for c in (profile.get("confusionPairs") or [])
+                  if (c.get("actual") or "").strip().lower() not in names_lower]
+    foods = [f for f in (profile.get("foods") or [])
+             if (f.get("name") or "").strip().lower() not in names_lower]
+    if len(confusions) < len(profile.get("confusionPairs") or []) or len(foods) < len(profile.get("foods") or []):
+        update_user_food_profile(profile["id"], {"confusionPairs": confusions, "foods": foods})
+        print(f"   📎 Removed learned pattern(s) from profile for cleared ingredient name(s)")
+    return True
+
+
 def delete_ingredient(ingredient_id: str) -> bool:
     """Delete an ingredient by ID. Uses service token (bypasses API rules)."""
     lid = (ingredient_id or "").strip() if isinstance(ingredient_id, str) else None
@@ -172,6 +233,30 @@ def delete_ingredient(ingredient_id: str) -> bool:
     if not ok:
         print(f"   ⚠️ Delete {lid} failed: {r.status_code} {r.text[:150]}")
     return ok
+
+
+def fetch_ingredient_ids() -> set:
+    """Fetch all ingredient IDs (lightweight, for orphan correction checks)."""
+    headers = {"Authorization": f"Bearer {get_token()}"}
+    ids = set()
+    page = 1
+    per_page = 500
+    import urllib.parse
+    fields = urllib.parse.quote("id")
+    while True:
+        url = f"{PB_URL}/api/collections/ingredients/records?page={page}&perPage={per_page}&fields={fields}"
+        r = requests.get(url, headers=headers)
+        if r.status_code != 200:
+            break
+        data = r.json()
+        items = data.get("items", [])
+        for rec in items:
+            if rec.get("id"):
+                ids.add(rec["id"])
+        if len(items) < per_page:
+            break
+        page += 1
+    return ids
 
 
 def fetch_records(collection_name, per_page=200):

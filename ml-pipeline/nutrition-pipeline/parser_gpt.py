@@ -38,6 +38,7 @@ def parse_ingredients(text: str, user_context: str = ""):
     Extract foods, drinks, supplements from: "{text}".
     {context_section}
     IMPORTANT: Also extract from portion descriptions. E.g. "ate 75%, only half the noodles" → noodles, quantity 0.5; "half the rice" → rice, quantity 0.5; "left a quarter" → scale quantity to 0.75. Always return at least one item if any food is mentioned.
+    IMPORTANT: PORTION MODIFIERS apply to ALL foods. When the user says "half", "quarter", "a third", "75%", "double", etc., the quantity MUST reflect that factor. Rule: base_amount × modifier. Typical full portions: steak 6oz, chicken breast 4oz, 1 cup rice, 1 egg. Then apply modifier: "half a steak" → 3oz; "quarter of the chicken" → 1oz; "half the rice" → 0.5 cup.
     IMPORTANT: Decompose complex/composite foods into their base ingredients.
     Examples:
     - "burrito" → tortilla, rice, beans, cheese, salsa, sour cream
@@ -60,7 +61,7 @@ def parse_ingredients(text: str, user_context: str = ""):
         * Eggs: count (unit: "eggs")
         * Bread/tortillas: count (unit: "slice" or "piece")
         * Bacon: count (unit: "piece" or "slice" — 2 pieces = 2 slices bacon)
-        * Meats: oz (chicken→4oz, steak→6oz)
+        * Meats: oz. Typical full: chicken 4oz, steak 6oz. Apply portion modifiers: "half a steak" → 3oz.
         * Rice/beans/grains: cups (unit: "cup", typically 0.5-1)
         * Vegetables: cups (unit: "cup", typically 0.25-0.5)
         * Cheese: oz (typically 1-2oz)
@@ -95,21 +96,6 @@ def parse_ingredients(text: str, user_context: str = ""):
 
     try:
         out = json.loads(raw)
-        # #region agent log
-        try:
-            _path = "/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log"
-            _names = [x.get("name") for x in (out or []) if isinstance(x, dict)]
-            _payload = {"timestamp": __import__("time").time()*1000, "location": "parser_gpt.py:parse_ingredients", "message": "gpt_parse_out", "data": {"text_preview": (text or "")[:120], "parsed_names": _names, "parsed_count": len(out or [])}, "hypothesisId": "H2", "sessionId": "debug-session"}
-            open(_path, "a").write(__import__("json").dumps(_payload) + "\n")
-        except Exception:
-            pass
-        if not out and text:
-            try:
-                _payload = {"timestamp": __import__("time").time()*1000, "location": "parser_gpt.py:parse_ingredients", "message": "gpt_returned_empty", "data": {"text_preview": (text or "")[:150], "raw_preview": (raw or "")[:300]}, "hypothesisId": "H2", "sessionId": "debug-session"}
-                open(_path, "a").write(__import__("json").dumps(_payload) + "\n")
-            except Exception:
-                pass
-        # #endregion
         if not out:
             print("Parser text returned [] for input:", repr(text[:60]) if text else "")
         return out
@@ -282,7 +268,7 @@ def parse_ingredients_from_image(meal: dict, pb_url: str, token: str | None = No
         if caption and caption.strip():
             caption_section = f"""
         USER CAPTION: "{caption.strip()}"
-        Use this to identify what's in the photo and to estimate portions. E.g. "only half the noodles" → noodles with quantity 0.5; "ate 75%" → scale portions down accordingly.
+        Use this to identify what's in the photo and to estimate portions. PORTION MODIFIERS apply to ALL foods: "half" → 0.5, "quarter" → 0.25, "75%" → 0.75. E.g. "only half the noodles" → noodles quantity 0.5; "half a steak" (typical 6oz) → 3oz; "ate 75%" → scale portions down accordingly.
         
         """
 

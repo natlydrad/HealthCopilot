@@ -60,10 +60,16 @@ function processIngredient(ing) {
   const name = (ing.name || '').toLowerCase();
   const qty = ing.quantity || 1;
   const unit = (ing.unit || '').toLowerCase();
-  const grams = toGrams(qty, unit);
+  // Use backend-computed grams when available (handles count, piece, etc. correctly)
+  const portionGrams = ing.parsingMetadata?.portionGrams;
+  const grams = (portionGrams != null && portionGrams > 0)
+    ? portionGrams
+    : toGrams(qty, unit);
 
   const fg = ing.parsingMetadata?.foodGroupServings;
-  if (fg && typeof fg === 'object') {
+  // When we have backend-computed portionGrams, prefer keyword path (accurate) over GPT foodGroupServings (often inflated)
+  const preferGramsOverFg = portionGrams != null && portionGrams > 0;
+  if (fg && typeof fg === 'object' && !preferGramsOverFg) {
     const g = Number(fg.grains) || 0;
     const v = Number(fg.vegetables) || 0;
     const f = Number(fg.fruits) || 0;

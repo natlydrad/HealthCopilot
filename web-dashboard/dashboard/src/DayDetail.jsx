@@ -340,14 +340,14 @@ export default function DayDetail() {
             )}
           </div>
         )}
-        {totals.foodGroups && Object.values(totals.foodGroups).some(v => v > 0) && (
+        {totals.frameworks?.myPlate && Object.values(totals.frameworks.myPlate).some(v => v > 0) && (
           <div className="bg-slate-600 text-white px-4 py-2 text-sm flex flex-wrap gap-4">
             <span className="text-slate-300 font-medium">Servings:</span>
-            {totals.foodGroups.vegetables > 0 && <span>🥬 Veg: {totals.foodGroups.vegetables.toFixed(1)}</span>}
-            {totals.foodGroups.fruits > 0 && <span>🍎 Fruit: {totals.foodGroups.fruits.toFixed(1)}</span>}
-            {totals.foodGroups.protein > 0 && <span>🥩 Protein: {totals.foodGroups.protein.toFixed(1)}</span>}
-            {totals.foodGroups.grains > 0 && <span>🌾 Grain: {totals.foodGroups.grains.toFixed(1)}</span>}
-            {totals.foodGroups.dairy > 0 && <span>🥛 Dairy: {totals.foodGroups.dairy.toFixed(1)}</span>}
+            {totals.frameworks.myPlate.vegetables > 0 && <span>🥬 Veg: {totals.frameworks.myPlate.vegetables.toFixed(1)}</span>}
+            {totals.frameworks.myPlate.fruits > 0 && <span>🍎 Fruit: {totals.frameworks.myPlate.fruits.toFixed(1)}</span>}
+            {totals.frameworks.myPlate.protein > 0 && <span>🥩 Protein: {totals.frameworks.myPlate.protein.toFixed(1)}</span>}
+            {totals.frameworks.myPlate.grains > 0 && <span>🌾 Grain: {totals.frameworks.myPlate.grains.toFixed(1)}</span>}
+            {totals.frameworks.myPlate.dairy > 0 && <span>🥛 Dairy: {totals.frameworks.myPlate.dairy.toFixed(1)}</span>}
           </div>
         )}
         {totals.frameworks && (

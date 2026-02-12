@@ -4,7 +4,7 @@ import os
 import sys
 from dotenv import load_dotenv
 from pb_client import get_token, PB_URL, fetch_all_ingredients
-from lookup_usda import validate_usda_match, extract_macros
+from lookup_usda import validate_usda_match, extract_macros, validate_scaled_calories, validate_scaled_protein, VERY_LOW_PROTEIN_INGREDIENTS
 import requests
 
 load_dotenv()
@@ -39,8 +39,9 @@ def validate_existing_ingredients(dry_run=True, since_date=None):
         if ing.get("source") != "usda":
             continue
 
+        raw_usda = ing.get("rawUSDA") or {}
         ingredient_name = ing.get("name", "")
-        matched_name = ing.get("rawUSDA", {}).get("name", "") or ing.get("name", "unknown")
+        matched_name = raw_usda.get("name", "") or ingredient_name or "unknown"
 
         nutrition = ing.get("nutrition", [])
         if not isinstance(nutrition, list) or not nutrition:
@@ -55,10 +56,8 @@ def validate_existing_ingredients(dry_run=True, since_date=None):
             continue
 
         macros = extract_macros(nutrition)
-        
-        # Validate
         is_valid, reason = validate_usda_match(ingredient_name, matched_name, macros)
-        
+
         if not is_valid:
             bad_matches.append({
                 "id": ing["id"],
@@ -68,6 +67,44 @@ def validate_existing_ingredients(dry_run=True, since_date=None):
                 "reason": reason,
                 "timestamp": ing.get("timestamp", "")[:10]
             })
+            continue
+
+        # Portion-aware scaled calorie check (catches e.g. 5 strawberries = 400 cal)
+        scaled_calories = None
+        for n in nutrition:
+            nm = (n.get("nutrientName") or "").lower()
+            un = (n.get("unitName") or "").upper()
+            if "energy" in nm and un in ("KCAL", "CAL"):
+                scaled_calories = float(n.get("value", 0) or 0)
+                break
+        if scaled_calories is not None:
+            qty = ing.get("quantity", 1)
+            u = ing.get("unit", "serving")
+            is_cal_valid, cal_reason = validate_scaled_calories(ingredient_name, qty, u, scaled_calories)
+            if not is_cal_valid:
+                bad_matches.append({
+                    "id": ing["id"],
+                    "name": ingredient_name,
+                    "matched": matched_name,
+                    "protein_per_100g": macros.get("protein", 0),
+                    "reason": cal_reason,
+                    "timestamp": ing.get("timestamp", "")[:10]
+                })
+                continue
+
+        # Beverage-type: check scaled protein (catches concentrate/powder wrong match)
+        name_lower = (ingredient_name or "").lower()
+        if any(f in name_lower for f in VERY_LOW_PROTEIN_INGREDIENTS):
+            is_protein_ok, protein_reason = validate_scaled_protein(ingredient_name, nutrition)
+            if not is_protein_ok:
+                bad_matches.append({
+                    "id": ing["id"],
+                    "name": ingredient_name,
+                    "matched": matched_name,
+                    "protein_per_100g": macros.get("protein", 0),
+                    "reason": protein_reason,
+                    "timestamp": ing.get("timestamp", "")[:10]
+                })
     
     if not bad_matches:
         print("✅ All USDA matches look valid!")

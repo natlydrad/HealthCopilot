@@ -31,6 +31,34 @@ from lookup_usda import (
 )
 from common_sense import common_sense_check
 
+# Map common-sense micro field names to (nutrientName, unitName) for merge (same as parse_api)
+_MICRO_OVERRIDES = {
+    "added_sugar_g": ("Sugars, added", "G"),
+    "caffeine_mg": ("Caffeine", "MG"),
+    "fiber_g": ("Fiber, total dietary", "G"),
+    "sodium_mg": ("Sodium, Na", "MG"),
+}
+
+
+def _merge_micro_overrides_into_nutrition(
+    nutrition: list,
+    added_sugar_g=None,
+    caffeine_mg=None,
+    fiber_g=None,
+    sodium_mg=None,
+) -> list:
+    """Merge optional micro overrides into nutrition list. Returns new list."""
+    by_key = {}
+    for n in nutrition or []:
+        if isinstance(n, dict):
+            key = (n.get("nutrientName"), n.get("unitName"))
+            by_key[key] = {**n, "value": n.get("value")}
+    for field, (nutrient_name, unit_name) in _MICRO_OVERRIDES.items():
+        val = added_sugar_g if field == "added_sugar_g" else caffeine_mg if field == "caffeine_mg" else fiber_g if field == "fiber_g" else sodium_mg
+        if val is not None and isinstance(val, (int, float)) and val >= 0:
+            by_key[(nutrient_name, unit_name)] = {"nutrientName": nutrient_name, "unitName": unit_name, "value": round(float(val), 2)}
+    return list(by_key.values())
+
 
 def _has_valid_nutrition(ing) -> bool:
     """True if ingredient has non-empty nutrition with at least Energy."""
@@ -73,13 +101,15 @@ def _parse_nutrition(ing) -> list:
     return list(raw) if isinstance(raw, list) else []
 
 
-def fetch_ingredients_missing_caffeine(since_date=None, limit=None, caffeine_only_filter=False):
+def fetch_ingredients_missing_caffeine(since_date=None, limit=None, caffeine_only_filter=False, name_contains=None):
     """
     Fetch ingredients that have valid nutrition but no Caffeine entry.
     If caffeine_only_filter, only include names that might have caffeine (coffee, tea, matcha, etc.).
+    If name_contains (str), only include ingredients whose name contains this substring (case-insensitive).
     """
     return _fetch_ingredients(
-        since_date=since_date, limit=limit, require_missing_caffeine=True, caffeine_only_filter=caffeine_only_filter
+        since_date=since_date, limit=limit, require_missing_caffeine=True,
+        caffeine_only_filter=caffeine_only_filter, name_contains=name_contains,
     )
 
 
@@ -88,7 +118,7 @@ def fetch_ingredients_with_nutrition(since_date=None, limit=None):
     return _fetch_ingredients(since_date=since_date, limit=limit, require_missing_caffeine=False)
 
 
-def _fetch_ingredients(since_date=None, limit=None, require_missing_caffeine=True, caffeine_only_filter=False):
+def _fetch_ingredients(since_date=None, limit=None, require_missing_caffeine=True, caffeine_only_filter=False, name_contains=None):
     headers = {"Authorization": f"Bearer {get_token()}"}
     all_items = []
     page = 1
@@ -116,6 +146,9 @@ def _fetch_ingredients(since_date=None, limit=None, require_missing_caffeine=Tru
             if caffeine_only_filter:
                 name_lower = (item.get("name") or "").lower()
                 if not any(kw in name_lower for kw in CAFFEINE_KEYWORDS):
+                    continue
+            if name_contains:
+                if (item.get("name") or "").lower().find(name_contains.lower()) < 0:
                     continue
             all_items.append(item)
             if limit and len(all_items) >= limit:
@@ -282,13 +315,25 @@ def run_common_sense_and_caffeine(
                     else:
                         if verbose:
                             print(f"   🧠 Common sense: {ing.get('name')} -> {new_qty} {new_unit}")
+                # Micronutrient overrides (added_sugar_g, caffeine_mg, fiber_g, sodium_mg)
+                micro_vals = [corr.get("added_sugar_g"), corr.get("caffeine_mg"), corr.get("fiber_g"), corr.get("sodium_mg")]
+                if any(v is not None and isinstance(v, (int, float)) and v >= 0 for v in micro_vals):
+                    minimal[i]["nutrition"] = _merge_micro_overrides_into_nutrition(
+                        minimal[i]["nutrition"],
+                        added_sugar_g=corr.get("added_sugar_g"),
+                        caffeine_mg=corr.get("caffeine_mg"),
+                        fiber_g=corr.get("fiber_g"),
+                        sodium_mg=corr.get("sodium_mg"),
+                    )
+                    if verbose:
+                        print(f"   🧠 Common sense micros: {ing.get('name')}")
                 break
 
-    # Now each ingredient has minimal[i].nutrition (possibly updated by common-sense). Add caffeine.
+    # Now each ingredient has minimal[i].nutrition (possibly updated by common-sense). Add caffeine from USDA only if not already set.
     to_patch = []
     for i, ing in enumerate(ingredients):
         nut = minimal[i]["nutrition"]
-        if do_caffeine:
+        if do_caffeine and not _has_caffeine(nut):
             caffeine_mg = get_caffeine_mg_for_ingredient(ing, verbose=verbose)
             nut = merge_caffeine_into_nutrition(nut, caffeine_mg)
         patch_qty = ing.get("quantity") if ing.get("id") in portion_updated_ids else None
@@ -297,7 +342,7 @@ def run_common_sense_and_caffeine(
     return to_patch
 
 
-def backfill(limit=None, dry_run=False, since_date=None, caffeine_only=False, common_sense_only=False, verbose=True):
+def backfill(limit=None, dry_run=False, since_date=None, caffeine_only=False, common_sense_only=False, verbose=True, name_contains=None):
     do_caffeine = not common_sense_only
     do_common_sense = not caffeine_only
 
@@ -313,7 +358,9 @@ def backfill(limit=None, dry_run=False, since_date=None, caffeine_only=False, co
         ingredients = fetch_ingredients_with_nutrition(since_date=since_date, limit=limit)
         print(f"   Found {len(ingredients)} ingredients with nutrition (common-sense only)\n")
     else:
-        ingredients = fetch_ingredients_missing_caffeine(since_date=since_date, limit=limit)
+        ingredients = fetch_ingredients_missing_caffeine(
+            since_date=since_date, limit=limit, name_contains=name_contains
+        )
         print(f"   Found {len(ingredients)} ingredients missing Caffeine\n")
 
     if not ingredients:
@@ -360,6 +407,7 @@ if __name__ == "__main__":
     parser.add_argument("--since", type=str, help="Only process ingredients since this date (YYYY-MM-DD)")
     parser.add_argument("--caffeine-only", action="store_true", help="Only add Caffeine, skip common-sense")
     parser.add_argument("--common-sense-only", action="store_true", help="Only run common-sense, do not add Caffeine")
+    parser.add_argument("--name-contains", type=str, help="Only process ingredients whose name contains this substring (e.g. matcha)")
     parser.add_argument("-q", "--quiet", action="store_true", help="Less verbose output")
     args = parser.parse_args()
 
@@ -374,4 +422,5 @@ if __name__ == "__main__":
         caffeine_only=args.caffeine_only,
         common_sense_only=args.common_sense_only,
         verbose=not args.quiet,
+        name_contains=args.name_contains,
     )
