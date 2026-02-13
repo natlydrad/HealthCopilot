@@ -79,6 +79,48 @@ def normalize_quantity(ing):
     return ing
 
 
+def _has_specific_portion(ing: dict) -> bool:
+    """True if the ingredient has an explicit quantity/unit (e.g. 1 cup, 2 oz). Don't overwrite with learned portion."""
+    u = (ing.get("unit") or "").strip().lower()
+    q = float(ing.get("quantity", 1) or 1)
+    specific_units = ("cup", "cups", "oz", "tbsp", "tsp", "piece", "pieces", "eggs", "egg", "slice", "slices", "g", "gram", "grams")
+    if u in specific_units:
+        return True
+    if u in ("serving", "servings") and q != 1:
+        return True
+    return False
+
+
+def _merge_ingredients_by_name(parsed: list) -> list:
+    """Merge ingredients with the same normalized name: sum quantities when same unit, else keep first."""
+    from collections import defaultdict
+    groups = defaultdict(list)
+    for ing in parsed:
+        name = (ing.get("name") or "").strip()
+        if not name:
+            continue
+        key = name.lower()
+        groups[key].append(ing)
+    merged = []
+    for _key, group in groups.items():
+        if len(group) == 1:
+            merged.append(group[0])
+            continue
+        first = dict(group[0])
+        first_name = first.get("name", "").strip()
+        u0 = (first.get("unit") or "serving").strip().lower()
+        q0 = float(first.get("quantity", 1) or 1)
+        for ing in group[1:]:
+            u = (ing.get("unit") or "serving").strip().lower()
+            if u == u0:
+                q0 += float(ing.get("quantity", 1) or 1)
+        first["quantity"] = q0
+        first["unit"] = first.get("unit") or "serving"
+        first["name"] = first_name
+        merged.append(first)
+    return merged
+
+
 def _usda_display_name_ok(parsed_name: str, usda_name: str) -> bool:
     """Require at least one significant word from parsed name in USDA name. Rejects e.g. pork -> Oolong tea."""
     if not parsed_name or not usda_name:
@@ -377,6 +419,25 @@ def clear_meal_ingredients(meal_id):
         # #endregion
         print(f"   ❌ Clear failed: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+def _clear_meal_ingredients_internal(meal_id):
+    """
+    Delete all ingredients for a meal (internal use). Used before re-parsing so we replace, not append.
+    Does not touch corrections/learned patterns. Returns number deleted.
+    """
+    total_deleted = 0
+    for _ in range(20):
+        ingredients = fetch_ingredients_by_meal_id(meal_id)
+        if not ingredients:
+            break
+        for ing in ingredients:
+            ing_id = ing.get("id")
+            if ing_id and delete_ingredient(ing_id):
+                total_deleted += 1
+    if total_deleted:
+        print(f"   🗑️ Cleared {total_deleted} existing ingredients for meal {meal_id} (re-parse replace)")
+    return total_deleted
 
 
 @app.route("/delete-ingredient/<ingredient_id>", methods=["POST", "DELETE"])
@@ -1119,6 +1180,21 @@ def parse_meal(meal_id):
                 else:
                     print(f"   🔀 Fallback: matched 'same as before' phrase, copying from most recent meal")
         
+        # Replace, don't append: clear existing ingredients before we add (copy or parse)
+        _clear_meal_ingredients_internal(meal_id)
+        # Duplication-prevention: re-check; if any remain, retry clear once then fail if still non-empty
+        remaining = fetch_ingredients_by_meal_id(meal_id)
+        if remaining:
+            print(f"   ⚠️ Re-check after clear: {len(remaining)} ingredients still present, retrying clear...")
+            _clear_meal_ingredients_internal(meal_id)
+            remaining = fetch_ingredients_by_meal_id(meal_id)
+            if remaining:
+                print(f"   ❌ Clear failed: {len(remaining)} ingredients still present for meal {meal_id}; refusing to parse to avoid duplicates")
+                return jsonify({
+                    "error": "Could not clear existing ingredients; try Clear day or clear this meal first",
+                    "trace": trace,
+                }), 500
+        
         # Copy ingredients from source meal if we're "same as before" and that meal already has ingredients (no re-parse)
         if source_meal_id and source_meal_id != meal_id:
             # #region agent log
@@ -1326,6 +1402,26 @@ def parse_meal(meal_id):
                 "trace": trace,
             }), 200
         
+        # Merge same-ingredient lines (e.g. two "rice" entries → one with summed quantity when same unit)
+        parsed = _merge_ingredients_by_name(parsed)
+        # Dedupe parsed list by (name, quantity, unit) to prevent duplicate DB rows from text+image merge etc.
+        def _ing_key(ing):
+            n = (ing.get("name") or "").strip().lower()
+            q = float(ing.get("quantity", 1) or 1)
+            u = (ing.get("unit") or "serving").strip().lower()
+            return (n, q, u)
+        seen = set()
+        parsed_deduped = []
+        for ing in parsed:
+            k = _ing_key(ing)
+            if k in seen:
+                continue
+            seen.add(k)
+            parsed_deduped.append(ing)
+        if len(parsed_deduped) < len(parsed):
+            print(f"   📋 Deduped parsed ingredients: {len(parsed)} -> {len(parsed_deduped)}")
+        parsed = parsed_deduped
+        
         # Process and save ingredients (collect pending, then common-sense check, then insert)
         saved = []
         pending = []
@@ -1342,15 +1438,16 @@ def parse_meal(meal_id):
             ing = normalize_quantity(ing)
             quantity = ing.get("quantity", 1)
             unit = ing.get("unit", "serving")
-            # Apply learned correction so pantry/USDA see the corrected name and portion
+            # Apply learned correction so pantry/USDA see the corrected name and portion (don't overwrite explicit quantity/unit)
             learned = check_learned_correction(ing.get("name", ""), user_id) if user_id else {}
             if learned.get("should_correct"):
                 old_name = ing.get("name")
                 ing["name"] = learned["corrected_name"]
-                if learned.get("corrected_quantity") is not None:
-                    quantity = learned["corrected_quantity"]
-                if learned.get("corrected_unit"):
-                    unit = learned["corrected_unit"]
+                if not _has_specific_portion(ing):
+                    if learned.get("corrected_quantity") is not None:
+                        quantity = learned["corrected_quantity"]
+                    if learned.get("corrected_unit"):
+                        unit = learned["corrected_unit"]
                 name = ing["name"].lower().strip()
                 print(f"   🧠 LEARNED: '{old_name}' → '{ing['name']}' ({learned.get('reason', '')})")
             else:
@@ -1398,7 +1495,7 @@ def parse_meal(meal_id):
                 label_used = False
             
             if not scaled_nutrition:
-                # Pantry: prefer stored nutrition from corrections (e.g. 20g protein); else USDA by code
+                # Pantry first for recurring items (name is already post-learned correction)
                 usda = None
                 pantry_match = None
                 if user_id:

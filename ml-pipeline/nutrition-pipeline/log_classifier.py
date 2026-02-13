@@ -35,8 +35,8 @@ PB_PASSWORD = os.getenv("PB_PASSWORD")
 CLASSIFICATION_PROMPT = """You are a health log classifier. Analyze the user's log entry and classify it.
 
 Categories:
-- food: Eating food, meals, snacks, beverages with calories (coffee, matcha, smoothies)
-- hydration: Water intake tracking (start/finish water bottle, plain water) - NOT drinks with calories
+- food: Eating food, meals, snacks, and any named beverage (tea of any kind, coffee, matcha, soda, juice, smoothies, etc.). All drinks that have a specific name are food to log.
+- hydration: Plain water only (start/finish water bottle, no specific drink name, no calories). Any named drink (tea, coffee, soda, etc.) is food, not hydration.
 - poop: Bowel movements, bathroom, stool descriptions
 - mood: Emotions, feelings, mental state (happy, sad, anxious, stressed, crying)
 - symptom: Physical symptoms (nausea, headache, pain, tired, fatigue)
@@ -49,6 +49,7 @@ IMPORTANT: An entry can have MULTIPLE categories. For example:
 - "ate chicken and felt nauseous" = food + symptom
 - "finished water bottle, small poop" = hydration + poop
 - "coffee with milk" = food (because it has calories/nutritional content)
+- "earl grey tea", "oolong tea", "chamomile tea", "green tea" = food (beverages to log)
 - "started my 40oz water bottle" = hydration (just tracking water intake, no calories)
 - "220mg naproxen" = medication (it's a drug)
 - "vitamin D 2000IU" = supplement (vitamins are supplements, not food)
@@ -84,8 +85,8 @@ You are given:
 Classify the ENTIRE entry (image + text together) using the same categories as text-only classification.
 
 Categories:
-- food: Eating food, meals, snacks, beverages with calories (coffee, matcha, smoothies). The image shows actual food/drink to log.
-- hydration: Water intake (plain water, water bottle) - NOT drinks with calories
+- food: Eating food, meals, snacks, and any beverage (tea, coffee, matcha, soda, juice, smoothies, etc.). The image shows actual food/drink to log. Hydration = plain water only.
+- hydration: Water intake (plain water, water bottle only) - NOT any named drink (tea, coffee, soda, etc.).
 - poop: Bowel movements, stool descriptions
 - mood: Emotions, feelings
 - symptom: Physical symptoms
@@ -94,7 +95,7 @@ Categories:
 - activity: Exercise, sleep, activities
 - other: Doesn't fit above (e.g. photo of a pill bottle, screenshot, non-food item)
 
-CRITICAL: Use the IMAGE to decide. If the image shows a meal, plate of food, drink with calories, or edible items → include "food".
+CRITICAL: Use the IMAGE to decide. If the image shows a meal, plate of food, any drink (tea, coffee, can, bottle of soda, cup of matcha, etc.), or edible items → include "food".
 If the image shows only medication, supplements, a water bottle (hydration), or non-food (e.g. rug, receipt) → do NOT include "food".
 Do not put non-food items (medication, supplements, hydration-only) into ingredients; classify them correctly so we do not parse them as food.
 

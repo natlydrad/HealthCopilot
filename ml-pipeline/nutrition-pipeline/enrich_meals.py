@@ -50,6 +50,18 @@ def normalize_quantity(ing):
     return ing
 
 
+def _has_specific_portion(ing: dict) -> bool:
+    """True if the ingredient has an explicit quantity/unit (e.g. 1 cup, 2 oz). Don't overwrite with learned portion."""
+    u = (ing.get("unit") or "").strip().lower()
+    q = float(ing.get("quantity", 1) or 1)
+    specific_units = ("cup", "cups", "oz", "tbsp", "tsp", "piece", "pieces", "eggs", "egg", "slice", "slices", "g", "gram", "grams")
+    if u in specific_units:
+        return True
+    if u in ("serving", "servings") and q != 1:
+        return True
+    return False
+
+
 # Unit to grams conversion (approximate)
 UNIT_TO_GRAMS = {
     # Weight
@@ -304,17 +316,18 @@ def enrich_meals(skip_usda=False, limit=None, since_date=None):
             original_name = ing["name"]
             learned_correction = None
             
-            # TIER 2: Check if we've learned a correction for this ingredient
+            # TIER 2: Check if we've learned a correction for this ingredient (don't overwrite explicit quantity/unit)
             if user_id:
                 learned = check_learned_correction(ing["name"], user_id)
                 if learned.get("should_correct"):
                     learned_correction = learned
                     old_name = ing["name"]
                     ing["name"] = learned["corrected_name"]
-                    if learned.get("corrected_quantity"):
-                        ing["quantity"] = learned["corrected_quantity"]
-                    if learned.get("corrected_unit"):
-                        ing["unit"] = learned["corrected_unit"]
+                    if not _has_specific_portion(ing):
+                        if learned.get("corrected_quantity"):
+                            ing["quantity"] = learned["corrected_quantity"]
+                        if learned.get("corrected_unit"):
+                            ing["unit"] = learned["corrected_unit"]
                     print(f"   🧠 LEARNED: '{old_name}' → '{ing['name']}' ({learned['reason']})")
                     stats["learned_corrections"] += 1
             

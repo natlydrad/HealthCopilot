@@ -162,6 +162,9 @@ export default function DayDetail() {
   const [showLearning, setShowLearning] = useState(false);
   const [showFrameworkCompare, setShowFrameworkCompare] = useState(false);
   const [totalsRefreshTrigger, setTotalsRefreshTrigger] = useState(0);
+  const [parseAllInProgress, setParseAllInProgress] = useState(false);
+  const [clearDayInProgress, setClearDayInProgress] = useState(false);
+  const [refreshIngredientsTrigger, setRefreshIngredientsTrigger] = useState(0);
 
   const refreshTotals = () => setTotalsRefreshTrigger((t) => t + 1);
 
@@ -308,6 +311,63 @@ export default function DayDetail() {
     }
   };
 
+  const handleParseEverything = async () => {
+    const toParse = meals.filter((m) => (m.text && m.text.trim()) || m.image);
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/b81179ea-362a-4b1e-9962-8572fc6e73fd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DayDetail.jsx:handleParseEverything',message:'Parse everything started',data:{toParseCount:toParse.length,mealIds:toParse.map(m=>m.id),totalMeals:meals.length},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
+    // #endregion
+    if (toParse.length === 0) {
+      alert("No meals with text or photo to parse.");
+      return;
+    }
+    setParseAllInProgress(true);
+    try {
+      let completed = 0;
+      for (const meal of toParse) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/b81179ea-362a-4b1e-9962-8572fc6e73fd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DayDetail.jsx:handleParseEverything',message:'Before parse meal',data:{mealId:meal.id,index:completed},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+        // #endregion
+        const result = await parseAndSaveMeal(meal);
+        completed += 1;
+        // #region agent log
+        const ingCount = (result?.ingredients && Array.isArray(result.ingredients) ? result.ingredients.length : 0);
+        fetch('http://127.0.0.1:7242/ingest/b81179ea-362a-4b1e-9962-8572fc6e73fd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DayDetail.jsx:handleParseEverything',message:'After parse meal',data:{mealId:meal.id,ingredientCount:ingCount,completed},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+        // #endregion
+      }
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/b81179ea-362a-4b1e-9962-8572fc6e73fd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DayDetail.jsx:handleParseEverything',message:'All parses done, triggering refresh',data:{totalCompleted:completed},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+      // #endregion
+      setRefreshIngredientsTrigger((t) => t + 1);
+      refreshTotals();
+    } catch (err) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/b81179ea-362a-4b1e-9962-8572fc6e73fd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DayDetail.jsx:handleParseEverything',message:'Parse everything failed',data:{error:String(err?.message||err)},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+      // #endregion
+      console.error("Parse everything failed:", err);
+      alert(`Parse failed: ${err?.message || err}`);
+    } finally {
+      setParseAllInProgress(false);
+    }
+  };
+
+  const handleClearDay = async () => {
+    if (meals.length === 0) return;
+    if (!confirm("Clear all ingredients for this day? This cannot be undone.")) return;
+    setClearDayInProgress(true);
+    try {
+      for (const meal of meals) {
+        await clearMealIngredients(meal.id);
+      }
+      setRefreshIngredientsTrigger((t) => t + 1);
+      refreshTotals();
+    } catch (err) {
+      console.error("Clear day failed:", err);
+      alert(`Clear failed: ${err?.message || err}`);
+    } finally {
+      setClearDayInProgress(false);
+    }
+  };
+
   return (
     <div className="p-8 bg-gray-50 min-h-screen">
       <div className="flex items-center justify-between mb-4">
@@ -327,6 +387,22 @@ export default function DayDetail() {
       
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <h1 className="text-2xl font-bold">{date}</h1>
+        <button
+          type="button"
+          onClick={handleParseEverything}
+          disabled={parseAllInProgress || meals.length === 0}
+          className="px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-100 rounded-lg hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {parseAllInProgress ? "Parsing…" : "Parse everything"}
+        </button>
+        <button
+          type="button"
+          onClick={handleClearDay}
+          disabled={clearDayInProgress || meals.length === 0}
+          className="px-3 py-1.5 text-sm font-medium text-red-700 bg-red-100 rounded-lg hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {clearDayInProgress ? "Clearing…" : "Clear day"}
+        </button>
         <button
           type="button"
           onClick={handleExportDayForReview}
@@ -433,6 +509,7 @@ export default function DayDetail() {
         <MealCard
           key={meal.id}
           date={date}
+          refreshIngredientsTrigger={refreshIngredientsTrigger}
           meal={meal}
           onMealUpdated={(mid, updates) =>
             setMeals((prev) => prev.map((m) => (m.id === mid ? { ...m, ...updates } : m)))
@@ -455,7 +532,7 @@ export default function DayDetail() {
 
 const BULK_REVIEW_DEBOUNCE_MS = 300;
 
-function MealCard({ date, meal, onMealUpdated, onTotalsRefresh, frameworkAttribution }) {
+function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTotalsRefresh, frameworkAttribution }) {
   const [ingredients, setIngredients] = useState([]);
   const [correcting, setCorrecting] = useState(null);
   const [parsing, setParsing] = useState(false);
@@ -522,6 +599,9 @@ function MealCard({ date, meal, onMealUpdated, onTotalsRefresh, frameworkAttribu
 
   useEffect(() => {
     async function loadIngredients() {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/b81179ea-362a-4b1e-9962-8572fc6e73fd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DayDetail.jsx:MealCard loadIngredients',message:'Refetching ingredients',data:{mealId:meal.id,refreshTrigger:refreshIngredientsTrigger},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+      // #endregion
       console.log("🔍 Fetching ingredients for meal:", meal.id, meal.text);
       const ings = await fetchIngredients(meal.id);
       console.log("✅ Ingredients response:", ings);
@@ -536,7 +616,7 @@ function MealCard({ date, meal, onMealUpdated, onTotalsRefresh, frameworkAttribu
       }
     }
     loadIngredients();
-  }, [meal.id, meal.text, meal.image]);
+  }, [meal.id, meal.text, meal.image, refreshIngredientsTrigger]);
 
   // Parse meal on demand (works with text OR images via backend API)
   const [parseError, setParseError] = useState(null);
@@ -908,6 +988,12 @@ function MealCard({ date, meal, onMealUpdated, onTotalsRefresh, frameworkAttribu
             const carbs = nutrients.find((n) => (n.nutrientName || "").toLowerCase().includes("carbohydrate"));
             const fat = nutrients.find((n) => (n.nutrientName || "").toLowerCase().includes("lipid") || (n.nutrientName || "").toLowerCase().includes("fat"));
             const lowConf = isLowConfidence(ing);
+            const hasMeaningfulNutrition = nutrients.length > 0 && (
+              (parseFloat(energy?.value) || 0) > 0 ||
+              (parseFloat(protein?.value) || 0) > 0 ||
+              (parseFloat(carbs?.value) || 0) > 0 ||
+              (parseFloat(fat?.value) || 0) > 0
+            );
 
             // Source label helper
             const getSourceLabel = () => {
@@ -940,6 +1026,12 @@ function MealCard({ date, meal, onMealUpdated, onTotalsRefresh, frameworkAttribu
                         : "Needs review — tap to fix"}
                     >
                       Review
+                    </span>
+                  )}
+                  {/* No nutrition data / estimated when not from database */}
+                  {!hasMeaningfulNutrition && (
+                    <span className="text-[10px] text-gray-500 shrink-0" title="No nutrition data matched for this ingredient — values are estimated or missing.">
+                      No nutrition data
                     </span>
                   )}
                   

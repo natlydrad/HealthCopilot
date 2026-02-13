@@ -406,6 +406,52 @@ def score_calorie_fit(cal_per_100g: float, expected_lo: float, expected_hi: floa
     return cal_per_100g - expected_hi + 100
 
 
+def _is_drink_like_query(query_lower: str) -> bool:
+    """True if the query looks like a beverage (tea, coffee, matcha, soda, juice, etc.)."""
+    if not query_lower:
+        return False
+    terms = ("tea", "coffee", "matcha", "espresso", "soda", "cola", "juice", "lemonade", "smoothie")
+    return any(t in query_lower for t in terms)
+
+
+def _query_implies_caffeine(query_lower: str) -> bool:
+    """True if query suggests a caffeinated drink (tea/coffee/matcha) without decaf/herbal."""
+    if not query_lower:
+        return False
+    if any(x in query_lower for x in ("decaf", "herbal", "caffeine-free", "caffeine free")):
+        return False
+    return any(t in query_lower for t in ("tea", "coffee", "matcha", "espresso"))
+
+
+def _score_drink_match(query_lower: str, matched_name: str, raw_nutrients: list) -> float:
+    """
+    Score how well a USDA candidate fits a drink-like query. Higher = better.
+    Prefer brewed/beverage forms and (for tea/coffee) non-zero caffeine when user didn't say decaf.
+    """
+    if not _is_drink_like_query(query_lower):
+        return 0.0
+    score = 0.0
+    matched_lower = (matched_name or "").lower()
+    if "brewed" in matched_lower or "beverage" in matched_lower or "beverages" in matched_lower:
+        score += 10.0
+    caffeine = extract_caffeine_mg_per_100g(raw_nutrients or [])
+    if caffeine is None:
+        caffeine = 0.0
+    if _query_implies_caffeine(query_lower) and caffeine > 0:
+        score += 15.0
+    elif _query_implies_caffeine(query_lower) and caffeine == 0:
+        score -= 5.0
+    return score
+
+
+def _has_nutrition_data(raw_nutrients: list, macros: dict) -> bool:
+    """True if the match has non-empty, non-zero nutrition data."""
+    if not raw_nutrients:
+        return False
+    total = (macros.get("calories") or 0) + (macros.get("protein") or 0) + (macros.get("carbs") or 0) + (macros.get("fat") or 0)
+    return total > 0
+
+
 def validate_usda_match(ingredient_name: str, matched_name: str, macros: dict) -> tuple[bool, str]:
     """
     Validate if USDA match seems reasonable.
@@ -526,6 +572,9 @@ def usda_lookup(ingredient_name):
                 is_valid, reason = validate_usda_match(ingredient_name, matched_name, macros)
                 if not is_valid:
                     continue
+                if _is_drink_like_query(ingredient_lower) and _query_implies_caffeine(ingredient_lower):
+                    if (macros.get("calories") or 0) == 0 and (extract_caffeine_mg_per_100g(raw_nutrients) or 0) == 0:
+                        continue
                 cal_100 = macros.get("calories", 0) or 0
                 cal_score = score_calorie_fit(cal_100, expected_range[0], expected_range[1]) if expected_range else 0
                 carbs = macros.get("carbs", 0) or 0
@@ -542,7 +591,12 @@ def usda_lookup(ingredient_name):
                     if is_composite and carbs < best_carbs:
                         valid[i] = (s + 200, carbs, *v[2:])
                 valid.sort(key=lambda x: x[0])
+                if _is_drink_like_query(ingredient_lower) and len(valid) > 1:
+                    valid.sort(key=lambda x: (-_score_drink_match(ingredient_lower, x[4], x[5]), x[0]))
                 best = valid[0]
+                while valid and not _has_nutrition_data(best[5], best[3]):
+                    valid.pop(0)
+                    best = valid[0] if valid else None
 
             if best:
                 score, _, f, macros, matched_name, raw_nutrients = best
@@ -591,26 +645,29 @@ def usda_lookup(ingredient_name):
                     valid2.append((cal_score, f, macros, matched_name, raw_nutrients))
                 if valid2:
                     valid2.sort(key=lambda x: x[0])
-                    _, f, macros, matched_name, raw_nutrients = valid2[0]
-                    cal_100 = macros.get("calories", 0)
-                    serving_g_alt = f.get("servingSize", 100)
-                    # #region agent log
-                    if "matcha" in ingredient_name.lower():
-                        try:
-                            import json, time
-                            _line = json.dumps({"timestamp": time.time() * 1000, "location": "lookup_usda.py:usda_match_alt", "message": "USDA match (alt) for matcha", "data": {"ingredient_name": ingredient_name, "matched_name": matched_name, "serving_size_g": serving_g_alt}, "sessionId": "debug-session", "hypothesisId": "H3"}) + "\n"
-                            open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
-                        except Exception:
-                            pass
-                    # #endregion
-                    print(f"   ✅ Matched (alt): '{matched_name}' (fdcId: {f['fdcId']}) — {cal_100:.0f} cal/100g")
-                    return {
-                        "usdaCode": f["fdcId"],
-                        "name": matched_name,
-                        "nutrition": raw_nutrients,
-                        "macros_per_100g": macros,
-                        "serving_size_g": serving_g_alt,
-                    }
+                    for v2 in valid2:
+                        _, f, macros, matched_name, raw_nutrients = v2
+                        if not _has_nutrition_data(raw_nutrients, macros):
+                            continue
+                        cal_100 = macros.get("calories", 0)
+                        serving_g_alt = f.get("servingSize", 100)
+                        # #region agent log
+                        if "matcha" in ingredient_name.lower():
+                            try:
+                                import json, time
+                                _line = json.dumps({"timestamp": time.time() * 1000, "location": "lookup_usda.py:usda_match_alt", "message": "USDA match (alt) for matcha", "data": {"ingredient_name": ingredient_name, "matched_name": matched_name, "serving_size_g": serving_g_alt}, "sessionId": "debug-session", "hypothesisId": "H3"}) + "\n"
+                                open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
+                            except Exception:
+                                pass
+                        # #endregion
+                        print(f"   ✅ Matched (alt): '{matched_name}' (fdcId: {f['fdcId']}) — {cal_100:.0f} cal/100g")
+                        return {
+                            "usdaCode": f["fdcId"],
+                            "name": matched_name,
+                            "nutrition": raw_nutrients,
+                            "macros_per_100g": macros,
+                            "serving_size_g": serving_g_alt,
+                        }
         else:
             # Primary query returned no results — try alternative queries (e.g. "pork shoulder steak" → "pork shoulder steak raw")
             print(f"   ⚠️ No USDA results for '{ingredient_name}', trying alternative queries...")
@@ -638,17 +695,20 @@ def usda_lookup(ingredient_name):
                     valid2.append((cal_score, f, macros, matched_name, raw_nutrients))
                 if valid2:
                     valid2.sort(key=lambda x: x[0])
-                    _, f, macros, matched_name, raw_nutrients = valid2[0]
-                    cal_100 = macros.get("calories", 0)
-                    serving_g_alt = f.get("servingSize", 100)
-                    print(f"   ✅ Matched (alt): '{matched_name}' (fdcId: {f['fdcId']}) — {cal_100:.0f} cal/100g")
-                    return {
-                        "usdaCode": f["fdcId"],
-                        "name": matched_name,
-                        "nutrition": raw_nutrients,
-                        "macros_per_100g": macros,
-                        "serving_size_g": serving_g_alt,
-                    }
+                    for v2 in valid2:
+                        _, f, macros, matched_name, raw_nutrients = v2
+                        if not _has_nutrition_data(raw_nutrients, macros):
+                            continue
+                        cal_100 = macros.get("calories", 0)
+                        serving_g_alt = f.get("servingSize", 100)
+                        print(f"   ✅ Matched (alt): '{matched_name}' (fdcId: {f['fdcId']}) — {cal_100:.0f} cal/100g")
+                        return {
+                            "usdaCode": f["fdcId"],
+                            "name": matched_name,
+                            "nutrition": raw_nutrients,
+                            "macros_per_100g": macros,
+                            "serving_size_g": serving_g_alt,
+                        }
             print(f"   ⚠️ No USDA match after trying alternatives")
             return None
 
