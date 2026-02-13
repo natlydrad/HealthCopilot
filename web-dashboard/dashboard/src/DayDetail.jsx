@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { fetchMealsForDateRange, fetchIngredients, fetchHasNonFoodLogs, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getLearningStats, removeLearnedPattern, parseAndSaveMeal, clearMealIngredients, clearNonFoodClassification, sendCorrectionMessage, previewCorrection, saveCorrection, reparseIngredientFromText, getParseApiUrl, deleteIngredient, addIngredients, updateIngredientPortion } from "./api";
 import { computeServingsByFramework, MYPLATE_TARGETS, DAILY_DOZEN_TARGETS, LONGEVITY_TARGETS, MATCHED_TO_EMOJI } from "./utils/foodFrameworks";
@@ -262,6 +262,52 @@ export default function DayDetail() {
     load();
   }, [date, totalsRefreshTrigger]);
 
+  const handleExportDayForReview = async () => {
+    if (!date) return;
+    try {
+      const raw = typeof localStorage !== "undefined" ? localStorage.getItem(`bulk-review:${date}`) : null;
+      const annotations = (raw ? (() => { try { const p = JSON.parse(raw); return p.annotations || {}; } catch { return {}; } })() : {});
+      const mealsWithIngredients = await Promise.all(
+        meals.map(async (m) => {
+          const ings = await fetchIngredients(m.id);
+          return {
+            id: m.id,
+            text: m.text || "",
+            timestamp: m.timestamp || null,
+            ingredients: ings.map((ing) => {
+              const ann = annotations[ing.id];
+              const nutrition = getNutritionArray(ing);
+              return {
+                id: ing.id,
+                name: ing.name,
+                quantity: ing.quantity ?? 1,
+                unit: ing.unit || "serving",
+                source: ing.source || null,
+                nutrition: nutrition.length ? nutrition : [],
+                annotation: ann && (ann.category || ann.reasoning) ? { category: ann.category || null, reasoning: ann.reasoning || null } : null,
+              };
+            }),
+          };
+        })
+      );
+      const payload = {
+        date,
+        exportedAt: new Date().toISOString(),
+        meals: mealsWithIngredients,
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `bulk-review-${date}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Export failed:", err);
+      alert(`Export failed: ${err?.message || err}`);
+    }
+  };
+
   return (
     <div className="p-8 bg-gray-50 min-h-screen">
       <div className="flex items-center justify-between mb-4">
@@ -279,7 +325,16 @@ export default function DayDetail() {
         </button>
       </div>
       
-      <h1 className="text-2xl font-bold mb-4">{date}</h1>
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <h1 className="text-2xl font-bold">{date}</h1>
+        <button
+          type="button"
+          onClick={handleExportDayForReview}
+          className="px-3 py-1.5 text-sm font-medium text-purple-700 bg-purple-100 rounded-lg hover:bg-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-400"
+        >
+          Export day for review
+        </button>
+      </div>
 
       <div className="bg-white rounded-xl shadow mb-6 overflow-hidden">
         <div className="bg-slate-800 text-white px-4 py-3">
@@ -377,6 +432,7 @@ export default function DayDetail() {
       {meals.map((meal) => (
         <MealCard
           key={meal.id}
+          date={date}
           meal={meal}
           onMealUpdated={(mid, updates) =>
             setMeals((prev) => prev.map((m) => (m.id === mid ? { ...m, ...updates } : m)))
@@ -397,7 +453,9 @@ export default function DayDetail() {
   );
 }
 
-function MealCard({ meal, onMealUpdated, onTotalsRefresh, frameworkAttribution }) {
+const BULK_REVIEW_DEBOUNCE_MS = 300;
+
+function MealCard({ date, meal, onMealUpdated, onTotalsRefresh, frameworkAttribution }) {
   const [ingredients, setIngredients] = useState([]);
   const [correcting, setCorrecting] = useState(null);
   const [parsing, setParsing] = useState(false);
@@ -416,6 +474,51 @@ function MealCard({ meal, onMealUpdated, onTotalsRefresh, frameworkAttribution }
   const [expandedNutrientId, setExpandedNutrientId] = useState(null);
 
   const [hasNonFoodLogs, setHasNonFoodLogs] = useState(false);
+
+  // Bulk-review annotations: { ingredientId: { category, reasoning } }, synced to localStorage
+  const [annotations, setAnnotations] = useState({});
+  const bulkReviewSaveRef = useRef(null);
+  const ingredientIdsKey = useMemo(() => ingredients.map((i) => i.id).join(","), [ingredients]);
+
+  useEffect(() => {
+    if (!date || ingredients.length === 0) {
+      setAnnotations({});
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(`bulk-review:${date}`);
+      const data = raw ? JSON.parse(raw) : {};
+      const ann = data.annotations || {};
+      setAnnotations((prev) => {
+        const next = { ...prev };
+        ingredients.forEach((ing) => {
+          if (ann[ing.id]) next[ing.id] = { category: ann[ing.id].category ?? "", reasoning: ann[ing.id].reasoning ?? "" };
+        });
+        return next;
+      });
+    } catch {
+      setAnnotations({});
+    }
+  }, [date, ingredientIdsKey]);
+
+  const setBulkReviewAnnotation = (ingredientId, field, value) => {
+    setAnnotations((prev) => {
+      const next = { ...prev, [ingredientId]: { ...(prev[ingredientId] || {}), [field]: value } };
+      if (bulkReviewSaveRef.current) clearTimeout(bulkReviewSaveRef.current);
+      bulkReviewSaveRef.current = setTimeout(() => {
+        try {
+          const raw = localStorage.getItem(`bulk-review:${date}`);
+          const data = raw ? JSON.parse(raw) : { date, annotations: {} };
+          data.date = date;
+          data.annotations = { ...(data.annotations || {}), ...next };
+          localStorage.setItem(`bulk-review:${date}`, JSON.stringify(data));
+        } catch (e) {
+          console.warn("bulk-review save failed", e);
+        }
+      }, BULK_REVIEW_DEBOUNCE_MS);
+      return next;
+    });
+  };
 
   useEffect(() => {
     async function loadIngredients() {
@@ -943,6 +1046,31 @@ function MealCard({ meal, onMealUpdated, onTotalsRefresh, frameworkAttribution }
                     {deletingId === ing.id ? "…" : "🗑"}
                   </button>
                 </div>
+                {/* Bulk-review: category + reasoning (inline, de-emphasized) */}
+                {date && (
+                  <div
+                    className="px-2 pb-1.5 pt-0.5 flex flex-wrap items-center gap-2 text-xs text-gray-500 border-t border-gray-100"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <select
+                      value={annotations[ing.id]?.category ?? ""}
+                      onChange={(e) => setBulkReviewAnnotation(ing.id, "category", e.target.value)}
+                      className="text-[11px] border border-gray-200 rounded py-0.5 px-1.5 bg-gray-50 text-gray-600"
+                    >
+                      <option value="">—</option>
+                      <option value="common_sense">Common sense</option>
+                      <option value="learned">Learned</option>
+                      <option value="pantry">Pantry</option>
+                    </select>
+                    <input
+                      type="text"
+                      value={annotations[ing.id]?.reasoning ?? ""}
+                      onChange={(e) => setBulkReviewAnnotation(ing.id, "reasoning", e.target.value)}
+                      placeholder="e.g. green tea should have caffeine"
+                      className="flex-1 min-w-[120px] text-[11px] border border-gray-200 rounded py-0.5 px-1.5 bg-gray-50 text-gray-600 placeholder-gray-400"
+                    />
+                  </div>
+                )}
                 {/* Expanded: full macro/micro list */}
                 {showNutrients && (
                   <div 
