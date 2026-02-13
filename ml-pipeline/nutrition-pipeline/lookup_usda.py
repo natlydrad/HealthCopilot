@@ -414,11 +414,24 @@ def _is_drink_like_query(query_lower: str) -> bool:
     return any(t in query_lower for t in terms)
 
 
-def _query_implies_caffeine(query_lower: str) -> bool:
-    """True if query suggests a caffeinated drink (tea/coffee/matcha) without decaf/herbal."""
+def _query_implies_decaf_or_herbal(query_lower: str) -> bool:
+    """True if query suggests a decaf/herbal/sleepy drink (prefer 0-caffeine match)."""
     if not query_lower:
         return False
-    if any(x in query_lower for x in ("decaf", "herbal", "caffeine-free", "caffeine free")):
+    return any(
+        x in query_lower
+        for x in (
+            "decaf", "herbal", "caffeine-free", "caffeine free",
+            "sleepy", "sleep ", "sleepy ", "bedtime", "calm", "chamomile", "peppermint", "rooibos",
+        )
+    )
+
+
+def _query_implies_caffeine(query_lower: str) -> bool:
+    """True if query suggests a caffeinated drink (tea/coffee/matcha) without decaf/herbal/sleepy."""
+    if not query_lower:
+        return False
+    if _query_implies_decaf_or_herbal(query_lower):
         return False
     return any(t in query_lower for t in ("tea", "coffee", "matcha", "espresso"))
 
@@ -426,7 +439,8 @@ def _query_implies_caffeine(query_lower: str) -> bool:
 def _score_drink_match(query_lower: str, matched_name: str, raw_nutrients: list) -> float:
     """
     Score how well a USDA candidate fits a drink-like query. Higher = better.
-    Prefer brewed/beverage forms and (for tea/coffee) non-zero caffeine when user didn't say decaf.
+    Prefer brewed/beverage forms; for tea/coffee prefer caffeine when user didn't say decaf/sleepy;
+    for sleepy/herbal prefer 0 caffeine; prefer name overlap (e.g. green tea -> match with "green").
     """
     if not _is_drink_like_query(query_lower):
         return 0.0
@@ -437,10 +451,21 @@ def _score_drink_match(query_lower: str, matched_name: str, raw_nutrients: list)
     caffeine = extract_caffeine_mg_per_100g(raw_nutrients or [])
     if caffeine is None:
         caffeine = 0.0
-    if _query_implies_caffeine(query_lower) and caffeine > 0:
+    if _query_implies_decaf_or_herbal(query_lower):
+        if caffeine == 0:
+            score += 12.0
+        else:
+            score -= 10.0
+    elif _query_implies_caffeine(query_lower) and caffeine > 0:
         score += 15.0
     elif _query_implies_caffeine(query_lower) and caffeine == 0:
         score -= 5.0
+    query_words = set(re.findall(r"[a-z0-9]{2,}", query_lower))
+    query_words -= {"tea", "coffee", "the", "and", "with", "cup", "cups"}
+    for w in query_words:
+        if w in matched_lower:
+            score += 5.0
+            break
     return score
 
 
@@ -574,6 +599,9 @@ def usda_lookup(ingredient_name):
                     continue
                 if _is_drink_like_query(ingredient_lower) and _query_implies_caffeine(ingredient_lower):
                     if (macros.get("calories") or 0) == 0 and (extract_caffeine_mg_per_100g(raw_nutrients) or 0) == 0:
+                        continue
+                if _query_implies_decaf_or_herbal(ingredient_lower):
+                    if (extract_caffeine_mg_per_100g(raw_nutrients) or 0) > 5:
                         continue
                 cal_100 = macros.get("calories", 0) or 0
                 cal_score = score_calorie_fit(cal_100, expected_range[0], expected_range[1]) if expected_range else 0

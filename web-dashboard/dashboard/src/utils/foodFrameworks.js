@@ -30,8 +30,12 @@ function toGrams(qty, unit) {
   return qty * (UNIT_TO_GRAMS[u] ?? 80);
 }
 
-/** Return matched category from name only (for display/emoji when fg provides numbers) */
+const DRINK_TERMS = ['tea', 'coffee', 'espresso', 'matcha', 'latte', 'cappuccino', 'soda', 'cola', 'juice', 'smoothie', 'water', 'beverage', 'drink', 'oolong', 'chamomile', 'peppermint', 'earl grey', 'green tea', 'black tea', 'herbal'];
+
+/** Return matched category from name only (for display/emoji when fg provides numbers). Drinks never get Protein (animal). */
 function matchedFromKeywords(name) {
+  const n = (name || '').toLowerCase();
+  if (DRINK_TERMS.some(d => n.includes(d))) return null;
   if (BEANS.some(b => name.includes(b))) return 'Beans/legumes';
   if (BERRIES.some(b => name.includes(b))) return 'Berries';
   if (OTHER_FRUITS.some(f => name.includes(f))) return 'Other fruits';
@@ -67,19 +71,20 @@ function processIngredient(ing) {
     : toGrams(qty, unit);
 
   const fg = ing.parsingMetadata?.foodGroupServings;
+  const isDrink = DRINK_TERMS.some(d => name.includes(d));
   // When we have backend-computed portionGrams, prefer keyword path (accurate) over GPT foodGroupServings (often inflated)
   const preferGramsOverFg = portionGrams != null && portionGrams > 0;
   if (fg && typeof fg === 'object' && !preferGramsOverFg) {
     const g = Number(fg.grains) || 0;
     const v = Number(fg.vegetables) || 0;
     const f = Number(fg.fruits) || 0;
-    const p = Number(fg.protein) || 0;
+    const p = isDrink ? 0 : (Number(fg.protein) || 0);
     const d = Number(fg.dairy) || 0;
     const isLegumeSource = BEANS.some(x => name.includes(x));
     const isPlantMilk = isLegumeSource || /\b(almond|oat|coconut|cashew|rice)\s*milk\b/.test(name);
     const isBrothStock = /\b(broth|stock)\b/.test(name);
     mp.vegetables = v; mp.fruits = f;
-    const baseProtein = isBrothStock ? 0 : (p + (isPlantMilk && d > 0 ? d : 0));
+    const baseProtein = isBrothStock || isDrink ? 0 : (p + (isPlantMilk && d > 0 ? d : 0));
     mp.dairy = isPlantMilk ? 0 : d;
 
     const isWholeGrain = WHOLE_GRAINS.some(x => name.includes(x));

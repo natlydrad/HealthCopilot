@@ -163,7 +163,9 @@ export default function DayDetail() {
   const [showFrameworkCompare, setShowFrameworkCompare] = useState(false);
   const [totalsRefreshTrigger, setTotalsRefreshTrigger] = useState(0);
   const [parseAllInProgress, setParseAllInProgress] = useState(false);
+  const [parseAllProgress, setParseAllProgress] = useState({ current: 0, total: 0 });
   const [clearDayInProgress, setClearDayInProgress] = useState(false);
+  const [clearDayProgress, setClearDayProgress] = useState({ current: 0, total: 0 });
   const [refreshIngredientsTrigger, setRefreshIngredientsTrigger] = useState(0);
 
   const refreshTotals = () => setTotalsRefreshTrigger((t) => t + 1);
@@ -321,6 +323,7 @@ export default function DayDetail() {
       return;
     }
     setParseAllInProgress(true);
+    setParseAllProgress({ current: 0, total: toParse.length });
     try {
       let completed = 0;
       for (const meal of toParse) {
@@ -329,6 +332,7 @@ export default function DayDetail() {
         // #endregion
         const result = await parseAndSaveMeal(meal);
         completed += 1;
+        setParseAllProgress({ current: completed, total: toParse.length });
         // #region agent log
         const ingCount = (result?.ingredients && Array.isArray(result.ingredients) ? result.ingredients.length : 0);
         fetch('http://127.0.0.1:7242/ingest/b81179ea-362a-4b1e-9962-8572fc6e73fd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DayDetail.jsx:handleParseEverything',message:'After parse meal',data:{mealId:meal.id,ingredientCount:ingCount,completed},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
@@ -347,6 +351,7 @@ export default function DayDetail() {
       alert(`Parse failed: ${err?.message || err}`);
     } finally {
       setParseAllInProgress(false);
+      setParseAllProgress({ current: 0, total: 0 });
     }
   };
 
@@ -354,9 +359,13 @@ export default function DayDetail() {
     if (meals.length === 0) return;
     if (!confirm("Clear all ingredients for this day? This cannot be undone.")) return;
     setClearDayInProgress(true);
+    setClearDayProgress({ current: 0, total: meals.length });
     try {
+      let completed = 0;
       for (const meal of meals) {
         await clearMealIngredients(meal.id);
+        completed += 1;
+        setClearDayProgress({ current: completed, total: meals.length });
       }
       setRefreshIngredientsTrigger((t) => t + 1);
       refreshTotals();
@@ -365,6 +374,7 @@ export default function DayDetail() {
       alert(`Clear failed: ${err?.message || err}`);
     } finally {
       setClearDayInProgress(false);
+      setClearDayProgress({ current: 0, total: 0 });
     }
   };
 
@@ -411,6 +421,32 @@ export default function DayDetail() {
           Export day for review
         </button>
       </div>
+      {parseAllInProgress && parseAllProgress.total > 0 && (
+        <div className="mb-4 w-full max-w-md flex flex-col gap-1">
+          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-blue-500 rounded-full transition-all duration-300"
+              style={{ width: `${(parseAllProgress.current / parseAllProgress.total) * 100}%` }}
+            />
+          </div>
+          <span className="text-xs text-gray-600">
+            Parsing meal {parseAllProgress.current} of {parseAllProgress.total}
+          </span>
+        </div>
+      )}
+      {clearDayInProgress && clearDayProgress.total > 0 && (
+        <div className="mb-4 w-full max-w-md flex flex-col gap-1">
+          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-red-500 rounded-full transition-all duration-300"
+              style={{ width: `${(clearDayProgress.current / clearDayProgress.total) * 100}%` }}
+            />
+          </div>
+          <span className="text-xs text-gray-600">
+            Clearing meal {clearDayProgress.current} of {clearDayProgress.total}
+          </span>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow mb-6 overflow-hidden">
         <div className="bg-slate-800 text-white px-4 py-3">
