@@ -82,9 +82,9 @@ def parse_ingredients(text: str, user_context: str = ""):
       e.g., "standard coffee cup size" or "typical chicken breast portion"
     - foodGroupServings (object, optional) - serving equivalents for food-group counting.
       Format: {{ "grains": 0, "protein": 0, "vegetables": 0, "fruits": 0, "dairy": 0, "fats": 0 }}.
-      Grains: 1 slice bread = 1. Vegetables: 1/2 cup = 1. Fruits: 1 piece/small fruit = 1. Dairy: 1 cup milk = 1.
+      Grains: 1 slice bread = 1. Vegetables: 1/2 cup = 1. Fruits: 1 cup berries = 1; 7 strawberries ≈ 0.5 cup ≈ 0.5–1 (NOT 7). 1 piece small whole fruit (apple, orange, banana) = 1. Dairy: 1 cup milk = 1.
       Protein uses OZ-EQUIVALENTS (MyPlate): 1 oz meat = 1, so 4 oz chicken = 4, 1 egg = 1, 1/4 cup beans = 1.
-      E.g. broccoli 1 cup → {{ "vegetables": 2 }}; chicken breast 4 oz → {{ "protein": 4 }}; 1 egg → {{ "protein": 1 }}.
+      E.g. broccoli 1 cup → {{ "vegetables": 2 }}; chicken breast 4 oz → {{ "protein": 4 }}; 7 strawberries → {{ "fruits": 1 }}; 1 egg → {{ "protein": 1 }}.
     
     Return empty array [] only if the input clearly contains no food/drink/supplement (e.g. empty, or only metadata like "tap to edit").
     """

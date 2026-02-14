@@ -126,9 +126,10 @@ Rules:
   * Cookies, biscuits, crackers, tortilla chips, corn chips, pretzels: grains (1 cookie ≈ 1 grain; chips/crackers by oz ~28g per serving).
   * Tortilla chips and corn chips are GRAINS not vegetables (corn as a grain product).
   * Bread, rice, pasta, cereal, etc.: grains. Vegetables and fruits by cup or piece.
+  * Berries (strawberries, blueberries, etc.): 1 cup = 1 fruit serving. 7 strawberries ≈ 0.5 cup ≈ 1 serving, NOT 7.
   * Beverages (tea, coffee, soda, juice): omit foodGroupServings or use all zeros.
 - Only output corrections for clear violations. If everything looks reasonable, return [].
-- Match "name" exactly to the ingredient name from the list (case-insensitive match is ok).
+- Match "name" to the ingredient: use exact name from the list, or key words (e.g. "pork shoulder" matches "Pork, fresh, shoulder, (Boston butt)..."). Case-insensitive.
 - Output ONLY a JSON array. No markdown, no explanation. Example: [{{"name": "water", "zero_calories": true}}] or [{{"name": "pork shoulder", "foodGroupServings": {{"grains": 0, "vegetables": 0, "fruits": 0, "protein": 6, "dairy": 0}}}}] or []."""
 
     def _strip_markdown(s: str) -> str:

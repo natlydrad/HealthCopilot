@@ -1184,13 +1184,26 @@ def _caffeine_fallback_for_drink(name_lower):
     return None
 
 
+def _correction_name_matches(payload_name: str, name_key: str) -> bool:
+    """True if correction name matches payload (exact or all words in name_key appear in payload)."""
+    p = (payload_name or "").strip().lower()
+    k = (name_key or "").strip().lower()
+    if not k:
+        return False
+    if p == k:
+        return True
+    # Fuzzy: all significant words in name_key appear in payload_name (e.g. "pork shoulder" matches "Pork, fresh, shoulder, (Boston butt)...")
+    words = re.findall(r"[a-z0-9]+", k)
+    return len(words) > 0 and all(w in p for w in words)
+
+
 def _apply_single_correction(pending, corr, scale_nutrition_fn, zero_calorie_nutrition_array_fn, merge_micro_fn, trace, source_label):
     """Apply one correction to the matching pending item. source_label: 'rules' or 'common_sense'."""
     name_key = (corr.get("name") or "").strip().lower()
     if not name_key:
         return
     for p in pending:
-        if (p["payload"].get("name") or "").strip().lower() != name_key:
+        if not _correction_name_matches(p["payload"].get("name"), name_key):
             continue
         if corr.get("zero_calories"):
             prev_nutrition = p["payload"].get("nutrition") or []
