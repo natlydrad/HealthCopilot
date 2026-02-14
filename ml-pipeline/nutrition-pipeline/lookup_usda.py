@@ -227,9 +227,13 @@ def validate_scaled_calories(
         "lemon": (10, 40), "lemons": (10, 40), "lime": (10, 40), "limes": (10, 40),
     }
     unit_lower = (unit or "").lower()
-    # Per-piece/count validation (piece, pieces, or count for small quantities of fruit/berries)
-    count_units = ("piece", "pieces", "count")
-    if unit_lower in count_units and quantity > 0:
+    # Count-like: piece/pieces/count, or unit is a piece_bounds key (e.g. strawberries, eggs), or unit matches name
+    is_count_like = (
+        unit_lower in ("piece", "pieces", "count")
+        or unit_lower in piece_bounds
+        or (quantity > 0 and quantity <= 100 and unit_lower == name_lower.strip())
+    )
+    if is_count_like and quantity > 0:
         for key, (lo, hi) in piece_bounds.items():
             if key in name_lower:
                 per_piece = scaled_calories / quantity
@@ -486,6 +490,9 @@ def _score_drink_match(query_lower: str, matched_name: str, raw_nutrients: list)
     matched_tea_type = [t for t in tea_type_terms if t in matched_lower]
     if query_tea_type and not matched_tea_type and not has_overlap:
         score -= 15.0  # strong penalty: wrong tea type (e.g. earl grey -> oolong)
+    # Penalize when query and match have different tea types (e.g. raspberry hibiscus -> oolong)
+    if query_tea_type and matched_tea_type and not (set(query_tea_type) & set(matched_tea_type)):
+        score -= 15.0
     return score
 
 
@@ -627,6 +634,16 @@ def usda_lookup(ingredient_name):
                 raw_nutrients = f.get("foodNutrients", [])
                 macros = extract_macros(raw_nutrients)
                 matched_name = f["description"]
+                # #region agent log
+                if _is_drink_like_query(ingredient_lower) and (macros.get("calories") or 0) == 0 and (macros.get("protein") or 0) == 0 and len(raw_nutrients or []) > 0:
+                    try:
+                        import json as _json, time as _t
+                        _tot = (macros.get("calories") or 0) + (macros.get("protein") or 0) + (macros.get("carbs") or 0) + (macros.get("fat") or 0)
+                        _line = _json.dumps({"timestamp": _t.time()*1000, "location": "lookup_usda.py:extract_macros_drink_zero", "message": "drink match macros=0", "data": {"query": ingredient_name, "matched": matched_name, "macros_total": _tot, "raw_nutrients_len": len(raw_nutrients), "raw_sample": [n.get("nutrientName") or (n.get("nutrient") or {}).get("name") for n in (raw_nutrients or [])[:5]]}, "hypothesisId": "H3"}) + "\n"
+                        open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
+                    except Exception:
+                        pass
+                # #endregion
                 is_valid, reason = validate_usda_match(ingredient_name, matched_name, macros)
                 if not is_valid:
                     continue
@@ -664,6 +681,14 @@ def usda_lookup(ingredient_name):
                     # Reject drink match with bad tea-type fit (e.g. earl grey -> oolong); prefer GPT fallback
                     if _is_drink_like_query(ingredient_lower):
                         drink_score = _score_drink_match(ingredient_lower, best[4], best[5])
+                        # #region agent log
+                        try:
+                            import json as _json, time as _t
+                            _line = _json.dumps({"timestamp": _t.time()*1000, "location": "lookup_usda.py:drink_reject_check", "message": "drink_score check", "data": {"query": ingredient_name, "matched": best[4], "drink_score": drink_score, "rejected": drink_score < 0, "valid_count": len(valid)}, "hypothesisId": "H1"}) + "\n"
+                            open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
+                        except Exception:
+                            pass
+                        # #endregion
                         if drink_score < 0:
                             valid.pop(0)
                             best = valid[0] if valid else None
@@ -671,27 +696,35 @@ def usda_lookup(ingredient_name):
                     break
 
             if best:
-                score, _, f, macros, matched_name, raw_nutrients = best
-                cal_100 = macros.get("calories", 0)
-                serving_g = f.get("servingSize", 100)
-                # #region agent log
-                if "matcha" in ingredient_name.lower():
-                    try:
-                        import json, time
-                        _line = json.dumps({"timestamp": time.time() * 1000, "location": "lookup_usda.py:usda_match", "message": "USDA match for matcha", "data": {"ingredient_name": ingredient_name, "matched_name": matched_name, "serving_size_g": serving_g}, "sessionId": "debug-session", "hypothesisId": "H3"}) + "\n"
-                        open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
-                    except Exception:
-                        pass
-                # #endregion
-                print(f"   ✅ Matched: '{matched_name}' (fdcId: {f['fdcId']}) — {cal_100:.0f} cal/100g, score={score:.0f}")
-                print(f"   Macros: {macros}")
-                return {
-                    "usdaCode": f["fdcId"],
-                    "name": matched_name,
-                    "nutrition": raw_nutrients,
-                    "macros_per_100g": macros,
-                    "serving_size_g": serving_g,
-                }
+                # For drinks: if primary best has bad tea-type fit (e.g. raspberry hibiscus -> Oolong), try alt queries instead
+                if _is_drink_like_query(ingredient_lower):
+                    drink_score = _score_drink_match(ingredient_lower, best[4], best[5])
+                    if drink_score < 0:
+                        print(f"   ⏭️ Primary drink match has bad fit (score={drink_score:.0f}), trying alternative queries...")
+                        best = None
+                if best:
+                    score, _, f, macros, matched_name, raw_nutrients = best
+                    cal_100 = macros.get("calories", 0)
+                    serving_g = f.get("servingSize", 100)
+                    # #region agent log
+                    if _is_drink_like_query(ingredient_lower):
+                        try:
+                            import json as _json, time as _t
+                            _line = _json.dumps({"timestamp": _t.time()*1000, "location": "lookup_usda.py:usda_return_drink", "message": "USDA returning drink match", "data": {"query": ingredient_name, "matched": matched_name, "cal_100": cal_100, "macros": macros}, "hypothesisId": "H2"}) + "\n"
+                            open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
+                        except Exception:
+                            pass
+                    # #endregion
+                    print(f"   ✅ Matched: '{matched_name}' (fdcId: {f['fdcId']}) — {cal_100:.0f} cal/100g, score={score:.0f}")
+                    print(f"   Macros: {macros}")
+                    nutrition = normalize_usda_food_nutrients(raw_nutrients)
+                    return {
+                        "usdaCode": f["fdcId"],
+                        "name": matched_name,
+                        "nutrition": nutrition,
+                        "macros_per_100g": macros,
+                        "serving_size_g": serving_g,
+                    }
             # First query had results but none passed validation — try alternative queries (e.g. "matcha" → "matcha beverage")
             for alt_q in _alternative_usda_queries(ingredient_name):
                 if alt_q == ingredient_name:
@@ -714,35 +747,41 @@ def usda_lookup(ingredient_name):
                     cal_100 = macros.get("calories", 0) or 0
                     expected_range = get_expected_cal_range(ingredient_name)
                     cal_score = score_calorie_fit(cal_100, expected_range[0], expected_range[1]) if expected_range else 0
-                    valid2.append((cal_score, f, macros, matched_name, raw_nutrients))
+                    drink_score = _score_drink_match(ingredient_lower, matched_name, raw_nutrients) if _is_drink_like_query(ingredient_lower) else 0.0
+                    valid2.append((cal_score, drink_score, f, macros, matched_name, raw_nutrients))
                 if valid2:
-                    valid2.sort(key=lambda x: x[0])
-                    for v2 in valid2:
-                        _, f, macros, matched_name, raw_nutrients = v2
-                        if not _has_nutrition_data(raw_nutrients, macros):
-                            continue
-                        cal_100 = macros.get("calories", 0)
-                        serving_g_alt = f.get("servingSize", 100)
-                        # #region agent log
-                        if "matcha" in ingredient_name.lower():
-                            try:
-                                import json, time
-                                _line = json.dumps({"timestamp": time.time() * 1000, "location": "lookup_usda.py:usda_match_alt", "message": "USDA match (alt) for matcha", "data": {"ingredient_name": ingredient_name, "matched_name": matched_name, "serving_size_g": serving_g_alt}, "sessionId": "debug-session", "hypothesisId": "H3"}) + "\n"
-                                open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
-                            except Exception:
-                                pass
-                        # #endregion
-                        print(f"   ✅ Matched (alt): '{matched_name}' (fdcId: {f['fdcId']}) — {cal_100:.0f} cal/100g")
-                        return {
-                            "usdaCode": f["fdcId"],
-                            "name": matched_name,
-                            "nutrition": raw_nutrients,
-                            "macros_per_100g": macros,
-                            "serving_size_g": serving_g_alt,
-                        }
+                    # For drinks: reject bad tea-type fits (drink_score < 0), then sort by drink_score desc, then cal_score
+                    valid2 = [v for v in valid2 if v[1] >= 0]
+                    if valid2:
+                        valid2.sort(key=lambda x: (-x[1], x[0]))
+                        for v2 in valid2:
+                            _, _, f, macros, matched_name, raw_nutrients = v2
+                            if not _has_nutrition_data(raw_nutrients, macros):
+                                continue
+                            cal_100 = macros.get("calories", 0)
+                            serving_g_alt = f.get("servingSize", 100)
+                            # #region agent log
+                            if "matcha" in ingredient_name.lower():
+                                try:
+                                    import json, time
+                                    _line = json.dumps({"timestamp": time.time() * 1000, "location": "lookup_usda.py:usda_match_alt", "message": "USDA match (alt) for matcha", "data": {"ingredient_name": ingredient_name, "matched_name": matched_name, "serving_size_g": serving_g_alt}, "sessionId": "debug-session", "hypothesisId": "H3"}) + "\n"
+                                    open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
+                                except Exception:
+                                    pass
+                            # #endregion
+                            print(f"   ✅ Matched (alt): '{matched_name}' (fdcId: {f['fdcId']}) — {cal_100:.0f} cal/100g")
+                            nutrition = normalize_usda_food_nutrients(raw_nutrients)
+                            return {
+                                "usdaCode": f["fdcId"],
+                                "name": matched_name,
+                                "nutrition": nutrition,
+                                "macros_per_100g": macros,
+                                "serving_size_g": serving_g_alt,
+                            }
         else:
             # Primary query returned no results — try alternative queries (e.g. "pork shoulder steak" → "pork shoulder steak raw")
             print(f"   ⚠️ No USDA results for '{ingredient_name}', trying alternative queries...")
+            ingredient_lower = ingredient_name.lower()
             for alt_q in _alternative_usda_queries(ingredient_name):
                 if alt_q == ingredient_name:
                     continue
@@ -764,23 +803,27 @@ def usda_lookup(ingredient_name):
                     cal_100 = macros.get("calories", 0) or 0
                     expected_range = get_expected_cal_range(ingredient_name)
                     cal_score = score_calorie_fit(cal_100, expected_range[0], expected_range[1]) if expected_range else 0
-                    valid2.append((cal_score, f, macros, matched_name, raw_nutrients))
+                    drink_score = _score_drink_match(ingredient_lower, matched_name, raw_nutrients) if _is_drink_like_query(ingredient_lower) else 0.0
+                    valid2.append((cal_score, drink_score, f, macros, matched_name, raw_nutrients))
                 if valid2:
-                    valid2.sort(key=lambda x: x[0])
-                    for v2 in valid2:
-                        _, f, macros, matched_name, raw_nutrients = v2
-                        if not _has_nutrition_data(raw_nutrients, macros):
-                            continue
-                        cal_100 = macros.get("calories", 0)
-                        serving_g_alt = f.get("servingSize", 100)
-                        print(f"   ✅ Matched (alt): '{matched_name}' (fdcId: {f['fdcId']}) — {cal_100:.0f} cal/100g")
-                        return {
-                            "usdaCode": f["fdcId"],
-                            "name": matched_name,
-                            "nutrition": raw_nutrients,
-                            "macros_per_100g": macros,
-                            "serving_size_g": serving_g_alt,
-                        }
+                    valid2 = [v for v in valid2 if v[1] >= 0]
+                    if valid2:
+                        valid2.sort(key=lambda x: (-x[1], x[0]))
+                        for v2 in valid2:
+                            _, _, f, macros, matched_name, raw_nutrients = v2
+                            if not _has_nutrition_data(raw_nutrients, macros):
+                                continue
+                            cal_100 = macros.get("calories", 0)
+                            serving_g_alt = f.get("servingSize", 100)
+                            print(f"   ✅ Matched (alt): '{matched_name}' (fdcId: {f['fdcId']}) — {cal_100:.0f} cal/100g")
+                            nutrition = normalize_usda_food_nutrients(raw_nutrients)
+                            return {
+                                "usdaCode": f["fdcId"],
+                                "name": matched_name,
+                                "nutrition": nutrition,
+                                "macros_per_100g": macros,
+                                "serving_size_g": serving_g_alt,
+                            }
             print(f"   ⚠️ No USDA match after trying alternatives")
             return None
 
@@ -828,7 +871,7 @@ def usda_lookup_by_fdc_id(fdc_id, serving_size_g: float = 100.0) -> dict | None:
         return {
             "usdaCode": str(fdc_id),
             "name": name,
-            "nutrition": raw_nutrients,
+            "nutrition": norm_nutrients,
             "macros_per_100g": macros,
             "serving_size_g": serving,
         }
@@ -887,8 +930,21 @@ def _alternative_usda_queries(ingredient_name: str) -> list[str]:
     if "coffee" in lower or "espresso" in lower:
         queries.append("coffee brewed")
         queries.append("black coffee brewed")
-    if "tea" in lower and "green" not in lower and "herbal" not in lower:
-        queries.append("tea brewed")
+    # Tea: use type-specific alt queries so we don't lose context (earl grey -> black tea, not generic oolong)
+    if "tea" in lower:
+        if "earl" in lower or "grey" in lower or "gray" in lower:
+            queries.append("black tea brewed")
+        elif "hibiscus" in lower or ("raspberry" in lower and "tea" in lower):
+            queries.append("hibiscus tea brewed")
+        elif "chamomile" in lower or "peppermint" in lower or "rooibos" in lower:
+            queries.append("herbal tea brewed")
+        elif "sleepy" in lower or "bedtime" in lower or "calm" in lower:
+            # Prefer GPT fallback for sleepy tea; don't add generic tea brewed
+            pass
+        elif "green" in lower:
+            queries.append("green tea brewed")
+        elif "herbal" not in lower:
+            queries.append("tea brewed")
     # Beverage/broth-type: try "beverage" or "ready to drink" so we get prepared form, not just powder/concentrate
     if any(f in lower for f in VERY_LOW_PROTEIN_INGREDIENTS):
         base = name.split(",")[0].strip()

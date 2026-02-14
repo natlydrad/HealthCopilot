@@ -38,6 +38,7 @@ def parse_ingredients(text: str, user_context: str = ""):
     Extract foods, drinks, supplements from: "{text}".
     {context_section}
     IMPORTANT: When the user states an exact amount (e.g. "1 cup", "2 eggs", "half a cup"), use that exact quantity and unit. Do not substitute a different fraction or amount unless the user clearly described a portion modifier (e.g. "ate half of it", "left a quarter").
+    IMPORTANT: For phrases like "1 cup ground turkey", "a cup of soy milk", or "soy milk cup" (one cup implied), output quantity 1 and unit "cup". Do not substitute 0.25 cup, 4 oz, or other portion unless the user clearly indicated that modifier.
     IMPORTANT: When the user states a count (e.g. "7 strawberries", "2 eggs", "3 slices"), use that exact quantity and unit. Do not convert counts to volume (cups, etc.) unless the user explicitly stated volume.
     IMPORTANT: Also extract from portion descriptions. E.g. "ate 75%, only half the noodles" → noodles, quantity 0.5; "half the rice" → rice, quantity 0.5; "left a quarter" → scale quantity to 0.75. Always return at least one item if any food is mentioned.
     IMPORTANT: PORTION MODIFIERS apply to ALL foods. When the user says "half", "quarter", "a third", "75%", "double", etc., the quantity MUST reflect that factor. Rule: base_amount × modifier. Typical full portions: steak 6oz, chicken breast 4oz, 1 cup rice, 1 egg. Then apply modifier: "half a steak" → 3oz; "quarter of the chicken" → 1oz; "half the rice" → 0.5 cup.
@@ -54,6 +55,7 @@ def parse_ingredients(text: str, user_context: str = ""):
     AVOID vague terms: "pizza toppings", "salad stuff", "sandwich fillings", "leftover food". Prefer specific items: "pepperoni pizza slice", "2 slices cheese pizza", "lettuce, tomato, dressing", "turkey sandwich".
     Simple items stay as-is: "apple", "coffee", "eggs", "chicken breast"
     Single food/drink phrases must return one item: "iced matcha" → one drink (e.g. name "matcha", category "drink"); "green tea", "matcha latte", "oat milk" → one item each. Tea, coffee, matcha, soda, and any other single named drink or food must return exactly one item; never return an empty array for a clear single food or drink.
+    For a single mention like "tbsp frank's red hot" or "frank's red hot sauce", output exactly one ingredient (e.g. the sauce), not two (e.g. sauce and dill spears). One user phrase = one ingredient line.
     Do not list the same ingredient twice; if the same food appears multiple times, combine into one line with the total quantity.
     
     Return ONLY a JSON array (no markdown, no explanation).

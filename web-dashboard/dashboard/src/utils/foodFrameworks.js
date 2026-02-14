@@ -134,6 +134,11 @@ function processIngredient(ing) {
     return { mp, dd, lg, matched };
   }
 
+  // Keyword fallback: treat drinks as Beverage so they never get Protein (animal) or Dairy emoji
+  if (DRINK_TERMS.some(d => name.includes(d))) {
+    matched = 'Beverage';
+    return { mp, dd, lg, matched };
+  }
   if (BEANS.some(b => name.includes(b))) {
     if (unit === 'cup' || unit === 'cups') { dd.beans = qty * 2; lg.legumes = qty * 2; mp.protein = qty * 4; }
     else if (unit === 'tbsp' || unit === 'tablespoon') { dd.beans = qty * 0.5; lg.legumes = 0.25; mp.protein = 0.5; }
@@ -261,5 +266,6 @@ export const MATCHED_TO_EMOJI = {
   'Grains': '🌾',
   'Protein (animal)': '🥩',
   'Dairy': '🥛',
+  'Beverage': '🥤',
   'GPT foodGroupServings': '🍽️',
 };

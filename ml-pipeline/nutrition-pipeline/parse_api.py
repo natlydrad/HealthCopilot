@@ -118,15 +118,146 @@ def _merge_ingredients_by_name(parsed: list) -> list:
     return merged
 
 
+def _merge_pending_by_usda(pending: list) -> list:
+    """
+    Merge pending items that resolve to the same USDA product (or same normalized name when no USDA).
+    Prevents duplicates when parser returns different names (e.g. "frank's red hot" and "red hot sauce")
+    that both map to the same USDA item.
+    """
+    from collections import defaultdict
+    groups = defaultdict(list)
+    for p in pending:
+        payload = p["payload"]
+        usda_code = payload.get("usdaCode")
+        key = usda_code if usda_code else (payload.get("name") or "").strip().lower()
+        if not key:
+            key = id(p)  # unique key so we don't merge unknowns
+        groups[key].append(p)
+
+    merged = []
+    for _key, group in groups.items():
+        if len(group) == 1:
+            merged.append(group[0])
+            continue
+        first = group[0]
+        units = [(p["quantity"], (p["unit"] or "serving").strip().lower()) for p in group]
+        u0 = units[0][1]
+        if all(u == u0 for _, u in units):
+            total_qty = sum(q for q, _ in units)
+            first_qty = float(first["quantity"] or 1)
+            first = dict(first)
+            first["quantity"] = total_qty
+            first["payload"] = dict(first["payload"])
+            first["payload"]["quantity"] = total_qty
+            # Rescale nutrition for merged quantity
+            usda = first.get("usda")
+            raw_nut = (usda.get("nutrition", []) if usda else None) or (first["payload"].get("rawUSDA") or {}).get("nutrition")
+            serving_g = first.get("serving_size_g") or (usda.get("serving_size_g") if usda else 100) or 100
+            if raw_nut:
+                first["payload"]["nutrition"] = scale_nutrition(
+                    raw_nut, total_qty, first["unit"] or "serving", serving_g
+                )
+            else:
+                # GPT-sourced: scale existing nutrition proportionally
+                nut = first["payload"].get("nutrition") or []
+                if nut and first_qty > 0:
+                    scale = total_qty / first_qty
+                    first["payload"]["nutrition"] = [
+                        {**n, "value": round((n.get("value") or 0) * scale, 2)}
+                        for n in nut
+                    ]
+            merged.append(first)
+        else:
+            merged.append(group[0])
+    return merged
+
+
+def _normalize_name_for_merge(s: str) -> str:
+    """Lower, strip, collapse spaces for similarity comparison."""
+    if not s:
+        return ""
+    return " ".join((s or "").lower().strip().split())
+
+
+def _names_similar(a: str, b: str, min_stem_len: int = 6) -> bool:
+    """True if both names likely refer to the same product (e.g. frank's red hot vs frank's red hot sauce)."""
+    na, nb = _normalize_name_for_merge(a), _normalize_name_for_merge(b)
+    if not na or not nb:
+        return False
+    if na == nb:
+        return True
+    if na in nb or nb in na:
+        return True
+    # Same leading stem (e.g. "frank's red hot" vs "frank's redhot sauce")
+    words_a, words_b = set(na.split()), set(nb.split())
+    common = words_a & words_b
+    stem = "".join(sorted(common))
+    return len(stem) >= min_stem_len
+
+
+def _is_sauce_or_condiment(name: str) -> bool:
+    n = (name or "").lower()
+    return "sauce" in n or "condiment" in n or "hot sauce" in n
+
+
+def _is_pickles_or_spears(name: str) -> bool:
+    n = (name or "").lower()
+    return "pickle" in n or "spear" in n
+
+
+def _merge_pending_by_similar_name_intent(pending: list) -> list:
+    """
+    Merge pendings that represent the same user mention but resolved to different products
+    (e.g. "frank's red hot" -> sauce and dill spears). Keep sauce/condiment, drop pickles/spears when names are similar.
+    """
+    if len(pending) < 2:
+        return pending
+    drop = set()  # indices to remove
+    for i in range(len(pending)):
+        if i in drop:
+            continue
+        name_i = (pending[i]["payload"].get("name") or "").strip()
+        usda_name_i = (pending[i].get("usda") or {}).get("name") or ""
+        sauce_i = _is_sauce_or_condiment(name_i) or _is_sauce_or_condiment(usda_name_i)
+        pickles_i = _is_pickles_or_spears(name_i) or _is_pickles_or_spears(usda_name_i)
+        for j in range(i + 1, len(pending)):
+            if j in drop:
+                continue
+            name_j = (pending[j]["payload"].get("name") or "").strip()
+            if not _names_similar(name_i, name_j):
+                continue
+            usda_name_j = (pending[j].get("usda") or {}).get("name") or ""
+            sauce_j = _is_sauce_or_condiment(name_j) or _is_sauce_or_condiment(usda_name_j)
+            pickles_j = _is_pickles_or_spears(name_j) or _is_pickles_or_spears(usda_name_j)
+            if sauce_i and pickles_j:
+                drop.add(j)
+            elif sauce_j and pickles_i:
+                drop.add(i)
+                break
+    if not drop:
+        return pending
+    return [p for idx, p in enumerate(pending) if idx not in drop]
+
+
+# Known raw fruit/berry/veg names so we always retry USDA (e.g. "strawberries" -> try "strawberries raw")
+_COMMON_RAW_FOOD_NAMES = frozenset([
+    "strawberry", "strawberries", "blueberry", "blueberries", "raspberry", "raspberries",
+    "blackberry", "blackberries", "apple", "apples", "banana", "bananas", "orange", "oranges",
+    "grape", "grapes", "kiwi", "kiwis", "peach", "peaches", "pear", "pears", "plum", "plums",
+])
+
+
 def _is_common_whole_food(name: str) -> bool:
     """True if name looks like common produce (short, no brand) — prefer USDA over GPT."""
     if not name or len(name) < 2:
         return False
-    words = (name or "").lower().strip().split()
+    n = (name or "").lower().strip()
+    if n in _COMMON_RAW_FOOD_NAMES:
+        return True
+    words = n.split()
     if len(words) > 2:
         return False
     brand_like = ("wegmans", "silk", "oatly", "starbucks", "chipotle", "mcdonald", "trader joe", "whole food")
-    n = name.lower()
     if any(b in n for b in brand_like):
         return False
     return True
@@ -905,6 +1036,30 @@ def _trace_append(trace, step, message, detail=None):
     trace.append({"step": step, "message": message, "detail": detail or {}})
 
 
+def _caffeine_from_nutrition(nutrition):
+    """Extract Caffeine value (MG) from a nutrition array. Returns None if missing."""
+    if not nutrition or not isinstance(nutrition, list):
+        return None
+    for n in nutrition:
+        if isinstance(n, dict) and (n.get("nutrientName") or "").strip().lower() == "caffeine":
+            try:
+                return float(n.get("value", 0))
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
+def _caffeine_fallback_for_drink(name_lower):
+    """Minimal fallback (mg) when drink has no caffeine in nutrition. None = don't add."""
+    if "matcha" in name_lower:
+        return 70
+    if "espresso" in name_lower or "coffee" in name_lower:
+        return 95
+    if "tea" in name_lower:
+        return 30
+    return None
+
+
 def _apply_single_correction(pending, corr, scale_nutrition_fn, zero_calorie_nutrition_array_fn, merge_micro_fn, trace, source_label):
     """Apply one correction to the matching pending item. source_label: 'rules' or 'common_sense'."""
     name_key = (corr.get("name") or "").strip().lower()
@@ -914,27 +1069,43 @@ def _apply_single_correction(pending, corr, scale_nutrition_fn, zero_calorie_nut
         if (p["payload"].get("name") or "").strip().lower() != name_key:
             continue
         if corr.get("zero_calories"):
+            prev_nutrition = p["payload"].get("nutrition") or []
             p["payload"]["nutrition"] = zero_calorie_nutrition_array_fn()
             _trace_append(trace, source_label, f"{source_label}: {p['payload']['name']} -> 0 cal")
             print(f"   📋 {source_label}: {p['payload']['name']} -> 0 cal")
+            # For drinks, preserve or re-add caffeine so zero_calories doesn't wipe it
+            name_lower = (p["payload"].get("name") or "").strip().lower()
+            if any(t in name_lower for t in ("tea", "coffee", "matcha", "espresso", "cola", "soda")):
+                caffeine_mg = _caffeine_from_nutrition(prev_nutrition)
+                if caffeine_mg is None:
+                    caffeine_mg = _caffeine_fallback_for_drink(name_lower)
+                if caffeine_mg is not None and caffeine_mg >= 0:
+                    p["payload"]["nutrition"] = merge_micro_fn(
+                        p["payload"].get("nutrition") or [],
+                        caffeine_mg=caffeine_mg,
+                    )
         if "quantity" in corr or "unit" in corr or "serving_size_g" in corr:
-            new_qty = corr.get("quantity", p["payload"]["quantity"])
-            new_unit = corr.get("unit", p["payload"]["unit"])
-            new_serving_g = corr.get("serving_size_g") if "serving_size_g" in corr else p.get("serving_size_g")
-            p["payload"]["quantity"] = new_qty
-            p["payload"]["unit"] = new_unit
-            if p.get("usda") and p["usda"].get("nutrition") and new_serving_g is not None:
-                p["payload"]["nutrition"] = scale_nutrition_fn(
-                    p["usda"]["nutrition"],
-                    new_qty,
-                    new_unit,
-                    new_serving_g,
-                )
-                _trace_append(trace, source_label, f"{source_label}: {p['payload']['name']} -> {new_qty} {new_unit} ({new_serving_g}g)")
-                print(f"   📋 {source_label}: {p['payload']['name']} -> {new_qty} {new_unit} ({new_serving_g}g)")
+            # Do not overwrite when the user already gave a specific portion (e.g. 1 cup, 2 oz)
+            if _has_specific_portion(p["payload"]):
+                pass  # keep existing quantity/unit
             else:
-                _trace_append(trace, source_label, f"{source_label}: {p['payload']['name']} -> {new_qty} {new_unit}")
-                print(f"   📋 {source_label}: {p['payload']['name']} -> {new_qty} {new_unit}")
+                new_qty = corr.get("quantity", p["payload"]["quantity"])
+                new_unit = corr.get("unit", p["payload"]["unit"])
+                new_serving_g = corr.get("serving_size_g") if "serving_size_g" in corr else p.get("serving_size_g")
+                p["payload"]["quantity"] = new_qty
+                p["payload"]["unit"] = new_unit
+                if p.get("usda") and p["usda"].get("nutrition") and new_serving_g is not None:
+                    p["payload"]["nutrition"] = scale_nutrition_fn(
+                        p["usda"]["nutrition"],
+                        new_qty,
+                        new_unit,
+                        new_serving_g,
+                    )
+                    _trace_append(trace, source_label, f"{source_label}: {p['payload']['name']} -> {new_qty} {new_unit} ({new_serving_g}g)")
+                    print(f"   📋 {source_label}: {p['payload']['name']} -> {new_qty} {new_unit} ({new_serving_g}g)")
+                else:
+                    _trace_append(trace, source_label, f"{source_label}: {p['payload']['name']} -> {new_qty} {new_unit}")
+                    print(f"   📋 {source_label}: {p['payload']['name']} -> {new_qty} {new_unit}")
         micro_vals = [corr.get("added_sugar_g"), corr.get("caffeine_mg"), corr.get("fiber_g"), corr.get("sodium_mg")]
         if any(v is not None and isinstance(v, (int, float)) and v >= 0 for v in micro_vals):
             nut = p["payload"].get("nutrition") or []
@@ -1440,6 +1611,14 @@ def parse_meal(meal_id):
         # Process and save ingredients (collect pending, then common-sense check, then insert)
         saved = []
         pending = []
+        # #region agent log
+        try:
+            import json as _json, time as _t
+            _line = _json.dumps({"timestamp": _t.time()*1000, "location": "parse_api.py:parse_start", "message": "Parse flow starting", "data": {"meal_id": meal_id, "parsed_count": len(parsed), "text_preview": (text or "")[:60]}, "hypothesisId": "H5"}) + "\n"
+            open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
+        except Exception:
+            pass
+        # #endregion
         print(f"📦 Processing {len(parsed)} parsed ingredients...")
         
         for ing in parsed:
@@ -1649,6 +1828,16 @@ def parse_meal(meal_id):
                 if not scaled_nutrition:
                     # USDA failed or rejected - fall back to GPT estimate
                     print(f"   🤖 GPT fallback: estimating nutrition for '{name}' ({quantity} {unit})")
+                    # #region agent log
+                    try:
+                        _drink_terms = ("tea", "coffee", "matcha", "espresso")
+                        if any(t in (name or "").lower() for t in _drink_terms):
+                            import json as _json, time as _t
+                            _line = _json.dumps({"timestamp": _t.time()*1000, "location": "parse_api.py:gpt_fallback_drink", "message": "GPT fallback for drink", "data": {"name": name, "usda_returned_none": usda is None}, "hypothesisId": "H4"}) + "\n"
+                            open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
+                    except Exception:
+                        pass
+                    # #endregion
                     gpt_nutrition = gpt_estimate_nutrition(name, quantity, unit)
                     if gpt_nutrition:
                         scaled_nutrition = gpt_nutrition
@@ -1732,7 +1921,17 @@ def parse_meal(meal_id):
                 "quantity": quantity,
                 "unit": unit,
             })
-        
+
+        # Merge duplicates: same USDA product or same normalized name (e.g. "frank's red hot" + "red hot sauce" -> one)
+        n_before = len(pending)
+        pending = _merge_pending_by_usda(pending)
+        if len(pending) < n_before:
+            print(f"   📋 Merged duplicate ingredients: {n_before} -> {len(pending)}")
+        # Same user mention resolved to sauce vs pickles (e.g. "frank's red hot" -> keep sauce, drop dill spears)
+        n_before = len(pending)
+        pending = _merge_pending_by_similar_name_intent(pending)
+        if len(pending) < n_before:
+            print(f"   📋 Merged by intent (sauce over pickles): {n_before} -> {len(pending)}")
         # Common-sense: (1) deterministic rules first, (2) then GPT for edge cases
         try:
             minimal = []
