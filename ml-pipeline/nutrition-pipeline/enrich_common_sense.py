@@ -216,6 +216,18 @@ def apply_deterministic_rules(ingredients: list[dict]) -> list[dict]:
                 if total > 0:
                     corr["added_sugar_g"] = total
 
+        # Meat/poultry/fish: foodGroupServings protein = oz when missing or all zeros (MyPlate oz-equivalents)
+        meat_terms = ("pork", "beef", "chicken", "turkey", "fish", "salmon", "tuna", "lamb", "steak", "ground", "bacon", "sausage", "ham", "meat")
+        fg = ing.get("foodGroupServings")
+        fg_ok = isinstance(fg, dict) and sum(float(fg.get(k) or 0) for k in ("grains", "vegetables", "fruits", "protein", "dairy")) > 0
+        if not fg_ok and any(m in name_lower for m in meat_terms):
+            u = unit.lower()
+            if u in ("oz", "ounce", "ounces"):
+                prot = round(float(quantity), 2)  # 1 oz meat = 1 protein oz-equivalent
+                corr["foodGroupServings"] = {"grains": 0, "vegetables": 0, "fruits": 0, "protein": prot, "dairy": 0}
+            elif u in ("egg", "eggs"):
+                corr["foodGroupServings"] = {"grains": 0, "vegetables": 0, "fruits": 0, "protein": round(float(quantity), 2), "dairy": 0}
+
         # Only add if we actually have corrections (more than just "name")
         if len(corr) > 1:
             corrections.append(corr)

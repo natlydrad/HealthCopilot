@@ -213,6 +213,11 @@ def validate_scaled_calories(
     E.g. 6 small chicken wings should be ~200-400 cal, not 1500.
     """
     if scaled_calories <= 0:
+        # Grain products (oats, rice) in cups with 0 cal suggest missing USDA data; reject to trigger cooked retry
+        unit_lower = (unit or "").lower()
+        grain_terms = ("oat", "oats", "oatmeal", "steel cut", "rice", "brown rice", "white rice")
+        if unit_lower in ("cup", "cups") and any(g in ingredient_name.lower() for g in grain_terms):
+            return False, f"Scaled {scaled_calories:.0f} cal for oats/rice in cups (expected >0; missing data or wrong match)"
         return True, ""
     name_lower = ingredient_name.lower()
 
@@ -291,7 +296,8 @@ def validate_scaled_calories(
 
     # Cup-based sanity for oats and rice (catches raw when user meant cooked)
     grain_terms = ("oat", "oats", "oatmeal", "steel cut", "rice", "brown rice", "white rice")
-    if unit_lower in ("cup", "cups") and quantity > 0 and any(g in name_lower for g in grain_terms):
+    is_grain = any(g in name_lower for g in grain_terms)
+    if unit_lower in ("cup", "cups") and quantity > 0 and is_grain:
         if "raw" not in name_lower and "dry" not in name_lower and "uncooked" not in name_lower:
             cal_per_cup = scaled_calories / quantity
             if cal_per_cup > 250:
@@ -688,7 +694,13 @@ def validate_usda_match(
     words = re.findall(r"[a-z0-9]{2,}", ingredient_lower)
     stop = {"the", "and", "with", "for", "raw", "cooked", "half", "other", "same", "cup", "cups", "oz"}
     significant = [w for w in words if w not in stop]
-    if significant and not any(w in matched_lower for w in significant):
+    # Oat/oats/oatmeal/steel cut: treat as equivalent (oatmeal matches steel cut oats)
+    grain_synonyms = ("oat", "oats", "oatmeal", "steel", "cut")
+    has_grain_query = any(g in ingredient_lower for g in grain_synonyms)
+    has_grain_match = "oat" in matched_lower
+    if has_grain_query and has_grain_match:
+        pass  # allow match (e.g. oatmeal for steel cut oats)
+    elif significant and not any(w in matched_lower for w in significant):
         # #region agent log
         try:
             import json
@@ -1073,21 +1085,21 @@ def _alternative_usda_queries(ingredient_name: str) -> list[str]:
     if ("frank" in lower or "franks" in lower) and "red hot" in lower:
         queries.append("frank's red hot sauce")
         queries.append("hot sauce cayenne pepper")
-    # Grains (oats, rice): when user said "cooked", prioritize cooked queries first
+    # Grains (oats, rice): when user said "cooked" OR oats in cups (implies cooked), add cooked queries
     grain_terms = ["oat", "oats", "oatmeal", "steel cut", "rice", "brown rice", "white rice"]
     if "milk" not in lower and any(g in lower for g in grain_terms) and "raw" not in lower and "dry" not in lower and "uncooked" not in lower:
         base = name.split(",")[0].strip()
+        cooked_alts = []
+        if "steel" in lower or "oat" in lower:
+            cooked_alts.extend(["oatmeal cooked", "oats cooked with water"])  # FNDDS cooked oatmeal
         if "cooked" in lower:
-            # Preparation intent: try cooked-specific queries first so USDA returns cooked product
-            cooked_alts = []
-            if "steel" in lower or "oat" in lower:
-                cooked_alts.extend(["oatmeal cooked", "oats cooked with water", "steel cut oatmeal"])
+            cooked_alts.extend(["steel cut oatmeal"])
             base_no_cooked = re.sub(r"\bcooked\b", "", base).strip()
-            if base_no_cooked and base_no_cooked != base:
+            if base_no_cooked and base_no_cooked != base and f"{base_no_cooked} cooked" not in cooked_alts:
                 cooked_alts.append(f"{base_no_cooked} cooked")
-            for q in cooked_alts:
-                if q not in queries:
-                    queries.insert(1, q)  # After primary name
+        for q in cooked_alts:
+            if q not in queries:
+                queries.insert(1, q)  # After primary name
         queries.append(f"{base} cooked")
         if "cooked" in lower:
             base_no_cooked = re.sub(r"\bcooked\b", "", base).strip()
