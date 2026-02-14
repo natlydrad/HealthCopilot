@@ -534,30 +534,26 @@ def _score_drink_match_for_ordering(query_lower: str, matched_name: str, raw_nut
     return score
 
 
-def _query_implies_hot_sauce(query_lower: str) -> bool:
-    """True when query suggests hot sauce (e.g. frank's red hot)."""
-    return "frank" in query_lower and "red" in query_lower and "hot" in query_lower
-
-
 def _query_implies_condiment(query_lower: str) -> bool:
-    """True if query suggests a condiment/sauce (e.g. tbsp frank's red hot). Prefer USDA sauce over sausage/pickles."""
+    """True if query text contains condiment indicators (tbsp, sauce)."""
     if not query_lower:
         return False
     return "tbsp" in query_lower or "sauce" in query_lower
 
 
-def _condiment_query_matched_sausage(query_lower: str, matched_name: str) -> bool:
-    """Return True if query implies condiment (e.g. frank's red hot tbsp) but match is sausage/hot dog."""
+def _query_or_unit_implies_condiment(query_lower: str, unit: str | None) -> bool:
+    """True when portion is condiment-like: query has tbsp/sauce OR unit is tbsp/tsp."""
     if _query_implies_condiment(query_lower):
-        ml = matched_name.lower()
-        if "jumbo franks" in ml or ("franks" in ml and "sauce" not in ml and "condiment" not in ml):
-            return True
-    # Frank's Red Hot as product name typically means the sauce; reject hot dogs
-    if "frank" in query_lower and "red hot" in query_lower:
-        ml = matched_name.lower()
-        if "jumbo franks" in ml or ("franks" in ml and "sauce" not in ml and "condiment" not in ml):
-            return True
-    return False
+        return True
+    return _unit_implies_condiment(unit)
+
+
+def _condiment_query_matched_sausage(query_lower: str, matched_name: str, unit: str | None = None) -> bool:
+    """Return True if condiment portion but match is sausage/hot dog."""
+    if not _query_or_unit_implies_condiment(query_lower, unit):
+        return False
+    ml = matched_name.lower()
+    return "jumbo franks" in ml or ("franks" in ml and "sauce" not in ml and "condiment" not in ml)
 
 
 def _prefer_cooked_for_meat(query_lower: str, matched_name: str) -> float:
@@ -573,9 +569,9 @@ def _prefer_cooked_for_meat(query_lower: str, matched_name: str) -> float:
     return 0.0
 
 
-def _prefer_sauce_for_condiment_query(query_lower: str, matched_name: str) -> float:
-    """Return bonus to subtract from cal_score when query implies condiment and match is sauce (e.g. frank's red hot -> sauce not jumbo franks)."""
-    if not _query_implies_condiment(query_lower):
+def _prefer_sauce_for_condiment_query(query_lower: str, matched_name: str, unit: str | None = None) -> float:
+    """Bonus when condiment portion (tbsp/tsp) and match is sauce/condiment form."""
+    if not _query_or_unit_implies_condiment(query_lower, unit):
         return 0.0
     matched_lower = (matched_name or "").lower()
     if "sauce" in matched_lower or "condiment" in matched_lower:
@@ -584,12 +580,12 @@ def _prefer_sauce_for_condiment_query(query_lower: str, matched_name: str) -> fl
 
 
 def _prefer_cooked_for_grains(query_lower: str, matched_name: str) -> float:
-    """Return bonus to subtract from cal_score when query says cooked and match is cooked (e.g. cooked steel cut oats -> cooked oats not raw)."""
+    """Return bonus when query says cooked and match is cooked (e.g. cooked steel cut oats -> cooked oats not raw)."""
     if "cooked" not in (query_lower or ""):
         return 0.0
     matched_lower = (matched_name or "").lower()
     if "cooked" in matched_lower:
-        return 50.0
+        return 300.0  # Strong preference so cooked oats outrank raw
     return 0.0
 
 
@@ -617,12 +613,6 @@ def _match_is_raw_whole_produce(matched_name: str) -> bool:
         return False
     produce_terms = ("pepper", "peppers", "chili", "tomato", "tomatoes", "vegetable", "fruit", "onion", "carrot")
     return any(p in ml for p in produce_terms)
-
-
-def _match_is_pickles_or_spears(matched_name: str) -> bool:
-    """True when match is pickles/dill spears (whole, not sauce)."""
-    ml = (matched_name or "").lower()
-    return ("pickle" in ml or "spear" in ml) and "sauce" not in ml and "condiment" not in ml
 
 
 def validate_usda_match(
@@ -677,8 +667,8 @@ def validate_usda_match(
     if is_meat and not is_protein_powder and protein_per_100g > 40:
         return False, f"Suspicious: {ingredient_name} matched to {matched_name} with {protein_per_100g:.1f}g protein/100g (meat expected <40g)"
     
-    # Condiment query matched sausage (e.g. frank's red hot tbsp -> RED HOT JUMBO FRANKS)
-    if _condiment_query_matched_sausage(ingredient_lower, matched_name):
+    # Condiment portion matched sausage (tbsp + franks = reject hot dogs)
+    if _condiment_query_matched_sausage(ingredient_lower, matched_name, unit):
         return False, f"Condiment query '{ingredient_name}' matched sausage/hot dog '{matched_name}'"
     # Plain cabbage matched kimchi (user meant raw cabbage)
     if "cabbage" in ingredient_lower and "kimchi" not in ingredient_lower and "fermented" not in ingredient_lower:
@@ -687,9 +677,6 @@ def validate_usda_match(
     # Unit implies form: tbsp/tsp = condiment portion; reject raw whole produce (peppers, etc.)
     if _unit_implies_condiment(unit) and _match_is_raw_whole_produce(matched_name):
         return False, f"Condiment portion (tbsp/tsp) matched raw produce '{matched_name}'; prefer sauce/condiment"
-    # Hot sauce query (e.g. frank's red hot) matched pickles/dill spears — wrong product
-    if _unit_implies_condiment(unit) and _query_implies_hot_sauce(ingredient_lower) and _match_is_pickles_or_spears(matched_name):
-        return False, f"Hot sauce query matched pickles/spears '{matched_name}'; prefer sauce"
     # Check 3: Name mismatch (e.g., "bone broth" matching to "beef")
     # Simple check: if ingredient has a modifier, matched should too
     if "bone" in ingredient_lower and "bone" not in matched_lower:
@@ -785,7 +772,7 @@ def usda_lookup(ingredient_name: str, quantity: float | None = None, unit: str |
                 if is_composite and carbs == 0:
                     cal_score += 500
                 cal_score -= _prefer_cooked_for_meat(ingredient_lower, matched_name)
-                cal_score -= _prefer_sauce_for_condiment_query(ingredient_lower, matched_name)
+                cal_score -= _prefer_sauce_for_condiment_query(ingredient_lower, matched_name, unit)
                 cal_score -= _prefer_cooked_for_grains(ingredient_lower, matched_name)
                 valid.append((cal_score, carbs, f, macros, matched_name, raw_nutrients))
 
@@ -1086,20 +1073,26 @@ def _alternative_usda_queries(ingredient_name: str) -> list[str]:
     if ("frank" in lower or "franks" in lower) and "red hot" in lower:
         queries.append("frank's red hot sauce")
         queries.append("hot sauce cayenne pepper")
-    # Grains (oats, rice): add "cooked" when user likely means prepared (oatmeal, bowl of oats, etc.)
+    # Grains (oats, rice): when user said "cooked", prioritize cooked queries first
     grain_terms = ["oat", "oats", "oatmeal", "steel cut", "rice", "brown rice", "white rice"]
     if "milk" not in lower and any(g in lower for g in grain_terms) and "raw" not in lower and "dry" not in lower and "uncooked" not in lower:
         base = name.split(",")[0].strip()
+        if "cooked" in lower:
+            # Preparation intent: try cooked-specific queries first so USDA returns cooked product
+            cooked_alts = []
+            if "steel" in lower or "oat" in lower:
+                cooked_alts.extend(["oatmeal cooked", "oats cooked with water", "steel cut oatmeal"])
+            base_no_cooked = re.sub(r"\bcooked\b", "", base).strip()
+            if base_no_cooked and base_no_cooked != base:
+                cooked_alts.append(f"{base_no_cooked} cooked")
+            for q in cooked_alts:
+                if q not in queries:
+                    queries.insert(1, q)  # After primary name
         queries.append(f"{base} cooked")
-        # When user said "cooked X", also try "X cooked" and cooked oatmeal variants so USDA returns cooked product
         if "cooked" in lower:
             base_no_cooked = re.sub(r"\bcooked\b", "", base).strip()
             if base_no_cooked and f"{base_no_cooked} cooked" not in queries:
                 queries.append(f"{base_no_cooked} cooked")
-            if "steel" in lower or "oat" in lower:
-                queries.append("oatmeal cooked")
-                queries.append("oats cooked with water")
-                queries.append("steel cut oatmeal")
         if "rice" in lower:
             queries.append("rice cooked")
         if "brown rice" in lower:

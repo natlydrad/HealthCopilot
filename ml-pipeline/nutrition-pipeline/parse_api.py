@@ -285,6 +285,20 @@ def _is_pickles_or_spears(name: str) -> bool:
     return "pickle" in n or "spear" in n
 
 
+def _match_implies_sauce_or_condiment_form(p: dict) -> bool:
+    """True when USDA match suggests sauce/condiment form (not whole pickles, etc.)."""
+    usda_name = (p.get("usda") or {}).get("name") or ""
+    payload_name = (p.get("payload") or {}).get("name") or ""
+    return _is_sauce_or_condiment(payload_name) or _is_sauce_or_condiment(usda_name)
+
+
+def _match_implies_whole_form(p: dict) -> bool:
+    """True when USDA match suggests whole-item form (pickles, spears, dill wholes) not sauce."""
+    usda_name = ((p.get("usda") or {}).get("name") or "").lower()
+    whole_like = "pickle" in usda_name or "spear" in usda_name or ("whole" in usda_name and "dill" in usda_name)
+    return whole_like and "sauce" not in usda_name
+
+
 def _merge_pending_by_similar_name_intent(pending: list) -> list:
     """
     Merge pendings that represent the same user mention but resolved to different products
@@ -315,8 +329,40 @@ def _merge_pending_by_similar_name_intent(pending: list) -> list:
             else:
                 drop.add(j)
     if not drop:
-        return pending
-    return [p for idx, p in enumerate(pending) if idx not in drop]
+        out = pending
+    else:
+        out = [p for idx, p in enumerate(pending) if idx not in drop]
+
+    # Same portion (tbsp, same qty) with one sauce form and one whole form -> keep sauce
+    condiment_units = ("tbsp", "tsp", "tablespoon", "tablespoons", "teaspoon", "teaspoons")
+    if len(out) >= 2:
+        drop2 = set()
+        for i in range(len(out)):
+            if i in drop2:
+                continue
+            u = (out[i]["payload"].get("unit") or "").lower()
+            q = float(out[i]["payload"].get("quantity") or 1)
+            if u not in condiment_units:
+                continue
+            sauce_i = _match_implies_sauce_or_condiment_form(out[i])
+            whole_i = _match_implies_whole_form(out[i])
+            for j in range(i + 1, len(out)):
+                if j in drop2:
+                    continue
+                uj = (out[j]["payload"].get("unit") or "").lower()
+                qj = float(out[j]["payload"].get("quantity") or 1)
+                if uj != u or abs(q - qj) > 0.01:
+                    continue
+                sauce_j = _match_implies_sauce_or_condiment_form(out[j])
+                whole_j = _match_implies_whole_form(out[j])
+                if sauce_i and whole_j:
+                    drop2.add(j)
+                elif sauce_j and whole_i:
+                    drop2.add(i)
+                    break
+        if drop2:
+            out = [p for idx, p in enumerate(out) if idx not in drop2]
+    return out
 
 
 # Known raw fruit/berry/veg names so we always retry USDA (e.g. "strawberries" -> try "strawberries raw")
