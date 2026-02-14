@@ -14,7 +14,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pb_client import get_token, insert_ingredient, delete_ingredient, delete_non_food_logs_for_meal, build_user_context_prompt, add_learned_confusion, add_common_food, add_portion_preference, add_to_pantry, is_branded_or_specific, lookup_pantry_match, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date, fetch_ingredients_by_meal_id, fetch_meal_by_id, get_learned_patterns_for_user, remove_learned_pattern, check_learned_correction, delete_corrections_for_user_with_corrected_names, remove_learned_patterns_for_names
 from parser_gpt import parse_ingredients, parse_ingredients_from_image, correction_chat, get_image_base64, gpt_estimate_nutrition, expand_recipe
-from lookup_usda import usda_lookup, usda_lookup_by_fdc_id, usda_lookup_valid_for_portion, usda_search_options, scale_nutrition, get_piece_grams, validate_scaled_calories, validate_scaled_protein, UNIT_TO_GRAMS, zero_calorie_nutrition_array
+from lookup_usda import usda_lookup, usda_lookup_by_fdc_id, usda_lookup_valid_for_portion, usda_search_options, scale_nutrition, get_piece_grams, validate_scaled_calories, validate_scaled_protein, UNIT_TO_GRAMS, PIECE_GRAMS_BY_FOOD, zero_calorie_nutrition_array
 from log_classifier import classify_log, classify_log_with_image
 from common_sense import common_sense_check
 from enrich_common_sense import apply_deterministic_rules
@@ -250,11 +250,26 @@ def _names_similar(a: str, b: str, min_stem_len: int = 6) -> bool:
         return True
     if na in nb or nb in na:
         return True
+    # Frank's Red Hot variants: "frank's red hot", "franks red hot", "hot sauce", "frank's red hot sauce" -> same product
+    if _is_franks_red_hot_variant(na) and _is_franks_red_hot_variant(nb):
+        return True
+    # Parser may split "tbsp frank's red hot" into "frank's red hot" + "hot sauce" -> merge
+    condiment_terms = ("hot sauce", "hot chili", "cayenne", "red hot sauce")
+    if _is_franks_red_hot_variant(na) and any(t in nb for t in condiment_terms):
+        return True
+    if _is_franks_red_hot_variant(nb) and any(t in na for t in condiment_terms):
+        return True
     # Same leading stem (e.g. "frank's red hot" vs "frank's redhot sauce")
     words_a, words_b = set(na.split()), set(nb.split())
     common = words_a & words_b
     stem = "".join(sorted(common))
     return len(stem) >= min_stem_len
+
+
+def _is_franks_red_hot_variant(name: str) -> bool:
+    """True if name refers to Frank's Red Hot (sauce or product)."""
+    n = (name or "").lower()
+    return ("frank" in n and "red" in n and "hot" in n) or (("frank" in n or "franks" in n) and "hot sauce" in n)
 
 
 def _is_sauce_or_condiment(name: str) -> bool:
@@ -299,6 +314,22 @@ def _merge_pending_by_similar_name_intent(pending: list) -> list:
     if not drop:
         return pending
     return [p for idx, p in enumerate(pending) if idx not in drop]
+
+
+def _use_piece_grams_for_portion(unit_lower: str, name: str, quantity: float, piece_g: float | None) -> bool:
+    """True when we should use get_piece_grams for serving size (e.g. 7 strawberries, unit=strawberries)."""
+    if piece_g is None:
+        return False
+    if unit_lower in ("piece", "pieces", "count"):
+        return True
+    if unit_lower in ("serving", "servings") and 1 <= quantity <= 30:
+        return True
+    # Unit matches food name (e.g. "7 strawberries" with unit "strawberries") or is a known countable unit
+    if unit_lower == (name or "").lower().strip():
+        return True
+    if unit_lower in PIECE_GRAMS_BY_FOOD:
+        return True
+    return False
 
 
 # Known raw fruit/berry/veg names so we always retry USDA (e.g. "strawberries" -> try "strawberries raw")
@@ -846,10 +877,9 @@ def _process_and_insert_parsed_ingredient(ing, meal_id, user_context, source="ad
     if usda:
         serving_size = usda.get("serving_size_g", 100.0)
         unit_lower = (unit or "").lower()
-        if unit_lower in ("piece", "pieces"):
-            piece_g = get_piece_grams(name)
-            if piece_g is not None:
-                serving_size = piece_g
+        piece_g = get_piece_grams(name)
+        if _use_piece_grams_for_portion(unit_lower, name, quantity, piece_g):
+            serving_size = piece_g
         scaled_nutrition = scale_nutrition(usda.get("nutrition", []), quantity, unit, serving_size)
         cal_val = next((n.get("value", 0) for n in scaled_nutrition if n.get("nutrientName") == "Energy"), 0)
         is_valid, _ = validate_scaled_calories(name, quantity, unit, cal_val)
@@ -859,16 +889,15 @@ def _process_and_insert_parsed_ingredient(ing, meal_id, user_context, source="ad
             usda = usda_lookup_valid_for_portion(name, quantity, unit)
             if usda:
                 serving_size = usda.get("serving_size_g", 100.0)
-                if unit_lower in ("piece", "pieces"):
-                    piece_g = get_piece_grams(name)
-                    if piece_g is not None:
-                        serving_size = piece_g
+                piece_g = get_piece_grams(name)
+                if _use_piece_grams_for_portion(unit_lower, name, quantity, piece_g):
+                    serving_size = piece_g
                 scaled_nutrition = scale_nutrition(usda.get("nutrition", []), quantity, unit, serving_size)
                 source_ing = "usda"
                 portion_grams = round(quantity * serving_size, 1)
         else:
             source_ing = "usda"
-            portion_grams = round(quantity * (serving_size if unit_lower in ("serving", "piece", "pieces") else
+            portion_grams = round(quantity * (serving_size if _use_piece_grams_for_portion(unit_lower, name, quantity, piece_g) or unit_lower in ("serving", "piece", "pieces") else
                                       28.35 if unit == "oz" else 240 if unit == "cup" else 15 if unit == "tbsp" else 100), 1)
     if not scaled_nutrition:
         gpt_nutrition = gpt_estimate_nutrition(name, quantity, unit)
@@ -1785,19 +1814,15 @@ def parse_meal(meal_id):
                         if usda:
                             print(f"   ✅ USDA (retry for common whole food): '{usda.get('name')}'")
                 if usda:
-                    # Use food-specific piece weight when unit is piece/pieces, or "serving" with small count (e.g. 7 strawberries)
+                    # Use food-specific piece weight when unit is piece/pieces/count, serving with small count, or unit matches food (e.g. 7 strawberries)
                     serving_size = usda.get("serving_size_g", 100.0)
                     serving_size_g_used = serving_size
                     unit_lower = (unit or "").lower()
                     piece_g = get_piece_grams(name)
-                    if unit_lower in ("piece", "pieces", "count") and piece_g is not None:
+                    if _use_piece_grams_for_portion(unit_lower, name, quantity, piece_g):
                         serving_size = piece_g
                         serving_size_g_used = serving_size
                         print(f"   📐 Using {serving_size}g per piece for '{name}'")
-                    elif unit_lower in ("serving", "servings") and 1 <= quantity <= 30 and piece_g is not None:
-                        serving_size = piece_g
-                        serving_size_g_used = serving_size
-                        print(f"   📐 Using {serving_size}g per serving (countable) for '{name}'")
                     scaled_nutrition = scale_nutrition(
                         usda.get("nutrition", []),
                         quantity,
@@ -1817,10 +1842,7 @@ def parse_meal(meal_id):
                             serving_size_g_used = serving_size
                             unit_lower = (unit or "").lower()
                             piece_g = get_piece_grams(name)
-                            if unit_lower in ("piece", "pieces", "count") and piece_g is not None:
-                                serving_size = piece_g
-                                serving_size_g_used = serving_size
-                            elif unit_lower in ("serving", "servings") and 1 <= quantity <= 30 and piece_g is not None:
+                            if _use_piece_grams_for_portion(unit_lower, name, quantity, piece_g):
                                 serving_size = piece_g
                                 serving_size_g_used = serving_size
                             scaled_nutrition = scale_nutrition(
@@ -1834,7 +1856,8 @@ def parse_meal(meal_id):
                                 quantity
                                 * (
                                     serving_size
-                                    if unit_lower in ("serving", "servings", "piece", "pieces", "count")
+                                    if _use_piece_grams_for_portion(unit_lower, name, quantity, piece_g)
+                                    or unit_lower in ("serving", "servings", "piece", "pieces", "count")
                                     else 28.35 if unit == "oz" else 240 if unit == "cup" else 15 if unit == "tbsp" else 100
                                 ),
                                 1,
@@ -1853,10 +1876,7 @@ def parse_meal(meal_id):
                                 serving_size_g_used = serving_size
                                 unit_lower = (unit or "").lower()
                                 piece_g = get_piece_grams(name)
-                                if unit_lower in ("piece", "pieces", "count") and piece_g is not None:
-                                    serving_size = piece_g
-                                    serving_size_g_used = serving_size
-                                elif unit_lower in ("serving", "servings") and 1 <= quantity <= 30 and piece_g is not None:
+                                if _use_piece_grams_for_portion(unit_lower, name, quantity, piece_g):
                                     serving_size = piece_g
                                     serving_size_g_used = serving_size
                                 scaled_nutrition = scale_nutrition(
@@ -1884,7 +1904,7 @@ def parse_meal(meal_id):
                             scaled_nutrition = merge_label_onto_usda(scaled_nutrition, partial_label_array)
                             print(f"   📋 Overlaid {len(partial_label_array)} label values onto USDA")
                         source_ing = "usda"
-                        portion_grams = round(quantity * (serving_size if unit_lower in ("serving", "piece", "pieces", "count") else
+                        portion_grams = round(quantity * (serving_size if _use_piece_grams_for_portion(unit_lower, name, quantity, piece_g) or unit_lower in ("serving", "piece", "pieces", "count") else
                                               28.35 if unit == "oz" else
                                               240 if unit == "cup" else
                                               15 if unit == "tbsp" else 100), 1)
