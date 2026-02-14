@@ -157,12 +157,14 @@ def _parse_meal_to_ingredients(text: str) -> list[dict]:
 
         scaled_nutrition = []
         source_ing = "gpt"
+        usda_matched_name = None
 
         usda = usda_lookup(ing.get("name", ""))
         if not usda and _is_common_whole_food(name):
             usda = usda_lookup_valid_for_portion(ing.get("name", ""), quantity, unit)
 
         if usda:
+            usda_matched_name = usda.get("name")
             serving_size = usda.get("serving_size_g", 100.0)
             unit_lower = unit.lower()
             piece_g = get_piece_grams(name)
@@ -186,6 +188,7 @@ def _parse_meal_to_ingredients(text: str) -> list[dict]:
             if not is_valid:
                 usda = usda_lookup_valid_for_portion(ing.get("name", ""), quantity, unit)
                 if usda:
+                    usda_matched_name = usda.get("name")
                     serving_size = usda.get("serving_size_g", 100.0)
                     scaled_nutrition = scale_nutrition(
                         usda.get("nutrition", []), quantity, unit, serving_size
@@ -196,6 +199,7 @@ def _parse_meal_to_ingredients(text: str) -> list[dict]:
                 if not ok:
                     usda = usda_lookup_valid_for_portion(ing.get("name", ""), quantity, unit)
                     if usda:
+                        usda_matched_name = usda.get("name")
                         serving_size = usda.get("serving_size_g", 100.0)
                         scaled_nutrition = scale_nutrition(
                             usda.get("nutrition", []), quantity, unit, serving_size
@@ -210,13 +214,16 @@ def _parse_meal_to_ingredients(text: str) -> list[dict]:
                 scaled_nutrition = gpt_nutrition
                 source_ing = "gpt"
 
-        ingredients.append({
+        ing_dict = {
             "name": ing.get("name", ""),
             "quantity": quantity,
             "unit": unit,
             "source": source_ing,
             "nutrition": scaled_nutrition,
-        })
+        }
+        if usda_matched_name:
+            ing_dict["usda_matched_name"] = usda_matched_name
+        ingredients.append(ing_dict)
 
     # Apply deterministic rules (caffeine, etc.)
     corrections = apply_deterministic_rules(ingredients)
@@ -258,6 +265,12 @@ def evaluate_expectations(actual: list[dict], expected: dict) -> tuple[bool, lis
         for ing in actual:
             if "oolong" in (ing.get("name") or "").lower():
                 failures.append(f"Expected no Oolong, but got: {ing.get('name')}")
+                break
+            usda_name = ing.get("usda_matched_name") or ""
+            if usda_name and "oolong" in usda_name.lower():
+                failures.append(
+                    f"Expected no Oolong USDA match, but got: {usda_name}"
+                )
                 break
 
     if expected.get("hasCaffeine"):
@@ -317,6 +330,53 @@ def evaluate_expectations(actual: list[dict], expected: dict) -> tuple[bool, lis
                 failures.append(
                     f"'{ing.get('name')}' should not be GPT source (common whole food)"
                 )
+
+    if "usdaMatchNameExcludes" in expected:
+        entries = expected["usdaMatchNameExcludes"]
+        if isinstance(entries, dict):
+            entries = [entries]
+        for entry in entries:
+            if isinstance(entry, dict):
+                substr = entry.get("substr", "")
+                exclude = entry.get("exclude", "")
+            else:
+                continue
+            ing = _find_ingredient(actual, substr)
+            if not ing:
+                failures.append(f"Expected ingredient matching '{substr}', not found")
+            else:
+                usda_name = (ing.get("usda_matched_name") or "").lower()
+                if usda_name and exclude.lower() in usda_name:
+                    failures.append(
+                        f"'{ing.get('name')}': USDA match '{ing.get('usda_matched_name')}' contains '{exclude}'"
+                    )
+
+    if "caloriesInRange" in expected:
+        entries = expected["caloriesInRange"]
+        if isinstance(entries, dict):
+            entries = [entries]
+        for entry in entries:
+            if isinstance(entry, dict):
+                substr = entry.get("substr", "")
+                min_cal = entry.get("min", 0)
+                max_cal = entry.get("max", 9999)
+            else:
+                continue
+            ing = _find_ingredient(actual, substr)
+            if not ing:
+                failures.append(f"Expected ingredient matching '{substr}', not found")
+            else:
+                cal_val = 0
+                for n in (ing.get("nutrition") or []):
+                    if isinstance(n, dict):
+                        nn = (n.get("nutrientName") or "").lower()
+                        if "energy" in nn and "kj" not in nn:
+                            cal_val = float(n.get("value", 0) or 0)
+                            break
+                if not (min_cal <= cal_val <= max_cal):
+                    failures.append(
+                        f"'{ing.get('name')}': expected {min_cal}-{max_cal} cal, got {cal_val}"
+                    )
 
     return len(failures) == 0, failures
 

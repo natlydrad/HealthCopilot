@@ -450,7 +450,26 @@ def _query_implies_caffeine(query_lower: str) -> bool:
     return any(t in query_lower for t in ("tea", "coffee", "matcha", "espresso"))
 
 
-_DRINK_QUERY_STOPWORDS = {"tea", "coffee", "the", "and", "with", "cup", "cups", "oz", "serving"}
+_DRINK_QUERY_STOPWORDS = {"tea", "coffee", "the", "and", "with", "cup", "cups", "oz", "serving", "brewed"}
+
+
+def _tea_type_mismatch(query_lower: str, matched_name: str) -> bool:
+    """
+    Return True if tea query should reject this match (e.g. hibiscus/raspberry/sleepy tea -> reject Oolong).
+    Oolong has caffeine; hibiscus, raspberry hibiscus, sleepy/bedtime imply herbal.
+    """
+    if not query_lower or not matched_name:
+        return False
+    ml = matched_name.lower()
+    if "oolong" not in ml:
+        return False
+    # Hibiscus/raspberry hibiscus: reject Oolong (no hibiscus in Oolong)
+    if "hibiscus" in query_lower or ("raspberry" in query_lower and "tea" in query_lower):
+        return True
+    # Sleepy/bedtime/calm: reject Oolong (herbal tea, not caffeinated)
+    if any(x in query_lower for x in ("sleepy", "bedtime", "calm")):
+        return True
+    return False
 
 
 def _drink_match_has_query_overlap(query_lower: str, matched_name: str) -> bool:
@@ -499,6 +518,20 @@ def _query_implies_condiment(query_lower: str) -> bool:
     if not query_lower:
         return False
     return "tbsp" in query_lower or "sauce" in query_lower
+
+
+def _condiment_query_matched_sausage(query_lower: str, matched_name: str) -> bool:
+    """Return True if query implies condiment (e.g. frank's red hot tbsp) but match is sausage/hot dog."""
+    if _query_implies_condiment(query_lower):
+        ml = matched_name.lower()
+        if "jumbo franks" in ml or ("franks" in ml and "sauce" not in ml and "condiment" not in ml):
+            return True
+    # Frank's Red Hot as product name typically means the sauce; reject hot dogs
+    if "frank" in query_lower and "red hot" in query_lower:
+        ml = matched_name.lower()
+        if "jumbo franks" in ml or ("franks" in ml and "sauce" not in ml and "condiment" not in ml):
+            return True
+    return False
 
 
 def _prefer_cooked_for_meat(query_lower: str, matched_name: str) -> float:
@@ -590,6 +623,13 @@ def validate_usda_match(ingredient_name: str, matched_name: str, macros: dict) -
     if is_meat and not is_protein_powder and protein_per_100g > 40:
         return False, f"Suspicious: {ingredient_name} matched to {matched_name} with {protein_per_100g:.1f}g protein/100g (meat expected <40g)"
     
+    # Condiment query matched sausage (e.g. frank's red hot tbsp -> RED HOT JUMBO FRANKS)
+    if _condiment_query_matched_sausage(ingredient_lower, matched_name):
+        return False, f"Condiment query '{ingredient_name}' matched sausage/hot dog '{matched_name}'"
+    # Plain cabbage matched kimchi (user meant raw cabbage)
+    if "cabbage" in ingredient_lower and "kimchi" not in ingredient_lower and "fermented" not in ingredient_lower:
+        if "kimchi" in matched_lower:
+            return False, f"Plain cabbage matched kimchi '{matched_name}'; prefer raw cabbage"
     # Check 3: Name mismatch (e.g., "bone broth" matching to "beef")
     # Simple check: if ingredient has a modifier, matched should too
     if "bone" in ingredient_lower and "bone" not in matched_lower:
@@ -711,6 +751,10 @@ def usda_lookup(ingredient_name):
                             valid.pop(0)
                             best = valid[0] if valid else None
                             continue
+                        if _tea_type_mismatch(ingredient_lower, best[4]):
+                            valid.pop(0)
+                            best = valid[0] if valid else None
+                            continue
                     break
 
             if best:
@@ -718,6 +762,9 @@ def usda_lookup(ingredient_name):
                 if _is_drink_like_query(ingredient_lower):
                     if not _drink_match_has_query_overlap(ingredient_lower, best[4]):
                         print(f"   ⏭️ Primary drink match has no query overlap, trying alternative queries...")
+                        best = None
+                    elif _tea_type_mismatch(ingredient_lower, best[4]):
+                        print(f"   ⏭️ Primary drink match tea type mismatch (e.g. Oolong for hibiscus/sleepy), trying alternatives...")
                         best = None
                 if best:
                     score, _, f, macros, matched_name, raw_nutrients = best
@@ -766,9 +813,9 @@ def usda_lookup(ingredient_name):
                     cal_score = score_calorie_fit(cal_100, expected_range[0], expected_range[1]) if expected_range else 0
                     valid2.append((cal_score, f, macros, matched_name, raw_nutrients))
                 if valid2:
-                    # For drinks: keep only candidates with query overlap, then sort by drink ordering score
+                    # For drinks: keep only candidates with query overlap and no tea type mismatch, then sort by drink ordering score
                     if _is_drink_like_query(ingredient_lower):
-                        valid2 = [v for v in valid2 if _drink_match_has_query_overlap(ingredient_lower, v[3])]
+                        valid2 = [v for v in valid2 if _drink_match_has_query_overlap(ingredient_lower, v[3]) and not _tea_type_mismatch(ingredient_lower, v[3])]
                     if valid2:
                         if _is_drink_like_query(ingredient_lower):
                             valid2.sort(key=lambda x: (-_score_drink_match_for_ordering(ingredient_lower, x[3], x[4]), x[0]))
@@ -826,7 +873,7 @@ def usda_lookup(ingredient_name):
                     valid2.append((cal_score, f, macros, matched_name, raw_nutrients))
                 if valid2:
                     if _is_drink_like_query(ingredient_lower):
-                        valid2 = [v for v in valid2 if _drink_match_has_query_overlap(ingredient_lower, v[3])]
+                        valid2 = [v for v in valid2 if _drink_match_has_query_overlap(ingredient_lower, v[3]) and not _tea_type_mismatch(ingredient_lower, v[3])]
                     if valid2:
                         if _is_drink_like_query(ingredient_lower):
                             valid2.sort(key=lambda x: (-_score_drink_match_for_ordering(ingredient_lower, x[3], x[4]), x[0]))
@@ -918,7 +965,8 @@ def _alternative_usda_queries(ingredient_name: str) -> list[str]:
                  "strawberry", "strawberries", "blueberry", "blueberries", "peach", "peaches",
                  "kiwi", "kiwis", "pear", "pears", "plum", "plums",
                  "carrot", "carrots", "broccoli", "celery", "cucumber", "tomato", "tomatoes",
-                 "lettuce", "spinach", "pepper", "peppers", "melon", "watermelon", "mango", "mangoes"]
+                 "lettuce", "spinach", "pepper", "peppers", "melon", "watermelon", "mango", "mangoes",
+                 "cabbage", "cabbages"]
     if any(f in lower for f in raw_foods):
         # Avoid duplicate: if name already has "raw", skip
         if "raw" not in lower and "juice" not in lower and "dried" not in lower:
@@ -962,8 +1010,7 @@ def _alternative_usda_queries(ingredient_name: str) -> list[str]:
         elif "chamomile" in lower or "peppermint" in lower or "rooibos" in lower:
             queries.append("herbal tea brewed")
         elif "sleepy" in lower or "bedtime" in lower or "calm" in lower:
-            # Prefer GPT fallback for sleepy tea; don't add generic tea brewed
-            pass
+            queries.append("herbal tea brewed")
         elif "green" in lower:
             queries.append("green tea brewed")
         elif "herbal" not in lower:
@@ -974,16 +1021,24 @@ def _alternative_usda_queries(ingredient_name: str) -> list[str]:
         if "beverage" not in lower and "drink" not in lower:
             queries.append(f"{base} beverage")
         queries.append(f"beverages {base}")
+    # Frank's Red Hot etc: condiment (often tbsp) should get sauce, not hot dogs
+    if ("frank" in lower or "franks" in lower) and "red hot" in lower:
+        queries.append("frank's red hot sauce")
+        queries.append("hot sauce cayenne pepper")
     # Grains (oats, rice): add "cooked" when user likely means prepared (oatmeal, bowl of oats, etc.)
     grain_terms = ["oat", "oats", "oatmeal", "steel cut", "rice", "brown rice", "white rice"]
     if "milk" not in lower and any(g in lower for g in grain_terms) and "raw" not in lower and "dry" not in lower and "uncooked" not in lower:
         base = name.split(",")[0].strip()
         queries.append(f"{base} cooked")
-        # When user said "cooked X", also try "X cooked" so search returns cooked product (e.g. "steel cut oats cooked")
+        # When user said "cooked X", also try "X cooked" and cooked oatmeal variants so USDA returns cooked product
         if "cooked" in lower:
             base_no_cooked = re.sub(r"\bcooked\b", "", base).strip()
             if base_no_cooked and f"{base_no_cooked} cooked" not in queries:
                 queries.append(f"{base_no_cooked} cooked")
+            if "steel" in lower or "oat" in lower:
+                queries.append("oatmeal cooked")
+                queries.append("oats cooked with water")
+                queries.append("steel cut oatmeal")
         if "rice" in lower:
             queries.append("rice cooked")
         if "brown rice" in lower:

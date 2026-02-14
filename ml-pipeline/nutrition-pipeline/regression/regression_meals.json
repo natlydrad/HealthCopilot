@@ -7,10 +7,9 @@
       "text": "raspberry hibiscus tea",
       "expectations": {
         "noOolong": true,
-        "hasCaffeine": true,
         "ingredientCount": 1
       },
-      "note": "why is this oolong tea"
+      "note": "raspberry hibiscus is herbal (0 caffeine), must not match Oolong"
     },
     {
       "id": "tea-earl-grey",
@@ -76,9 +75,10 @@
       "text": "tbsp frank's red hot",
       "expectations": {
         "ingredientCount": 1,
-        "noDuplicates": true
+        "noDuplicates": true,
+        "caloriesInRange": { "substr": "frank", "min": 0, "max": 25 }
       },
-      "note": "one phrase = one ingredient, no duplicates"
+      "note": "one phrase = one ingredient; Frank's Red Hot sauce ~0-5 cal/tbsp, not hot dogs"
     },
     {
       "id": "kiwi",
@@ -96,9 +96,10 @@
           "steel cut oats": { "quantity": 0.75, "unit": "cup" },
           "ground turkey": { "quantity": 1, "unit": "cup" }
         },
-        "noDuplicates": true
+        "noDuplicates": true,
+        "usdaMatchNameExcludes": [{ "substr": "cabbage", "exclude": "kimchi" }]
       },
-      "note": "quantityMatches for oats and turkey, no duplicates"
+      "note": "quantityMatches for oats and turkey; cabbage should be raw not kimchi"
     }
   ]
 }

@@ -58,6 +58,7 @@ def parse_ingredients(text: str, user_context: str = ""):
     AVOID vague terms: "pizza toppings", "salad stuff", "sandwich fillings", "leftover food". Prefer specific items: "pepperoni pizza slice", "2 slices cheese pizza", "lettuce, tomato, dressing", "turkey sandwich".
     Simple items stay as-is: "apple", "coffee", "eggs", "chicken breast"
     Single food/drink phrases must return one item: "iced matcha" → one drink (e.g. name "matcha", category "drink"); "green tea", "matcha latte", "oat milk" → one item each. Tea, coffee, matcha, soda, and any other single named drink or food must return exactly one item; never return an empty array for a clear single food or drink.
+    For "sleepy tea", "bedtime tea", "calm tea", etc., use the full phrase as the name (e.g. name "sleepy tea") so the system can identify the herbal type.
     For a single mention like "tbsp frank's red hot" or "frank's red hot sauce", output exactly one ingredient (e.g. the sauce), not two (e.g. sauce and dill spears). One user phrase = one ingredient line.
     Do not list the same ingredient twice; if the same food appears multiple times, combine into one line with the total quantity.
     
