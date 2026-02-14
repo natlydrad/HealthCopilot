@@ -107,11 +107,12 @@ def _merge_ingredients_by_name(parsed: list) -> list:
         if len(group) == 1:
             merged.append(first)
             continue
-        # Sum quantities when units are compatible (same or both "serving")
+        # Sum quantities when units are compatible; identical quantities = duplicate parse, keep one
         units = [(float(ing.get("quantity", 1) or 1), (ing.get("unit") or "serving").strip().lower()) for ing in group]
         u0 = units[0][1]
         if all(u == u0 for _, u in units):
-            first["quantity"] = sum(q for q, _ in units)
+            qtys = [q for q, _ in units]
+            first["quantity"] = qtys[0] if len(set(qtys)) == 1 and len(qtys) > 1 else sum(qtys)
             first["unit"] = group[0].get("unit") or "serving"
         # else keep first (incompatible units, don't sum)
         merged.append(first)
@@ -205,7 +206,9 @@ def _merge_pending_by_usda(pending: list) -> list:
         units = [(p["quantity"], (p["unit"] or "serving").strip().lower()) for p in group]
         u0 = units[0][1]
         if all(u == u0 for _, u in units):
-            total_qty = sum(q for q, _ in units)
+            qtys = [q for q, _ in units]
+            # Identical quantities = likely duplicate from text+image parse; keep one, don't sum
+            total_qty = qtys[0] if len(set(qtys)) == 1 and len(qtys) > 1 else sum(qtys)
             first_qty = float(first["quantity"] or 1)
             first = dict(first)
             first["quantity"] = total_qty

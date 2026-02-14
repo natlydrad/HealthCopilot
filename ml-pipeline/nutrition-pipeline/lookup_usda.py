@@ -534,6 +534,11 @@ def _score_drink_match_for_ordering(query_lower: str, matched_name: str, raw_nut
     return score
 
 
+def _query_implies_hot_sauce(query_lower: str) -> bool:
+    """True when query suggests hot sauce (e.g. frank's red hot)."""
+    return "frank" in query_lower and "red" in query_lower and "hot" in query_lower
+
+
 def _query_implies_condiment(query_lower: str) -> bool:
     """True if query suggests a condiment/sauce (e.g. tbsp frank's red hot). Prefer USDA sauce over sausage/pickles."""
     if not query_lower:
@@ -614,6 +619,12 @@ def _match_is_raw_whole_produce(matched_name: str) -> bool:
     return any(p in ml for p in produce_terms)
 
 
+def _match_is_pickles_or_spears(matched_name: str) -> bool:
+    """True when match is pickles/dill spears (whole, not sauce)."""
+    ml = (matched_name or "").lower()
+    return ("pickle" in ml or "spear" in ml) and "sauce" not in ml and "condiment" not in ml
+
+
 def validate_usda_match(
     ingredient_name: str, matched_name: str, macros: dict,
     quantity: float | None = None, unit: str | None = None
@@ -676,6 +687,9 @@ def validate_usda_match(
     # Unit implies form: tbsp/tsp = condiment portion; reject raw whole produce (peppers, etc.)
     if _unit_implies_condiment(unit) and _match_is_raw_whole_produce(matched_name):
         return False, f"Condiment portion (tbsp/tsp) matched raw produce '{matched_name}'; prefer sauce/condiment"
+    # Hot sauce query (e.g. frank's red hot) matched pickles/dill spears — wrong product
+    if _unit_implies_condiment(unit) and _query_implies_hot_sauce(ingredient_lower) and _match_is_pickles_or_spears(matched_name):
+        return False, f"Hot sauce query matched pickles/spears '{matched_name}'; prefer sauce"
     # Check 3: Name mismatch (e.g., "bone broth" matching to "beef")
     # Simple check: if ingredient has a modifier, matched should too
     if "bone" in ingredient_lower and "bone" not in matched_lower:
