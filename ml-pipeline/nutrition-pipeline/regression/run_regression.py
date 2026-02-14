@@ -24,10 +24,8 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from parser_gpt import parse_ingredients, gpt_estimate_nutrition
 from lookup_usda import (
-    usda_lookup,
-    usda_lookup_valid_for_portion,
+    resolve_usda_for_ingredient,
     scale_nutrition,
-    get_piece_grams,
     validate_scaled_calories,
     validate_scaled_protein,
     zero_calorie_nutrition_array,
@@ -155,58 +153,9 @@ def _parse_meal_to_ingredients(text: str) -> list[dict]:
         quantity = float(ing.get("quantity", 1) or 1)
         unit = (ing.get("unit") or "serving").strip()
 
-        scaled_nutrition = []
-        source_ing = "gpt"
-        usda_matched_name = None
-
-        usda = usda_lookup(ing.get("name", ""))
-        if not usda and _is_common_whole_food(name):
-            usda = usda_lookup_valid_for_portion(ing.get("name", ""), quantity, unit)
-
-        if usda:
-            usda_matched_name = usda.get("name")
-            serving_size = usda.get("serving_size_g", 100.0)
-            unit_lower = unit.lower()
-            piece_g = get_piece_grams(name)
-            if unit_lower in ("piece", "pieces", "count") and piece_g is not None:
-                serving_size = piece_g
-            elif (
-                unit_lower in ("serving", "servings")
-                and 1 <= quantity <= 30
-                and piece_g is not None
-            ):
-                serving_size = piece_g
-
-            scaled_nutrition = scale_nutrition(
-                usda.get("nutrition", []), quantity, unit, serving_size
-            )
-            cal_val = next(
-                (n.get("value", 0) for n in scaled_nutrition if n.get("nutrientName") == "Energy"),
-                0,
-            )
-            is_valid, _ = validate_scaled_calories(name, quantity, unit, cal_val)
-            if not is_valid:
-                usda = usda_lookup_valid_for_portion(ing.get("name", ""), quantity, unit)
-                if usda:
-                    usda_matched_name = usda.get("name")
-                    serving_size = usda.get("serving_size_g", 100.0)
-                    scaled_nutrition = scale_nutrition(
-                        usda.get("nutrition", []), quantity, unit, serving_size
-                    )
-                    source_ing = "usda"
-            else:
-                ok, _ = validate_scaled_protein(name, scaled_nutrition)
-                if not ok:
-                    usda = usda_lookup_valid_for_portion(ing.get("name", ""), quantity, unit)
-                    if usda:
-                        usda_matched_name = usda.get("name")
-                        serving_size = usda.get("serving_size_g", 100.0)
-                        scaled_nutrition = scale_nutrition(
-                            usda.get("nutrition", []), quantity, unit, serving_size
-                        )
-                        source_ing = "usda"
-                else:
-                    source_ing = "usda"
+        usda, scaled_nutrition, source_ing, usda_matched_name = resolve_usda_for_ingredient(
+            ing.get("name", ""), quantity, unit
+        )
 
         if not scaled_nutrition:
             gpt_nutrition = gpt_estimate_nutrition(ing.get("name", ""), quantity, unit)

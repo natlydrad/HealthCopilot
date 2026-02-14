@@ -98,6 +98,24 @@ def get_piece_grams(ingredient_name: str) -> float | None:
     return None
 
 
+def use_piece_grams_for_portion(unit_lower: str, name: str, quantity: float, piece_g: float | None) -> bool:
+    """
+    True when we should use get_piece_grams for serving size (countable foods).
+    Unit-agnostic: if piece_g exists and quantity suggests count (1-100), use it.
+    """
+    if piece_g is None:
+        return False
+    if unit_lower in ("piece", "pieces", "count"):
+        return True
+    if unit_lower in ("serving", "servings") and 1 <= quantity <= 30:
+        return True
+    if unit_lower == (name or "").lower().strip():
+        return True
+    if unit_lower in PIECE_GRAMS_BY_FOOD:
+        return True
+    return False
+
+
 def convert_to_grams(quantity: float, unit: str, serving_size_g: float = 100.0) -> float:
     """
     Convert a quantity + unit to grams.
@@ -115,6 +133,9 @@ def convert_to_grams(quantity: float, unit: str, serving_size_g: float = 100.0) 
     # Special handling for serving/piece/count - use USDA serving size (or piece_g when provided)
     if unit_lower in ("serving", "servings", "piece", "pieces", "count"):
         return quantity * serving_size_g
+    # Unit matches countable food (e.g. "7 strawberries" with unit "strawberries") - use piece grams
+    if unit_lower in PIECE_GRAMS_BY_FOOD:
+        return quantity * PIECE_GRAMS_BY_FOOD[unit_lower]
     
     # Look up conversion factor
     grams_per_unit = UNIT_TO_GRAMS.get(unit_lower, 100.0)  # default 100g if unknown
@@ -575,10 +596,32 @@ def _has_nutrition_data(raw_nutrients: list, macros: dict) -> bool:
     return total > 0
 
 
-def validate_usda_match(ingredient_name: str, matched_name: str, macros: dict) -> tuple[bool, str]:
+def _unit_implies_condiment(unit: str | None) -> bool:
+    """True when unit suggests user is measuring a condiment/sauce (tbsp, tsp)."""
+    if not unit:
+        return False
+    return unit.lower().strip() in ("tbsp", "tsp", "tablespoon", "tablespoons", "teaspoon", "teaspoons")
+
+
+def _match_is_raw_whole_produce(matched_name: str) -> bool:
+    """True when match looks like raw whole produce (peppers, vegetables, fruit) not sauce/dressing."""
+    ml = (matched_name or "").lower()
+    if "raw" not in ml:
+        return False
+    if any(c in ml for c in ("sauce", "dressing", "paste", "ketchup", "marinade", "condiment")):
+        return False
+    produce_terms = ("pepper", "peppers", "chili", "tomato", "tomatoes", "vegetable", "fruit", "onion", "carrot")
+    return any(p in ml for p in produce_terms)
+
+
+def validate_usda_match(
+    ingredient_name: str, matched_name: str, macros: dict,
+    quantity: float | None = None, unit: str | None = None
+) -> tuple[bool, str]:
     """
     Validate if USDA match seems reasonable.
-    Returns (is_valid, reason_if_invalid)
+    Returns (is_valid, reason_if_invalid).
+    When unit is provided: use unit-implies-form checks (e.g. tbsp + raw produce = reject for condiment).
     """
     # Reject USDA matches with no nutrition data (empty or all zeros)
     total_macros = (macros.get("calories") or 0) + (macros.get("protein") or 0) + (macros.get("carbs") or 0) + (macros.get("fat") or 0)
@@ -630,6 +673,9 @@ def validate_usda_match(ingredient_name: str, matched_name: str, macros: dict) -
     if "cabbage" in ingredient_lower and "kimchi" not in ingredient_lower and "fermented" not in ingredient_lower:
         if "kimchi" in matched_lower:
             return False, f"Plain cabbage matched kimchi '{matched_name}'; prefer raw cabbage"
+    # Unit implies form: tbsp/tsp = condiment portion; reject raw whole produce (peppers, etc.)
+    if _unit_implies_condiment(unit) and _match_is_raw_whole_produce(matched_name):
+        return False, f"Condiment portion (tbsp/tsp) matched raw produce '{matched_name}'; prefer sauce/condiment"
     # Check 3: Name mismatch (e.g., "bone broth" matching to "beef")
     # Simple check: if ingredient has a modifier, matched should too
     if "bone" in ingredient_lower and "bone" not in matched_lower:
@@ -656,10 +702,11 @@ def validate_usda_match(ingredient_name: str, matched_name: str, macros: dict) -
     return True, ""
 
 
-def usda_lookup(ingredient_name):
+def usda_lookup(ingredient_name: str, quantity: float | None = None, unit: str | None = None):
     """
     Look up nutrition data from USDA FoodData Central.
     Returns macros per 100g serving, or None if match seems invalid.
+    When quantity/unit are provided, use unit-implies-form validation (e.g. reject raw produce for tbsp).
     """
     print(f"🔍 USDA lookup for: '{ingredient_name}'")
     print(f"   API key present: {bool(USDA_KEY)} (length: {len(USDA_KEY) if USDA_KEY else 0})")
@@ -709,7 +756,7 @@ def usda_lookup(ingredient_name):
                     except Exception:
                         pass
                 # #endregion
-                is_valid, reason = validate_usda_match(ingredient_name, matched_name, macros)
+                is_valid, reason = validate_usda_match(ingredient_name, matched_name, macros, quantity, unit)
                 if not is_valid:
                     continue
                 if _is_drink_like_query(ingredient_lower) and _query_implies_caffeine(ingredient_lower):
@@ -805,7 +852,7 @@ def usda_lookup(ingredient_name):
                     raw_nutrients = f.get("foodNutrients", [])
                     macros = extract_macros(raw_nutrients)
                     matched_name = f["description"]
-                    is_valid, _ = validate_usda_match(ingredient_name, matched_name, macros)
+                    is_valid, _ = validate_usda_match(ingredient_name, matched_name, macros, quantity, unit)
                     if not is_valid:
                         continue
                     cal_100 = macros.get("calories", 0) or 0
@@ -864,7 +911,7 @@ def usda_lookup(ingredient_name):
                     raw_nutrients = f.get("foodNutrients", [])
                     macros = extract_macros(raw_nutrients)
                     matched_name = f["description"]
-                    is_valid, _ = validate_usda_match(ingredient_name, matched_name, macros)
+                    is_valid, _ = validate_usda_match(ingredient_name, matched_name, macros, quantity, unit)
                     if not is_valid:
                         continue
                     cal_100 = macros.get("calories", 0) or 0
@@ -1141,6 +1188,66 @@ def usda_search_options(
     return options, has_exact
 
 
+_COMMON_WHOLE_FOODS = frozenset([
+    "strawberry", "strawberries", "apple", "apples", "banana", "bananas",
+    "kiwi", "kiwis", "orange", "oranges", "pear", "pears", "plum", "plums",
+])
+
+
+def resolve_usda_for_ingredient(
+    name: str, quantity: float, unit: str
+) -> tuple[dict | None, list, str, str | None]:
+    """
+    Shared USDA resolution used by both regression runner and parse API.
+    Returns (usda_dict, scaled_nutrition, source, usda_matched_name).
+    source is "usda" or "gpt"; usda_matched_name is set when source is usda.
+    """
+    name_lower = (name or "").lower().strip()
+    unit_lower = (unit or "serving").lower().strip()
+    scaled_nutrition = []
+    source = "gpt"
+    usda_matched_name = None
+
+    usda = usda_lookup(name, quantity, unit)
+    if not usda and name_lower in _COMMON_WHOLE_FOODS:
+        usda = usda_lookup_valid_for_portion(name, quantity, unit)
+
+    if usda:
+        usda_matched_name = usda.get("name")
+        serving_size = usda.get("serving_size_g", 100.0)
+        piece_g = get_piece_grams(name)
+        if use_piece_grams_for_portion(unit_lower, name_lower, quantity, piece_g):
+            serving_size = piece_g
+        scaled_nutrition = scale_nutrition(usda.get("nutrition", []), quantity, unit, serving_size)
+        cal_val = next((n.get("value", 0) for n in scaled_nutrition if n.get("nutrientName") == "Energy"), 0)
+        is_valid, _ = validate_scaled_calories(name, quantity, unit, cal_val)
+        if not is_valid:
+            usda = usda_lookup_valid_for_portion(name, quantity, unit)
+            if usda:
+                usda_matched_name = usda.get("name")
+                serving_size = usda.get("serving_size_g", 100.0)
+                if use_piece_grams_for_portion(unit_lower, name_lower, quantity, piece_g):
+                    serving_size = piece_g
+                scaled_nutrition = scale_nutrition(usda.get("nutrition", []), quantity, unit, serving_size)
+                source = "usda"
+        else:
+            ok, _ = validate_scaled_protein(name, scaled_nutrition)
+            if not ok:
+                usda = usda_lookup_valid_for_portion(name, quantity, unit)
+                if usda:
+                    usda_matched_name = usda.get("name")
+                    serving_size = usda.get("serving_size_g", 100.0)
+                    if use_piece_grams_for_portion(unit_lower, name_lower, quantity, piece_g):
+                        serving_size = piece_g
+                    scaled_nutrition = scale_nutrition(usda.get("nutrition", []), quantity, unit, serving_size)
+            source = "usda" if usda else "gpt"
+
+    if not usda:
+        scaled_nutrition = []  # Caller will use GPT fallback
+
+    return usda, scaled_nutrition, source, usda_matched_name if usda else None
+
+
 def usda_lookup_valid_for_portion(
     ingredient_name: str, quantity: float, unit: str
 ) -> dict | None:
@@ -1152,7 +1259,7 @@ def usda_lookup_valid_for_portion(
     queries = _alternative_usda_queries(ingredient_name)
     seen_fdc = set()
     for q in queries:
-        usda = usda_lookup(q)
+        usda = usda_lookup(q, quantity, unit)
         if not usda:
             continue
         fdc_id = usda.get("usdaCode")
@@ -1160,21 +1267,11 @@ def usda_lookup_valid_for_portion(
             continue
         if fdc_id:
             seen_fdc.add(fdc_id)
-        # Scale and validate (use piece grams when unit is piece, serving, or count-like e.g. strawberries, eggs)
         serving_size = usda.get("serving_size_g", 100.0)
         unit_lower = (unit or "").lower()
         name_lower = (ingredient_name or "").strip().lower()
         piece_g = get_piece_grams(ingredient_name)
-        use_piece_for_serving = (
-            piece_g is not None
-            and (
-                unit_lower in ("piece", "pieces")
-                or (unit_lower in ("serving", "servings") and 1 <= quantity <= 30)
-                or unit_lower in PIECE_GRAMS_BY_FOOD
-                or unit_lower == name_lower
-            )
-        )
-        if use_piece_for_serving:
+        if use_piece_grams_for_portion(unit_lower, name_lower, quantity, piece_g):
             serving_size = piece_g
         scaled = scale_nutrition(
             usda.get("nutrition", []),
