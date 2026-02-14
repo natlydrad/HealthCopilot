@@ -25,6 +25,7 @@ sys.path.insert(0, str(REPO_ROOT))
 from regression.regression_runner import (
     parse_meal_text_to_ingredients,
     evaluate_expectations,
+    evaluate_production_checks,
 )
 
 
@@ -56,6 +57,10 @@ def main():
             continue
 
         ok, failures = evaluate_expectations(actual, expectations)
+        prod_ok, prod_failures = evaluate_production_checks(actual)
+        if not prod_ok:
+            failures = list(failures) + prod_failures
+            ok = False
         if ok:
             print(f"PASS {mid}: {text[:50]}...")
             passed += 1

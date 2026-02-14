@@ -2775,6 +2775,7 @@ def regression_run_one():
         from regression.regression_runner import (
             parse_meal_text_to_ingredients,
             evaluate_expectations,
+            evaluate_production_checks,
         )
     except ImportError as e:
         return jsonify({"error": f"Regression module not available: {e}"}), 500
@@ -2789,6 +2790,10 @@ def regression_run_one():
     try:
         ingredients = parse_meal_text_to_ingredients(text)
         passed, failures = evaluate_expectations(ingredients, expectations)
+        prod_ok, prod_failures = evaluate_production_checks(ingredients)
+        if not prod_ok:
+            failures = list(failures) + prod_failures
+            passed = False
         return jsonify({
             "ingredients": ingredients,
             "passed": passed,
@@ -2796,6 +2801,63 @@ def regression_run_one():
         })
     except Exception as e:
         return jsonify({"error": str(e), "ingredients": [], "passed": False, "failures": [str(e)]}), 500
+
+
+@app.route("/regression/run-day", methods=["POST"])
+def regression_run_day():
+    """
+    Run regression for a list of meals (e.g. a day's meals from the dashboard).
+    Body: { "meals": [ { "id": str, "text": str }, ... ] }
+    Uses REGRESSION_MODE (temp 0). For each meal: parse text -> ingredients; pass = no exception.
+    Returns: { "results": [ { "mealId", "text", "passed", "failures", "ingredients" }, ... ] }
+    """
+    os.environ["REGRESSION_MODE"] = "true"
+    os.environ["USE_PARSING_CACHE"] = "false"
+    try:
+        from regression.regression_runner import (
+            parse_meal_text_to_ingredients,
+            evaluate_production_checks,
+        )
+    except ImportError as e:
+        return jsonify({"error": f"Regression module not available: {e}"}), 500
+
+    data = request.get_json() or {}
+    meals = data.get("meals") or []
+    if not meals:
+        return jsonify({"results": [], "message": "No meals provided"}), 200
+
+    results = []
+    for m in meals:
+        meal_id = m.get("id") or ""
+        text = (m.get("text") or "").strip()
+        try:
+            ingredients = parse_meal_text_to_ingredients(text)
+            passed = True
+            failures = []
+            if text and not ingredients:
+                passed = False
+                failures.append("Parse returned no ingredients for non-empty text")
+            prod_ok, prod_failures = evaluate_production_checks(ingredients)
+            if not prod_ok:
+                failures = list(failures) + prod_failures
+                passed = False
+            results.append({
+                "mealId": meal_id,
+                "text": text,
+                "passed": passed,
+                "failures": failures,
+                "ingredients": ingredients,
+            })
+        except Exception as e:
+            results.append({
+                "mealId": meal_id,
+                "text": text,
+                "passed": False,
+                "failures": [str(e)],
+                "ingredients": [],
+            })
+
+    return jsonify({"results": results})
 
 
 if __name__ == "__main__":

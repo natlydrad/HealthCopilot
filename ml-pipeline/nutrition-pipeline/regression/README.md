@@ -8,10 +8,14 @@ All 10 meals pass with `USE_PARSING_CACHE=false REGRESSION_MODE=true`.
 
 ## How to Run
 
+**CLI (fixed suite):**
+
 ```bash
 cd ml-pipeline/nutrition-pipeline
 USE_PARSING_CACHE=false REGRESSION_MODE=true python regression/run_regression.py
 ```
+
+**Day-based (dashboard):** In the Day view for a date, click **Run regression for this day**. The dashboard sends that day’s meals to the Parse API (`POST /regression/run-day`); each meal text is run through the same text-only parse pipeline. Pass = parse completed, at least one ingredient for non-empty text, and **production checks** (servings + nutrient sanity) pass. Results show per-meal pass/fail with expandable parsed ingredients and failure messages.
 
 Environment variables:
 
@@ -62,10 +66,25 @@ Add an entry to `regression_meals.json`:
 | `quantityMatches` | object | `{ "name_substring": { "quantity": N, "unit": "..." } }` |
 | `sourceIsUsda` | string[] | These ingredients must have source "usda" |
 | `noGptFor` | string[] | These ingredients must NOT have source "gpt" |
+| `caloriesInRange` | object/array | `{ "substr": "name", "min": N, "max": M }` – ingredient calories in range |
+| `usdaMatchNameExcludes` | array | `[{ "substr": "cabbage", "exclude": "kimchi" }]` – USDA match must not contain exclude |
 
 ## Adding New Expectations
 
-Extend `evaluate_expectations()` in `run_regression.py` to support new keys. Keep expectations declarative (no code in JSON).
+Extend `evaluate_expectations()` in `regression_runner.py` to support new keys. Keep expectations declarative (no code in JSON).
+
+## What we check (comprehensive)
+
+Every run (CLI suite, run-one, run-day) evaluates:
+
+1. **Parsing** – Ingredient count, no duplicates, quantity/unit match (via expectation keys).
+2. **Source** – USDA vs GPT where expected (`sourceIsUsda`, `noGptFor`).
+3. **Nutrients** – Per-ingredient and per-meal sanity; optional `caloriesInRange` per ingredient.
+4. **Servings** – **Production checks:** `foodGroupServings` (when present) must be non-negative and not NaN; aggregate servings across the meal must be valid.
+5. **Nutrient sanity (production checks)** – Per ingredient: calories in 0–5000, protein/carbs/fat non-negative. Meal total calories in 0–5000.
+6. **USDA display name** – `usdaMatchNameExcludes` to reject wrong matches (e.g. Oolong for non-tea).
+
+Declarative expectations in `regression_meals.json` are evaluated first; then `evaluate_production_checks()` runs on the parsed ingredients (servings + nutrient sanity). Any failure is reported in `failures`.
 
 ## When Bulk-Review Fails but Regression Passes
 

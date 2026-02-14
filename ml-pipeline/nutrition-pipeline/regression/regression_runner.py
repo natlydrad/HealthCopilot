@@ -10,6 +10,9 @@ importing this module, or the pipeline may behave non-deterministically.
 from lookup_usda import (
     resolve_usda_for_ingredient,
     zero_calorie_nutrition_array,
+    get_grams_for_scaling,
+    get_piece_grams,
+    use_piece_grams_for_portion,
 )
 from parser_gpt import parse_ingredients, gpt_estimate_nutrition
 from enrich_common_sense import apply_deterministic_rules
@@ -96,6 +99,8 @@ def _apply_corrections(ingredients: list[dict], corrections: list[dict]) -> None
                 ing["nutrition"] = _merge_micro_into_nutrition(
                     ing.get("nutrition") or [], fiber_g=corr["fiber_g"]
                 )
+            if corr.get("foodGroupServings") and isinstance(corr["foodGroupServings"], dict):
+                ing["foodGroupServings"] = corr["foodGroupServings"]
             break
 
 
@@ -145,20 +150,44 @@ def parse_meal_text_to_ingredients(text: str) -> list[dict]:
                 scaled_nutrition = gpt_nutrition
                 source_ing = "gpt"
 
+        # portionGrams for production parity (servings / display)
+        serving_size = 100.0
+        if usda:
+            serving_size = usda.get("serving_size_g", 100.0)
+            piece_g = get_piece_grams(ing.get("name", ""))
+            if use_piece_grams_for_portion(unit.lower(), name, quantity, piece_g):
+                serving_size = piece_g
+        portion_grams = round(
+            get_grams_for_scaling(ing.get("name", ""), quantity, unit, serving_size), 1
+        )
+
+        fg = ing.get("foodGroupServings")
+        if not isinstance(fg, dict):
+            fg = None
+
         ing_dict = {
             "name": ing.get("name", ""),
             "quantity": quantity,
             "unit": unit,
             "source": source_ing,
             "nutrition": scaled_nutrition,
+            "portionGrams": portion_grams,
+            "foodGroupServings": fg,
         }
         if usda_matched_name:
             ing_dict["usda_matched_name"] = usda_matched_name
         ingredients.append(ing_dict)
 
-    # Apply deterministic rules (caffeine, etc.)
+    # Apply deterministic rules (caffeine, foodGroupServings for meat, etc.)
     corrections = apply_deterministic_rules(ingredients)
     _apply_corrections(ingredients, corrections)
+
+    # Normalize to parsingMetadata shape expected by frontend / production checks
+    for ing in ingredients:
+        ing["parsingMetadata"] = {
+            "portionGrams": ing.get("portionGrams"),
+            "foodGroupServings": ing.get("foodGroupServings"),
+        }
 
     return ingredients
 
@@ -302,5 +331,90 @@ def evaluate_expectations(actual: list[dict], expected: dict) -> tuple[bool, lis
                     failures.append(
                         f"'{ing.get('name')}': expected {min_cal}-{max_cal} cal, got {cal_val}"
                     )
+
+    return len(failures) == 0, failures
+
+
+def _get_macros(ing: dict) -> dict:
+    """Return {calories, protein, carbs, fat} from ingredient nutrition array."""
+    out = {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0}
+    for n in ing.get("nutrition") or []:
+        if not isinstance(n, dict):
+            continue
+        nn = (n.get("nutrientName") or "").lower()
+        val = float(n.get("value", 0) or 0)
+        if "energy" in nn and "kj" not in nn:
+            out["calories"] = val
+        elif nn == "protein":
+            out["protein"] = val
+        elif "carbohydrate" in nn:
+            out["carbs"] = val
+        elif "lipid" in nn or nn == "fat":
+            out["fat"] = val
+    return out
+
+
+def _aggregate_servings(ingredients: list[dict]) -> dict:
+    """Sum MyPlate-style foodGroupServings across ingredients. Returns {grains, vegetables, fruits, protein, dairy}."""
+    agg = {"grains": 0.0, "vegetables": 0.0, "fruits": 0.0, "protein": 0.0, "dairy": 0.0}
+    for ing in ingredients:
+        fg = ing.get("foodGroupServings") or (ing.get("parsingMetadata") or {}).get("foodGroupServings")
+        if not isinstance(fg, dict):
+            continue
+        for k in agg:
+            v = fg.get(k)
+            if v is not None:
+                try:
+                    agg[k] += float(v)
+                except (TypeError, ValueError):
+                    pass
+    return agg
+
+
+def evaluate_production_checks(ingredients: list[dict]) -> tuple[bool, list[str]]:
+    """
+    Production-parity checks: servings sanity and nutrient sanity.
+    Returns (passed, list of failure messages).
+    """
+    failures = []
+
+    # Servings: foodGroupServings non-negative, no NaN; aggregate non-negative
+    for i, ing in enumerate(ingredients):
+        fg = ing.get("foodGroupServings") or (ing.get("parsingMetadata") or {}).get("foodGroupServings")
+        if not isinstance(fg, dict):
+            continue
+        for k, v in fg.items():
+            if v is None:
+                continue
+            try:
+                f = float(v)
+                if f != f:  # NaN
+                    failures.append(f"'{ing.get('name')}': foodGroupServings.{k} is NaN")
+                elif f < 0:
+                    failures.append(f"'{ing.get('name')}': foodGroupServings.{k} is negative ({f})")
+            except (TypeError, ValueError):
+                failures.append(f"'{ing.get('name')}': foodGroupServings.{k} is not a number")
+
+    agg = _aggregate_servings(ingredients)
+    for k, v in agg.items():
+        if v != v or v < 0:
+            failures.append(f"Aggregate servings {k} invalid: {v}")
+
+    # Nutrient sanity: per-ingredient calories 0–5000, macros non-negative
+    for ing in ingredients:
+        macros = _get_macros(ing)
+        if not (0 <= macros["calories"] <= 5000):
+            failures.append(
+                f"'{ing.get('name')}': calories {macros['calories']:.0f} outside 0–5000"
+            )
+        if macros["protein"] < 0 or macros["carbs"] < 0 or macros["fat"] < 0:
+            failures.append(
+                f"'{ing.get('name')}': negative macro (p={macros['protein']:.0f} c={macros['carbs']:.0f} f={macros['fat']:.0f})"
+            )
+
+    # Meal total calories 0–5000
+    total_cal = sum(_get_macros(ing)["calories"] for ing in ingredients)
+    if not (0 <= total_cal <= 5000):
+        failures.append(f"Meal total calories {total_cal:.0f} outside 0–5000")
 
     return len(failures) == 0, failures
