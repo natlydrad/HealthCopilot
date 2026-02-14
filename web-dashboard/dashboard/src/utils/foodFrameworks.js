@@ -72,9 +72,10 @@ function processIngredient(ing) {
 
   const fg = ing.parsingMetadata?.foodGroupServings;
   const isDrink = DRINK_TERMS.some(d => name.includes(d));
-  // When we have backend-computed portionGrams, prefer keyword path (accurate) over GPT foodGroupServings (often inflated)
-  const preferGramsOverFg = portionGrams != null && portionGrams > 0;
-  if (fg && typeof fg === 'object' && !preferGramsOverFg) {
+  // Use foodGroupServings when present and has at least one non-zero value (GPT + common_sense_check).
+  // Fall back to keywords only when fg is missing or all zeros (so common_sense corrections are used).
+  const fgHasValues = fg && typeof fg === 'object' && [fg.grains, fg.vegetables, fg.fruits, fg.protein, fg.dairy].some(v => (Number(v) || 0) > 0);
+  if (fgHasValues) {
     const g = Number(fg.grains) || 0;
     const v = Number(fg.vegetables) || 0;
     const f = Number(fg.fruits) || 0;
