@@ -38,6 +38,45 @@ function formatNutritionSummary(nutrition) {
 // Vague names that should always be treated as low-confidence
 const VAGUE_NAME_PATTERNS = /pizza toppings|salad stuff|sandwich fillings|leftover food|toppings\b|leftover(s)?\b|generic salad|stuff\b|fillings\b/i;
 
+/** Max number of meals to parse at once for "Parse everything". */
+const PARSE_EVERYTHING_CONCURRENCY = 3;
+
+/**
+ * Run async tasks with bounded concurrency. Calls onTaskComplete(completedCount, result, index) after each task finishes.
+ * @param {Array<() => Promise<any>>} tasks - Array of functions that return promises
+ * @param {number} maxConcurrent - Max tasks running at once
+ * @param {(completed: number, result: { status: 'fulfilled'|'rejected', value?: any, reason?: any }, index: number) => void} [onTaskComplete]
+ * @returns {Promise<Array<{ status: 'fulfilled'|'rejected', value?: any, reason?: any }>>}
+ */
+async function runWithConcurrency(tasks, maxConcurrent, onTaskComplete) {
+  const results = new Array(tasks.length);
+  let completedCount = 0;
+  let nextIndex = 0;
+
+  const runOne = async (index) => {
+    if (index >= tasks.length) return;
+    try {
+      const value = await tasks[index]();
+      results[index] = { status: "fulfilled", value };
+    } catch (err) {
+      results[index] = { status: "rejected", reason: err };
+    } finally {
+      completedCount++;
+      onTaskComplete?.(completedCount, results[index], index);
+      if (nextIndex < tasks.length) {
+        await runOne(nextIndex++);
+      }
+    }
+  };
+
+  const workers = [];
+  for (let i = 0; i < Math.min(maxConcurrent, tasks.length); i++) {
+    workers.push(runOne(nextIndex++));
+  }
+  await Promise.all(workers);
+  return results;
+}
+
 function FrameworkProgress({ title, data, targets, units, labels }) {
   const entries = Object.keys(targets).filter((k) => targets[k] > 0);
   if (entries.length === 0) return null;
