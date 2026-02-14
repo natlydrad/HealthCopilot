@@ -81,7 +81,7 @@ def common_sense_check(meal_text: str, ingredients: list[dict]) -> list[dict]:
     if not ingredients:
         return []
 
-    # Build minimal summary for the model (include current micros)
+    # Build minimal summary for the model (include current micros and foodGroupServings)
     summary = []
     for ing in ingredients:
         name = ing.get("name", "?")
@@ -91,6 +91,11 @@ def common_sense_check(meal_text: str, ingredients: list[dict]) -> list[dict]:
         if cal is None and isinstance(ing.get("nutrition"), list):
             cal = _calories_from_nutrition(ing["nutrition"])
         micros = _micros_from_nutrition(ing.get("nutrition") or [])
+        fg = ing.get("foodGroupServings")
+        if isinstance(fg, dict):
+            fg = {k: fg.get(k) for k in ("grains", "vegetables", "fruits", "protein", "dairy") if k in fg}
+        else:
+            fg = None
         summary.append({
             "name": name,
             "quantity": qty,
@@ -100,9 +105,10 @@ def common_sense_check(meal_text: str, ingredients: list[dict]) -> list[dict]:
             "caffeine_mg": micros["caffeine_mg"],
             "fiber_g": micros["fiber_g"],
             "sodium_mg": micros["sodium_mg"],
+            "foodGroupServings": fg,
         })
 
-    prompt = f"""You are a nutrition common-sense checker. Given a meal description and a list of parsed ingredients with their current quantity, unit, calories, and micronutrients (added_sugar_g, caffeine_mg, fiber_g, sodium_mg), output ONLY a JSON array of corrections for items that are clearly wrong.
+    prompt = f"""You are a nutrition common-sense checker. Given a meal description and a list of parsed ingredients with their current quantity, unit, calories, micronutrients, and foodGroupServings (MyPlate), output ONLY a JSON array of corrections for items that are clearly wrong.
 
 Meal: "{meal_text}"
 
@@ -115,9 +121,15 @@ Rules:
 - Coffee/espresso (as a drink): one serving is typically one cup/shot. If quantity/unit is clearly wrong (e.g. 8 oz of coffee powder), suggest quantity 1, unit "serving", and serving_size_g if you know a reasonable gram weight.
 - Micronutrients: when an ingredient is clearly a source of a nutrient but current value is missing or 0, you may add one or more of: added_sugar_g (number), caffeine_mg (number), fiber_g (number), sodium_mg (number). Examples: matcha/coffee/tea with 0 caffeine -> add caffeine_mg (e.g. ~25-35 mg per gram matcha, ~80-100 mg per cup coffee); whole grain/legumes with 0 fiber -> add fiber_g; sweetened item with 0 added sugar -> add added_sugar_g; packaged/savory item with 0 sodium -> add sodium_mg. Only suggest when it is an obvious error and you can estimate reasonably from context/portion; otherwise omit.
 - Calorie sanity: If the stated quantity and unit describe a small amount (e.g. 7 strawberries, 2 eggs, 1 cup of cabbage) but total calories are clearly too high (e.g. 7 strawberries with 300+ cal, or 1 cup vegetables with 400+ cal), treat it as an error. Output a correction that either suggests a plausible calorie range, or correct quantity/unit if they look wrong (e.g. cups vs count), or add a brief note. Prefer correcting to a plausible value when obvious.
+- Food groups (MyPlate): If an ingredient has missing foodGroupServings (null) or clearly wrong values, add foodGroupServings: {{ "grains": N, "vegetables": N, "fruits": N, "protein": N, "dairy": N }}. Use 0 for categories that don't apply.
+  * Meat/poultry/fish in oz: protein = quantity (e.g. pork 6 oz -> {{ "protein": 6, "grains": 0, "vegetables": 0, "fruits": 0, "dairy": 0 }}).
+  * Cookies, biscuits, crackers, tortilla chips, corn chips, pretzels: grains (1 cookie ≈ 1 grain; chips/crackers by oz ~28g per serving).
+  * Tortilla chips and corn chips are GRAINS not vegetables (corn as a grain product).
+  * Bread, rice, pasta, cereal, etc.: grains. Vegetables and fruits by cup or piece.
+  * Beverages (tea, coffee, soda, juice): omit foodGroupServings or use all zeros.
 - Only output corrections for clear violations. If everything looks reasonable, return [].
 - Match "name" exactly to the ingredient name from the list (case-insensitive match is ok).
-- Output ONLY a JSON array. No markdown, no explanation. Example: [{{"name": "water", "zero_calories": true}}] or [{{"name": "matcha", "caffeine_mg": 56}}] or []."""
+- Output ONLY a JSON array. No markdown, no explanation. Example: [{{"name": "water", "zero_calories": true}}] or [{{"name": "pork shoulder", "foodGroupServings": {{"grains": 0, "vegetables": 0, "fruits": 0, "protein": 6, "dairy": 0}}}}] or []."""
 
     def _strip_markdown(s: str) -> str:
         s = (s or "").strip()

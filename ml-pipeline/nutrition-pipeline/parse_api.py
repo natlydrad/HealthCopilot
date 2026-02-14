@@ -1244,6 +1244,17 @@ def _apply_single_correction(pending, corr, scale_nutrition_fn, zero_calorie_nut
                 k: corr.get(k) for k in ("added_sugar_g", "caffeine_mg", "fiber_g", "sodium_mg") if corr.get(k) is not None
             })
             print(f"   📋 {source_label} micros: {p['payload']['name']}")
+        if corr.get("foodGroupServings") and isinstance(corr["foodGroupServings"], dict):
+            pm = p["payload"].get("parsingMetadata") or {}
+            pm = dict(pm)
+            fg = corr["foodGroupServings"]
+            pm["foodGroupServings"] = {}
+            for k in ("grains", "vegetables", "fruits", "protein", "dairy"):
+                v = fg.get(k)
+                pm["foodGroupServings"][k] = round(float(v), 2) if v is not None and isinstance(v, (int, float)) else 0
+            p["payload"]["parsingMetadata"] = pm
+            _trace_append(trace, source_label, f"{source_label} foodGroupServings: {p['payload']['name']}", {"foodGroupServings": pm["foodGroupServings"]})
+            print(f"   📋 {source_label} foodGroupServings: {p['payload']['name']} -> {pm['foodGroupServings']}")
         break
 
 
@@ -2068,16 +2079,19 @@ def parse_meal(meal_id):
             det_corrections = apply_deterministic_rules(minimal)
             for corr in det_corrections:
                 _apply_single_correction(pending, corr, scale_nutrition, zero_calorie_nutrition_array, merge_micro_overrides_into_nutrition, trace, "rules")
-            # Rebuild minimal after deterministic so GPT sees corrected state
+            # Rebuild minimal after deterministic so GPT sees corrected state (include foodGroupServings)
             for i, p in enumerate(pending):
                 nut = p["payload"].get("nutrition") or []
                 energy_vals = [n.get("value", 0) for n in nut if (n.get("nutrientName") or "").lower() == "energy"]
                 if not energy_vals:
                     energy_vals = [n.get("value", 0) for n in nut if "energy" in (n.get("nutrientName") or "").lower()]
+                pm = p["payload"].get("parsingMetadata") or {}
                 minimal[i]["nutrition"] = p["payload"].get("nutrition")
                 minimal[i]["calories"] = energy_vals[0] if energy_vals else None
                 minimal[i]["quantity"] = p["payload"]["quantity"]
                 minimal[i]["unit"] = p["payload"]["unit"]
+                fg = pm.get("foodGroupServings")
+                minimal[i]["foodGroupServings"] = fg if isinstance(fg, dict) else None
             # Step 2: GPT common-sense for edge cases
             corrections = common_sense_check(text, minimal)
             for corr in corrections:
