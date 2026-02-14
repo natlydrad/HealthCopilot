@@ -524,6 +524,16 @@ def _prefer_sauce_for_condiment_query(query_lower: str, matched_name: str) -> fl
     return 0.0
 
 
+def _prefer_cooked_for_grains(query_lower: str, matched_name: str) -> float:
+    """Return bonus to subtract from cal_score when query says cooked and match is cooked (e.g. cooked steel cut oats -> cooked oats not raw)."""
+    if "cooked" not in (query_lower or ""):
+        return 0.0
+    matched_lower = (matched_name or "").lower()
+    if "cooked" in matched_lower:
+        return 50.0
+    return 0.0
+
+
 def _has_nutrition_data(raw_nutrients: list, macros: dict) -> bool:
     """True if the match has non-empty, non-zero nutrition data."""
     if not raw_nutrients:
@@ -675,6 +685,7 @@ def usda_lookup(ingredient_name):
                     cal_score += 500
                 cal_score -= _prefer_cooked_for_meat(ingredient_lower, matched_name)
                 cal_score -= _prefer_sauce_for_condiment_query(ingredient_lower, matched_name)
+                cal_score -= _prefer_cooked_for_grains(ingredient_lower, matched_name)
                 valid.append((cal_score, carbs, f, macros, matched_name, raw_nutrients))
 
             if not valid:
@@ -968,6 +979,11 @@ def _alternative_usda_queries(ingredient_name: str) -> list[str]:
     if "milk" not in lower and any(g in lower for g in grain_terms) and "raw" not in lower and "dry" not in lower and "uncooked" not in lower:
         base = name.split(",")[0].strip()
         queries.append(f"{base} cooked")
+        # When user said "cooked X", also try "X cooked" so search returns cooked product (e.g. "steel cut oats cooked")
+        if "cooked" in lower:
+            base_no_cooked = re.sub(r"\bcooked\b", "", base).strip()
+            if base_no_cooked and f"{base_no_cooked} cooked" not in queries:
+                queries.append(f"{base_no_cooked} cooked")
         if "rice" in lower:
             queries.append("rice cooked")
         if "brown rice" in lower:
@@ -1089,14 +1105,22 @@ def usda_lookup_valid_for_portion(
             continue
         if fdc_id:
             seen_fdc.add(fdc_id)
-        # Scale and validate (use piece grams when unit is piece, or when "serving" with small count for countable fruit)
+        # Scale and validate (use piece grams when unit is piece, serving, or count-like e.g. strawberries, eggs)
         serving_size = usda.get("serving_size_g", 100.0)
         unit_lower = (unit or "").lower()
+        name_lower = (ingredient_name or "").strip().lower()
         piece_g = get_piece_grams(ingredient_name)
-        if unit_lower in ("piece", "pieces") and piece_g is not None:
+        use_piece_for_serving = (
+            piece_g is not None
+            and (
+                unit_lower in ("piece", "pieces")
+                or (unit_lower in ("serving", "servings") and 1 <= quantity <= 30)
+                or unit_lower in PIECE_GRAMS_BY_FOOD
+                or unit_lower == name_lower
+            )
+        )
+        if use_piece_for_serving:
             serving_size = piece_g
-        elif unit_lower in ("serving", "servings") and 1 <= quantity <= 30 and piece_g is not None:
-            serving_size = piece_g  # e.g. 7 "servings" strawberries = 7 * 12g
         scaled = scale_nutrition(
             usda.get("nutrition", []),
             quantity,

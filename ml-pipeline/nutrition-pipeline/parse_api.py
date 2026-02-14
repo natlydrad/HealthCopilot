@@ -151,9 +151,9 @@ def _align_quantity_from_meal_text(meal_text: str, parsed: list) -> None:
     """
     if not meal_text or not parsed:
         return
-    # Find all "N cup X" or "N/N cup X" or "N N/N cup X" patterns
+    # Find all "N cup X", "N/N cup X", or "N N/N cup X" patterns (standalone fraction e.g. 3/4 must be allowed)
     pattern = re.compile(
-        r"(?:^|[\s,])(\d+(?:\s*\d+/\d+)?)\s*cups?\s+([^,\.;]+?)(?=[,]|\s+and\s+|\s*$)",
+        r"(?:^|[\s,])(\d+/\d+|\d+(?:\s*\d+/\d+)?)\s*cups?\s+([^,\.;]+?)(?=[,]|\s+and\s+|\s*$)",
         re.IGNORECASE,
     )
     matches = []
