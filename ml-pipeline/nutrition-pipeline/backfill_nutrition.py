@@ -106,7 +106,7 @@ def _lookup_and_scale_nutrition(name: str, quantity: float, unit: str):
             piece_g = get_piece_grams(name)
             if piece_g is not None:
                 serving_size = piece_g
-        scaled_nutrition = scale_nutrition(usda.get("nutrition", []), quantity, unit, serving_size)
+        scaled_nutrition = scale_nutrition(usda.get("nutrition", []), quantity, unit, serving_size, ingredient_name=name)
         cal_val = next((n.get("value", 0) for n in scaled_nutrition if n.get("nutrientName") == "Energy"), 0)
         is_valid, _ = validate_scaled_calories(name, quantity, unit, cal_val)
         if not is_valid:
@@ -119,7 +119,7 @@ def _lookup_and_scale_nutrition(name: str, quantity: float, unit: str):
                     piece_g = get_piece_grams(name)
                     if piece_g is not None:
                         serving_size = piece_g
-                scaled_nutrition = scale_nutrition(usda.get("nutrition", []), quantity, unit, serving_size)
+                scaled_nutrition = scale_nutrition(usda.get("nutrition", []), quantity, unit, serving_size, ingredient_name=name)
                 source = "usda"
                 usda_code = usda.get("usdaCode")
         else:

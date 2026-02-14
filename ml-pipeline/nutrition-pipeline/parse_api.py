@@ -14,7 +14,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pb_client import get_token, insert_ingredient, delete_ingredient, delete_non_food_logs_for_meal, build_user_context_prompt, add_learned_confusion, add_common_food, add_portion_preference, add_to_pantry, is_branded_or_specific, lookup_pantry_match, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date, fetch_ingredients_by_meal_id, fetch_meal_by_id, get_learned_patterns_for_user, remove_learned_pattern, check_learned_correction, delete_corrections_for_user_with_corrected_names, remove_learned_patterns_for_names
 from parser_gpt import parse_ingredients, parse_ingredients_from_image, correction_chat, get_image_base64, gpt_estimate_nutrition, expand_recipe
-from lookup_usda import usda_lookup, usda_lookup_by_fdc_id, usda_lookup_valid_for_portion, usda_search_options, scale_nutrition, get_piece_grams, use_piece_grams_for_portion, validate_scaled_calories, validate_scaled_protein, UNIT_TO_GRAMS, PIECE_GRAMS_BY_FOOD, zero_calorie_nutrition_array
+from lookup_usda import usda_lookup, usda_lookup_by_fdc_id, usda_lookup_valid_for_portion, usda_search_options, scale_nutrition, get_piece_grams, get_grams_for_scaling, use_piece_grams_for_portion, validate_scaled_calories, validate_scaled_protein, UNIT_TO_GRAMS, PIECE_GRAMS_BY_FOOD, zero_calorie_nutrition_array
 from log_classifier import classify_log, classify_log_with_image
 from common_sense import common_sense_check
 from enrich_common_sense import apply_deterministic_rules
@@ -220,7 +220,8 @@ def _merge_pending_by_usda(pending: list) -> list:
             serving_g = first.get("serving_size_g") or (usda.get("serving_size_g") if usda else 100) or 100
             if raw_nut:
                 first["payload"]["nutrition"] = scale_nutrition(
-                    raw_nut, total_qty, first["unit"] or "serving", serving_g
+                    raw_nut, total_qty, first["unit"] or "serving", serving_g,
+                    ingredient_name=first["payload"].get("name"),
                 )
             else:
                 # GPT-sourced: scale existing nutrition proportionally
@@ -395,6 +396,10 @@ def _usda_display_name_ok(parsed_name: str, usda_name: str) -> bool:
         return bool(usda_name)
     pl = parsed_name.lower()
     ul = (usda_name or "").lower()
+    # Oat/oats/oatmeal/steel cut: treat as equivalent (Oatmeal, NFS is valid for steel cut oats)
+    grain_terms = ("oat", "oats", "oatmeal", "steel", "cut")
+    if any(g in pl for g in grain_terms) and "oat" in ul:
+        return True
     words = set(re.findall(r"[a-z0-9]{2,}", pl))
     stop = {"the", "and", "with", "for", "raw", "cooked", "half", "other", "same", "cup", "cups", "oz"}
     significant = [w for w in words if w not in stop]
@@ -913,7 +918,7 @@ def _process_and_insert_parsed_ingredient(ing, meal_id, user_context, source="ad
         piece_g = get_piece_grams(name)
         if use_piece_grams_for_portion(unit_lower, name, quantity, piece_g):
             serving_size = piece_g
-        scaled_nutrition = scale_nutrition(usda.get("nutrition", []), quantity, unit, serving_size)
+        scaled_nutrition = scale_nutrition(usda.get("nutrition", []), quantity, unit, serving_size, ingredient_name=name)
         cal_val = next((n.get("value", 0) for n in scaled_nutrition if n.get("nutrientName") == "Energy"), 0)
         is_valid, _ = validate_scaled_calories(name, quantity, unit, cal_val)
         if not is_valid:
@@ -925,13 +930,12 @@ def _process_and_insert_parsed_ingredient(ing, meal_id, user_context, source="ad
                 piece_g = get_piece_grams(name)
                 if use_piece_grams_for_portion(unit_lower, name, quantity, piece_g):
                     serving_size = piece_g
-                scaled_nutrition = scale_nutrition(usda.get("nutrition", []), quantity, unit, serving_size)
+                scaled_nutrition = scale_nutrition(usda.get("nutrition", []), quantity, unit, serving_size, ingredient_name=name)
                 source_ing = "usda"
-                portion_grams = round(quantity * serving_size, 1)
+                portion_grams = round(get_grams_for_scaling(name, quantity, unit, serving_size), 1)
         else:
             source_ing = "usda"
-            portion_grams = round(quantity * (serving_size if use_piece_grams_for_portion(unit_lower, name, quantity, piece_g) or unit_lower in ("serving", "piece", "pieces") else
-                                      28.35 if unit == "oz" else 240 if unit == "cup" else 15 if unit == "tbsp" else 100), 1)
+            portion_grams = round(get_grams_for_scaling(name, quantity, unit, serving_size), 1)
     if not scaled_nutrition:
         gpt_nutrition = gpt_estimate_nutrition(name, quantity, unit)
         if gpt_nutrition:
@@ -1202,9 +1206,11 @@ def _apply_single_correction(pending, corr, scale_nutrition_fn, zero_calorie_nut
     name_key = (corr.get("name") or "").strip().lower()
     if not name_key:
         return
+    matched = False
     for p in pending:
         if not _correction_name_matches(p["payload"].get("name"), name_key):
             continue
+        matched = True
         if corr.get("zero_calories"):
             prev_nutrition = p["payload"].get("nutrition") or []
             p["payload"]["nutrition"] = zero_calorie_nutrition_array_fn()
@@ -1266,9 +1272,27 @@ def _apply_single_correction(pending, corr, scale_nutrition_fn, zero_calorie_nut
                 v = fg.get(k)
                 pm["foodGroupServings"][k] = round(float(v), 2) if v is not None and isinstance(v, (int, float)) else 0
             p["payload"]["parsingMetadata"] = pm
+            # #region agent log
+            try:
+                import json as _j
+                _line = _j.dumps({"timestamp": __import__("time").time()*1000, "location": "parse_api.py:apply_fg", "message": "applied foodGroupServings", "data": {"payload_name": p["payload"]["name"], "fg": pm["foodGroupServings"], "source": source_label}, "hypothesisId": "H4"}) + "\n"
+                open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
+            except Exception:
+                pass
+            # #endregion
             _trace_append(trace, source_label, f"{source_label} foodGroupServings: {p['payload']['name']}", {"foodGroupServings": pm["foodGroupServings"]})
             print(f"   📋 {source_label} foodGroupServings: {p['payload']['name']} -> {pm['foodGroupServings']}")
         break
+    # #region agent log
+    if not matched and corr.get("foodGroupServings") and any(m in name_key for m in ("pork", "beef", "chicken", "fish", "turkey")):
+        try:
+            import json as _j
+            _payload_names = [x["payload"].get("name") for x in pending]
+            _line = _j.dumps({"timestamp": __import__("time").time()*1000, "location": "parse_api.py:fg_no_match", "message": "meat fg correction no match", "data": {"corr_name": name_key, "payload_names": _payload_names}, "hypothesisId": "H5"}) + "\n"
+            open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
+        except Exception:
+            pass
+    # #endregion
 
 
 @app.route("/parse/<meal_id>", methods=["POST"])
@@ -1884,7 +1908,8 @@ def parse_meal(meal_id):
                         usda.get("nutrition", []),
                         quantity,
                         unit,
-                        serving_size
+                        serving_size,
+                        ingredient_name=name,
                     )
                     # Calorie sanity check - reject absurd values (e.g. 6 wings = 1500 cal)
                     cal_val = next((n.get("value", 0) for n in scaled_nutrition if n.get("nutrientName") == "Energy"), 0)
@@ -1907,18 +1932,10 @@ def parse_meal(meal_id):
                                 quantity,
                                 unit,
                                 serving_size,
+                                ingredient_name=name,
                             )
                             source_ing = "usda"
-                            portion_grams = round(
-                                quantity
-                                * (
-                                    serving_size
-                                    if use_piece_grams_for_portion(unit_lower, name, quantity, piece_g)
-                                    or unit_lower in ("serving", "servings", "piece", "pieces", "count")
-                                    else 28.35 if unit == "oz" else 240 if unit == "cup" else 15 if unit == "tbsp" else 100
-                                ),
-                                1,
-                            )
+                            portion_grams = round(get_grams_for_scaling(name, quantity, unit, serving_size), 1)
                             print(f"   ✅ Better USDA match: {usda.get('name')}")
                     else:
                         # Beverage/broth: reject if scaled protein too high (concentrate matched with wrong serving size)
@@ -1941,17 +1958,10 @@ def parse_meal(meal_id):
                                     quantity,
                                     unit,
                                     serving_size,
+                                    ingredient_name=name,
                                 )
                                 source_ing = "usda"
-                                portion_grams = round(
-                                    quantity
-                                    * (
-                                        serving_size
-                                        if unit_lower in ("serving", "servings", "piece", "pieces", "count")
-                                        else 28.35 if unit == "oz" else 240 if unit == "cup" else 15 if unit == "tbsp" else 100
-                                    ),
-                                    1,
-                                )
+                                portion_grams = round(get_grams_for_scaling(name, quantity, unit, serving_size), 1)
                                 print(f"   ✅ Better USDA match (portion): {usda.get('name')}")
                         else:
                             # Passed both calorie and protein checks — use original USDA
@@ -1961,23 +1971,10 @@ def parse_meal(meal_id):
                             scaled_nutrition = merge_label_onto_usda(scaled_nutrition, partial_label_array)
                             print(f"   📋 Overlaid {len(partial_label_array)} label values onto USDA")
                         source_ing = "usda"
-                        portion_grams = round(quantity * (serving_size if use_piece_grams_for_portion(unit_lower, name, quantity, piece_g) or unit_lower in ("serving", "piece", "pieces", "count") else
-                                              28.35 if unit == "oz" else
-                                              240 if unit == "cup" else
-                                              15 if unit == "tbsp" else 100), 1)
+                        portion_grams = round(get_grams_for_scaling(name, quantity, unit, serving_size), 1)
                 if not scaled_nutrition:
                     # USDA failed or rejected - fall back to GPT estimate
                     print(f"   🤖 GPT fallback: estimating nutrition for '{name}' ({quantity} {unit})")
-                    # #region agent log
-                    try:
-                        _drink_terms = ("tea", "coffee", "matcha", "espresso")
-                        if any(t in (name or "").lower() for t in _drink_terms):
-                            import json as _json, time as _t
-                            _line = _json.dumps({"timestamp": _t.time()*1000, "location": "parse_api.py:gpt_fallback_drink", "message": "GPT fallback for drink", "data": {"name": name, "usda_returned_none": usda is None}, "hypothesisId": "H4"}) + "\n"
-                            open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
-                    except Exception:
-                        pass
-                    # #endregion
                     gpt_nutrition = gpt_estimate_nutrition(name, quantity, unit)
                     if gpt_nutrition:
                         scaled_nutrition = gpt_nutrition
@@ -2090,6 +2087,16 @@ def parse_meal(meal_id):
                 })
             # Step 1: Deterministic rules (zero-cal, caffeine, portion fixes, fiber, etc.)
             det_corrections = apply_deterministic_rules(minimal)
+            # #region agent log
+            try:
+                _mp = [{"name": m.get("name"), "unit": m.get("unit"), "fg": m.get("foodGroupServings")} for m in minimal]
+                _dc = [{"name": c.get("name"), "fg": c.get("foodGroupServings")} for c in det_corrections]
+                import json as _j
+                _line = _j.dumps({"timestamp": __import__("time").time()*1000, "location": "parse_api.py:det_rules", "message": "det_rules", "data": {"minimal": _mp, "det_corrections": _dc}, "hypothesisId": "H3"}) + "\n"
+                open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
+            except Exception:
+                pass
+            # #endregion
             for corr in det_corrections:
                 _apply_single_correction(pending, corr, scale_nutrition, zero_calorie_nutrition_array, merge_micro_overrides_into_nutrition, trace, "rules")
             # Rebuild minimal after deterministic so GPT sees corrected state (include foodGroupServings)
@@ -2343,7 +2350,8 @@ def save_correction(ingredient_id):
                     usda.get("nutrition", []),
                     new_qty,
                     new_unit,
-                    serving_size
+                    serving_size,
+                    ingredient_name=new_name,
                 )
                 cal_val = next((n.get("value", 0) for n in scaled_nutrition if n.get("nutrientName") == "Energy"), 0)
                 is_valid, _ = validate_scaled_calories(new_name, new_qty, new_unit, cal_val)
@@ -2449,6 +2457,7 @@ def save_correction(ingredient_id):
                     quantity,
                     unit,
                     usda.get("serving_size_g", 100.0),
+                    ingredient_name=corrected_name,
                 )
                 update["nutrition"] = scaled_nutrition
                 update["usdaCode"] = usda.get("usdaCode")
@@ -2487,7 +2496,8 @@ def save_correction(ingredient_id):
                         usda.get("nutrition", []),
                         quantity,
                         unit,
-                        usda.get("serving_size_g", 100.0)
+                        usda.get("serving_size_g", 100.0),
+                        ingredient_name=corrected_name,
                     )
                     update["nutrition"] = scaled_nutrition
                     update["usdaCode"] = usda.get("usdaCode")

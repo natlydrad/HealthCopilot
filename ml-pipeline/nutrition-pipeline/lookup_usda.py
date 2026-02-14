@@ -53,6 +53,10 @@ UNIT_TO_GRAMS = {
     "servings": 100.0,
 }
 
+# Cooked oats: 1 cup cooked ≈ 1/4 cup dry ≈ 40g dry steel cut oats
+# Use raw USDA entry + this conversion when user says "cooked" oats in cups
+DRY_GRAMS_PER_CUP_COOKED_OATS = 40.0
+
 
 # Food-specific grams per piece (when unit is "piece"/"pieces")
 # USDA does not standardize piece weights—each food has its own serving. We use curated values.
@@ -116,6 +120,38 @@ def use_piece_grams_for_portion(unit_lower: str, name: str, quantity: float, pie
     return False
 
 
+def _cooked_oats_dry_grams(ingredient_name: str, quantity: float, unit: str) -> float | None:
+    """
+    When user says cooked oats/oatmeal/steel cut in cups, return dry equivalent grams.
+    1 cup cooked = 40g dry (1/4 cup dry steel cut oats = 1 cup cooked).
+    Returns None when not applicable.
+    """
+    name = (ingredient_name or "").lower()
+    unit_lower = (unit or "").lower()
+    if unit_lower not in ("cup", "cups"):
+        return None
+    if "raw" in name or "dry" in name or "uncooked" in name:
+        return None
+    oat_terms = ("oat", "oats", "oatmeal", "steel cut")
+    if not any(t in name for t in oat_terms):
+        return None
+    # User said cooked (or implied by cups for oats - people rarely measure raw oats in cups at meal time)
+    if "cooked" in name or "steel cut" in name or "oatmeal" in name:
+        return quantity * DRY_GRAMS_PER_CUP_COOKED_OATS
+    return None
+
+
+def get_grams_for_scaling(ingredient_name: str, quantity: float, unit: str, serving_size_g: float = 100.0) -> float:
+    """
+    Return grams used for scaling nutrition. Uses cooked-oats dry equivalent when applicable.
+    Use this for portion_grams when displaying/storing the effective portion size.
+    """
+    dry = _cooked_oats_dry_grams(ingredient_name or "", quantity, unit)
+    if dry is not None:
+        return dry
+    return convert_to_grams(quantity, unit, serving_size_g)
+
+
 def convert_to_grams(quantity: float, unit: str, serving_size_g: float = 100.0) -> float:
     """
     Convert a quantity + unit to grams.
@@ -143,9 +179,15 @@ def convert_to_grams(quantity: float, unit: str, serving_size_g: float = 100.0) 
     return quantity * grams_per_unit
 
 
-def scale_nutrition(nutrients: list, quantity: float, unit: str, serving_size_g: float = 100.0, quiet: bool = False) -> list:
+def scale_nutrition(
+    nutrients: list, quantity: float, unit: str, serving_size_g: float = 100.0, quiet: bool = False,
+    ingredient_name: str | None = None,
+) -> list:
     """
     Scale USDA nutrition values (per 100g) to the actual portion size.
+    
+    When ingredient_name indicates cooked oats in cups, uses dry equivalent grams
+    so raw USDA oats entry can be used (1 cup cooked = 40g dry).
     
     Args:
         nutrients: List of nutrient dicts from USDA (values per 100g)
@@ -153,15 +195,20 @@ def scale_nutrition(nutrients: list, quantity: float, unit: str, serving_size_g:
         unit: Unit of measurement
         serving_size_g: USDA serving size for this food
         quiet: If True, do not print scaling message
+        ingredient_name: Optional - when cooked oats in cups, use dry equivalent for raw oats scaling
     
     Returns:
         New list with scaled nutrient values
     """
-    grams = convert_to_grams(quantity, unit, serving_size_g)
+    dry_g = _cooked_oats_dry_grams(ingredient_name or "", quantity, unit) if ingredient_name else None
+    grams = dry_g if dry_g is not None else convert_to_grams(quantity, unit, serving_size_g)
     scale_factor = grams / 100.0  # USDA data is per 100g
     
     if not quiet:
-        print(f"   📊 Scaling: {quantity} {unit} = {grams:.1f}g (scale factor: {scale_factor:.2f}x)")
+        if dry_g is not None:
+            print(f"   📊 Scaling: {quantity} {unit} cooked oats = {grams:.1f}g dry equiv (scale factor: {scale_factor:.2f}x)")
+        else:
+            print(f"   📊 Scaling: {quantity} {unit} = {grams:.1f}g (scale factor: {scale_factor:.2f}x)")
     
     scaled = []
     for n in nutrients:
@@ -1085,13 +1132,17 @@ def _alternative_usda_queries(ingredient_name: str) -> list[str]:
     if ("frank" in lower or "franks" in lower) and "red hot" in lower:
         queries.append("frank's red hot sauce")
         queries.append("hot sauce cayenne pepper")
-    # Grains (oats, rice): when user said "cooked" OR oats in cups (implies cooked), add cooked queries
+    # Grains (oats, rice): when user said "cooked" OR oats in cups (implies cooked)
+    # Prefer RAW steel cut oats first — we scale using dry equivalent (1 cup cooked = 40g dry)
     grain_terms = ["oat", "oats", "oatmeal", "steel cut", "rice", "brown rice", "white rice"]
     if "milk" not in lower and any(g in lower for g in grain_terms) and "raw" not in lower and "dry" not in lower and "uncooked" not in lower:
         base = name.split(",")[0].strip()
+        if ("steel" in lower or "oat" in lower) and "cooked" in lower:
+            # Raw steel cut oats + dry conversion gives correct nutrition for cooked amount
+            queries.insert(1, "steel cut oats")
         cooked_alts = []
         if "steel" in lower or "oat" in lower:
-            cooked_alts.extend(["oatmeal cooked", "oats cooked with water"])  # FNDDS cooked oatmeal
+            cooked_alts.extend(["oatmeal cooked", "oats cooked with water"])  # fallback: FNDDS cooked oatmeal
         if "cooked" in lower:
             cooked_alts.extend(["steel cut oatmeal"])
             base_no_cooked = re.sub(r"\bcooked\b", "", base).strip()
@@ -1162,7 +1213,7 @@ def usda_search_options(
                     piece_g = get_piece_grams(query)
                     if piece_g is not None:
                         serving_size = piece_g
-                scaled = scale_nutrition(raw_nutrients, quantity, unit, serving_size)
+                scaled = scale_nutrition(raw_nutrients, quantity, unit, serving_size, ingredient_name=query)
                 cal = next((n.get("value", 0) for n in scaled if n.get("nutrientName") == "Energy" and n.get("unitName") == "KCAL"), 0)
                 prot = next((n.get("value", 0) for n in scaled if n.get("nutrientName") == "Protein"), 0)
                 carbs = next((n.get("value", 0) for n in scaled if "carbohydrate" in (n.get("nutrientName") or "").lower()), 0)
@@ -1237,7 +1288,7 @@ def resolve_usda_for_ingredient(
         piece_g = get_piece_grams(name)
         if use_piece_grams_for_portion(unit_lower, name_lower, quantity, piece_g):
             serving_size = piece_g
-        scaled_nutrition = scale_nutrition(usda.get("nutrition", []), quantity, unit, serving_size)
+        scaled_nutrition = scale_nutrition(usda.get("nutrition", []), quantity, unit, serving_size, ingredient_name=name)
         cal_val = next((n.get("value", 0) for n in scaled_nutrition if n.get("nutrientName") == "Energy"), 0)
         is_valid, _ = validate_scaled_calories(name, quantity, unit, cal_val)
         if not is_valid:
@@ -1247,7 +1298,7 @@ def resolve_usda_for_ingredient(
                 serving_size = usda.get("serving_size_g", 100.0)
                 if use_piece_grams_for_portion(unit_lower, name_lower, quantity, piece_g):
                     serving_size = piece_g
-                scaled_nutrition = scale_nutrition(usda.get("nutrition", []), quantity, unit, serving_size)
+                scaled_nutrition = scale_nutrition(usda.get("nutrition", []), quantity, unit, serving_size, ingredient_name=name)
                 source = "usda"
         else:
             ok, _ = validate_scaled_protein(name, scaled_nutrition)
@@ -1258,7 +1309,7 @@ def resolve_usda_for_ingredient(
                     serving_size = usda.get("serving_size_g", 100.0)
                     if use_piece_grams_for_portion(unit_lower, name_lower, quantity, piece_g):
                         serving_size = piece_g
-                    scaled_nutrition = scale_nutrition(usda.get("nutrition", []), quantity, unit, serving_size)
+                    scaled_nutrition = scale_nutrition(usda.get("nutrition", []), quantity, unit, serving_size, ingredient_name=name)
             source = "usda" if usda else "gpt"
 
     if not usda:
@@ -1297,6 +1348,7 @@ def usda_lookup_valid_for_portion(
             quantity,
             unit,
             serving_size,
+            ingredient_name=ingredient_name,
         )
         cal_val = next((n.get("value", 0) for n in scaled if n.get("nutrientName") == "Energy"), 0)
         is_valid, reason = validate_scaled_calories(ingredient_name, quantity, unit, cal_val)

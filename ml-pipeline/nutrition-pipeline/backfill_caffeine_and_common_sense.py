@@ -308,7 +308,7 @@ def run_common_sense_and_caffeine(
                         if usda and usda.get("nutrition"):
                             norm = normalize_usda_food_nutrients(usda["nutrition"])
                             if norm:
-                                scaled = scale_nutrition(norm, new_qty, new_unit, new_serving_g, quiet=True)
+                                scaled = scale_nutrition(norm, new_qty, new_unit, new_serving_g, quiet=True, ingredient_name=ing.get("name"))
                                 minimal[i]["nutrition"] = scaled
                             if verbose:
                                 print(f"   🧠 Common sense: {ing.get('name')} -> {new_qty} {new_unit} ({new_serving_g}g)")
