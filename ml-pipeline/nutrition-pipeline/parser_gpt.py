@@ -39,11 +39,14 @@ def parse_ingredients(text: str, user_context: str = ""):
     {context_section}
     IMPORTANT: When the user states an exact amount (e.g. "1 cup", "2 eggs", "half a cup"), use that exact quantity and unit. Do not substitute a different fraction or amount unless the user clearly described a portion modifier (e.g. "ate half of it", "left a quarter").
     IMPORTANT: For phrases like "1 cup ground turkey", "a cup of soy milk", or "soy milk cup" (one cup implied), output quantity 1 and unit "cup". Do not substitute 0.25 cup, 4 oz, or other portion unless the user clearly indicated that modifier.
+    IMPORTANT: When the meal text contains an explicit amount (e.g. "1 cup cabbage", "3/4 cup cooked steel cut oats", "1 cup ground turkey"), output that exact quantity and unit (1 cup, 0.75 cup, 1 cup). Do not substitute a different number (e.g. 2, 1.5) unless the user clearly indicated a portion modifier.
     IMPORTANT: When the user states a count (e.g. "7 strawberries", "2 eggs", "3 slices"), use that exact quantity and unit. Do not convert counts to volume (cups, etc.) unless the user explicitly stated volume.
     IMPORTANT: Also extract from portion descriptions. E.g. "ate 75%, only half the noodles" → noodles, quantity 0.5; "half the rice" → rice, quantity 0.5; "left a quarter" → scale quantity to 0.75. Always return at least one item if any food is mentioned.
     IMPORTANT: PORTION MODIFIERS apply to ALL foods. When the user says "half", "quarter", "a third", "75%", "double", etc., the quantity MUST reflect that factor. Rule: base_amount × modifier. Typical full portions: steak 6oz, chicken breast 4oz, 1 cup rice, 1 egg. Then apply modifier: "half a steak" → 3oz; "quarter of the chicken" → 1oz; "half the rice" → 0.5 cup.
     IMPORTANT: Decompose complex/composite foods into their base ingredients.
     Examples:
+    - "1 cup cabbage" → cabbage, quantity 1, unit cup
+    - "3/4 cup steel cut oats" or "3/4 cup cooked steel cut oats" → steel cut oats, quantity 0.75, unit cup
     - "burrito" → tortilla, rice, beans, cheese, salsa, sour cream
     - "omelette" → eggs, butter, cheese, [any fillings mentioned]
     - "sandwich" → bread, meat, cheese, lettuce, tomato, mayo

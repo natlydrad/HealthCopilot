@@ -450,12 +450,28 @@ def _query_implies_caffeine(query_lower: str) -> bool:
     return any(t in query_lower for t in ("tea", "coffee", "matcha", "espresso"))
 
 
-def _score_drink_match(query_lower: str, matched_name: str, raw_nutrients: list) -> float:
+_DRINK_QUERY_STOPWORDS = {"tea", "coffee", "the", "and", "with", "cup", "cups", "oz", "serving"}
+
+
+def _drink_match_has_query_overlap(query_lower: str, matched_name: str) -> bool:
     """
-    Score how well a USDA candidate fits a drink-like query. Higher = better.
-    Prefer brewed/beverage forms; for tea/coffee prefer caffeine when user didn't say decaf/sleepy;
-    for sleepy/herbal prefer 0 caffeine; prefer name overlap (e.g. green tea -> match with "green").
-    Penalize tea-type mismatch: earl grey -> oolong gets negative; green -> oolong gets negative.
+    For drink-like queries: True iff the USDA match name contains at least one
+    significant word from the query. Used as the single gate for accepting a drink match.
+    """
+    if not query_lower or not matched_name:
+        return bool(matched_name)
+    query_words = set(re.findall(r"[a-z0-9]{2,}", query_lower))
+    query_words -= _DRINK_QUERY_STOPWORDS
+    if not query_words:
+        return True
+    matched_lower = (matched_name or "").lower()
+    return any(w in matched_lower for w in query_words)
+
+
+def _score_drink_match_for_ordering(query_lower: str, matched_name: str, raw_nutrients: list) -> float:
+    """
+    Minimal score for ordering drink candidates that already pass _drink_match_has_query_overlap.
+    Higher = better. Prefer brewed/beverage; prefer caffeine when query implies caffeinated; prefer 0 caffeine for herbal.
     """
     if not _is_drink_like_query(query_lower):
         return 0.0
@@ -475,25 +491,14 @@ def _score_drink_match(query_lower: str, matched_name: str, raw_nutrients: list)
         score += 15.0
     elif _query_implies_caffeine(query_lower) and caffeine == 0:
         score -= 5.0
-    # Tea-type consistency: prefer match whose name shares key descriptors (green, earl, black, hibiscus, etc.)
-    query_words = set(re.findall(r"[a-z0-9]{2,}", query_lower))
-    query_words -= {"tea", "coffee", "the", "and", "with", "cup", "cups"}
-    has_overlap = False
-    for w in query_words:
-        if w in matched_lower:
-            score += 8.0  # stronger bonus for type match
-            has_overlap = True
-            break
-    # Penalize mismatch: specialty tea (earl grey, raspberry hibiscus, green) matched to generic oolong/black
-    tea_type_terms = ("green", "earl", "grey", "oolong", "black", "hibiscus", "chamomile", "peppermint", "raspberry")
-    query_tea_type = [t for t in tea_type_terms if t in query_lower]
-    matched_tea_type = [t for t in tea_type_terms if t in matched_lower]
-    if query_tea_type and not matched_tea_type and not has_overlap:
-        score -= 15.0  # strong penalty: wrong tea type (e.g. earl grey -> oolong)
-    # Penalize when query and match have different tea types (e.g. raspberry hibiscus -> oolong)
-    if query_tea_type and matched_tea_type and not (set(query_tea_type) & set(matched_tea_type)):
-        score -= 15.0
     return score
+
+
+def _query_implies_condiment(query_lower: str) -> bool:
+    """True if query suggests a condiment/sauce (e.g. tbsp frank's red hot). Prefer USDA sauce over sausage/pickles."""
+    if not query_lower:
+        return False
+    return "tbsp" in query_lower or "sauce" in query_lower
 
 
 def _prefer_cooked_for_meat(query_lower: str, matched_name: str) -> float:
@@ -506,6 +511,16 @@ def _prefer_cooked_for_meat(query_lower: str, matched_name: str) -> float:
     matched_lower = (matched_name or "").lower()
     if "cooked" in matched_lower:
         return 50.0  # prefer cooked (lower cal_score = better rank)
+    return 0.0
+
+
+def _prefer_sauce_for_condiment_query(query_lower: str, matched_name: str) -> float:
+    """Return bonus to subtract from cal_score when query implies condiment and match is sauce (e.g. frank's red hot -> sauce not jumbo franks)."""
+    if not _query_implies_condiment(query_lower):
+        return 0.0
+    matched_lower = (matched_name or "").lower()
+    if "sauce" in matched_lower or "condiment" in matched_lower:
+        return 500.0
     return 0.0
 
 
@@ -659,6 +674,7 @@ def usda_lookup(ingredient_name):
                 if is_composite and carbs == 0:
                     cal_score += 500
                 cal_score -= _prefer_cooked_for_meat(ingredient_lower, matched_name)
+                cal_score -= _prefer_sauce_for_condiment_query(ingredient_lower, matched_name)
                 valid.append((cal_score, carbs, f, macros, matched_name, raw_nutrients))
 
             if not valid:
@@ -671,36 +687,26 @@ def usda_lookup(ingredient_name):
                         valid[i] = (s + 200, carbs, *v[2:])
                 valid.sort(key=lambda x: x[0])
                 if _is_drink_like_query(ingredient_lower) and len(valid) > 1:
-                    valid.sort(key=lambda x: (-_score_drink_match(ingredient_lower, x[4], x[5]), x[0]))
+                    valid.sort(key=lambda x: (-_score_drink_match_for_ordering(ingredient_lower, x[4], x[5]), x[0]))
                 best = valid[0]
                 while valid:
                     if not _has_nutrition_data(best[5], best[3]):
                         valid.pop(0)
                         best = valid[0] if valid else None
                         continue
-                    # Reject drink match with bad tea-type fit (e.g. earl grey -> oolong); prefer GPT fallback
+                    # Reject drink match when match name has no significant word from query (e.g. raspberry hibiscus -> Oolong)
                     if _is_drink_like_query(ingredient_lower):
-                        drink_score = _score_drink_match(ingredient_lower, best[4], best[5])
-                        # #region agent log
-                        try:
-                            import json as _json, time as _t
-                            _line = _json.dumps({"timestamp": _t.time()*1000, "location": "lookup_usda.py:drink_reject_check", "message": "drink_score check", "data": {"query": ingredient_name, "matched": best[4], "drink_score": drink_score, "rejected": drink_score < 0, "valid_count": len(valid)}, "hypothesisId": "H1"}) + "\n"
-                            open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_line)
-                        except Exception:
-                            pass
-                        # #endregion
-                        if drink_score < 0:
+                        if not _drink_match_has_query_overlap(ingredient_lower, best[4]):
                             valid.pop(0)
                             best = valid[0] if valid else None
                             continue
                     break
 
             if best:
-                # For drinks: if primary best has bad tea-type fit (e.g. raspberry hibiscus -> Oolong), try alt queries instead
+                # For drinks: reject if no query overlap, then try alt queries
                 if _is_drink_like_query(ingredient_lower):
-                    drink_score = _score_drink_match(ingredient_lower, best[4], best[5])
-                    if drink_score < 0:
-                        print(f"   ⏭️ Primary drink match has bad fit (score={drink_score:.0f}), trying alternative queries...")
+                    if not _drink_match_has_query_overlap(ingredient_lower, best[4]):
+                        print(f"   ⏭️ Primary drink match has no query overlap, trying alternative queries...")
                         best = None
                 if best:
                     score, _, f, macros, matched_name, raw_nutrients = best
@@ -747,15 +753,18 @@ def usda_lookup(ingredient_name):
                     cal_100 = macros.get("calories", 0) or 0
                     expected_range = get_expected_cal_range(ingredient_name)
                     cal_score = score_calorie_fit(cal_100, expected_range[0], expected_range[1]) if expected_range else 0
-                    drink_score = _score_drink_match(ingredient_lower, matched_name, raw_nutrients) if _is_drink_like_query(ingredient_lower) else 0.0
-                    valid2.append((cal_score, drink_score, f, macros, matched_name, raw_nutrients))
+                    valid2.append((cal_score, f, macros, matched_name, raw_nutrients))
                 if valid2:
-                    # For drinks: reject bad tea-type fits (drink_score < 0), then sort by drink_score desc, then cal_score
-                    valid2 = [v for v in valid2 if v[1] >= 0]
+                    # For drinks: keep only candidates with query overlap, then sort by drink ordering score
+                    if _is_drink_like_query(ingredient_lower):
+                        valid2 = [v for v in valid2 if _drink_match_has_query_overlap(ingredient_lower, v[3])]
                     if valid2:
-                        valid2.sort(key=lambda x: (-x[1], x[0]))
+                        if _is_drink_like_query(ingredient_lower):
+                            valid2.sort(key=lambda x: (-_score_drink_match_for_ordering(ingredient_lower, x[3], x[4]), x[0]))
+                        else:
+                            valid2.sort(key=lambda x: x[0])
                         for v2 in valid2:
-                            _, _, f, macros, matched_name, raw_nutrients = v2
+                            _, f, macros, matched_name, raw_nutrients = v2
                             if not _has_nutrition_data(raw_nutrients, macros):
                                 continue
                             cal_100 = macros.get("calories", 0)
@@ -803,14 +812,17 @@ def usda_lookup(ingredient_name):
                     cal_100 = macros.get("calories", 0) or 0
                     expected_range = get_expected_cal_range(ingredient_name)
                     cal_score = score_calorie_fit(cal_100, expected_range[0], expected_range[1]) if expected_range else 0
-                    drink_score = _score_drink_match(ingredient_lower, matched_name, raw_nutrients) if _is_drink_like_query(ingredient_lower) else 0.0
-                    valid2.append((cal_score, drink_score, f, macros, matched_name, raw_nutrients))
+                    valid2.append((cal_score, f, macros, matched_name, raw_nutrients))
                 if valid2:
-                    valid2 = [v for v in valid2 if v[1] >= 0]
+                    if _is_drink_like_query(ingredient_lower):
+                        valid2 = [v for v in valid2 if _drink_match_has_query_overlap(ingredient_lower, v[3])]
                     if valid2:
-                        valid2.sort(key=lambda x: (-x[1], x[0]))
+                        if _is_drink_like_query(ingredient_lower):
+                            valid2.sort(key=lambda x: (-_score_drink_match_for_ordering(ingredient_lower, x[3], x[4]), x[0]))
+                        else:
+                            valid2.sort(key=lambda x: x[0])
                         for v2 in valid2:
-                            _, _, f, macros, matched_name, raw_nutrients = v2
+                            _, f, macros, matched_name, raw_nutrients = v2
                             if not _has_nutrition_data(raw_nutrients, macros):
                                 continue
                             cal_100 = macros.get("calories", 0)

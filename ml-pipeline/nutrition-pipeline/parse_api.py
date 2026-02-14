@@ -118,6 +118,68 @@ def _merge_ingredients_by_name(parsed: list) -> list:
     return merged
 
 
+def _parse_cup_quantity(s: str) -> float | None:
+    """Parse a quantity string like '1', '3/4', '1 1/2' to a float. Returns None if invalid."""
+    s = (s or "").strip()
+    if not s:
+        return None
+    # Mixed number: "1 1/2" or "1 1/2"
+    parts = s.split()
+    if len(parts) == 2 and "/" in parts[1]:
+        try:
+            whole = int(parts[0])
+            num, denom = parts[1].split("/")
+            return whole + int(num) / int(denom)
+        except (ValueError, ZeroDivisionError):
+            return None
+    if "/" in s:
+        try:
+            num, denom = s.split("/")
+            return int(num.strip()) / int(denom.strip())
+        except (ValueError, ZeroDivisionError):
+            return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _align_quantity_from_meal_text(meal_text: str, parsed: list) -> None:
+    """
+    When meal text contains an explicit "N cup X" or "N/N cup X", align parsed ingredient
+    quantity/unit to that value when the ingredient name matches the phrase. Safety net for parser errors.
+    """
+    if not meal_text or not parsed:
+        return
+    # Find all "N cup X" or "N/N cup X" or "N N/N cup X" patterns
+    pattern = re.compile(
+        r"(?:^|[\s,])(\d+(?:\s*\d+/\d+)?)\s*cups?\s+([^,\.;]+?)(?=[,]|\s+and\s+|\s*$)",
+        re.IGNORECASE,
+    )
+    matches = []
+    for m in pattern.finditer(meal_text):
+        q_str = m.group(1).strip()
+        phrase = m.group(2).strip()
+        qty = _parse_cup_quantity(q_str)
+        if qty is not None and phrase:
+            matches.append((qty, phrase.lower()))
+    if not matches:
+        return
+    for ing in parsed:
+        name = (ing.get("name") or "").strip().lower()
+        if not name:
+            continue
+        cur_q = float(ing.get("quantity", 1) or 1)
+        cur_u = (ing.get("unit") or "serving").strip().lower()
+        for qty, phrase in matches:
+            # Ingredient name appears in phrase or phrase in name (e.g. "cabbage" in "cabbage (with vinegar)")
+            if name in phrase or phrase in name:
+                if abs(cur_q - qty) > 0.01 or cur_u != "cup":
+                    ing["quantity"] = qty
+                    ing["unit"] = "cup"
+                break
+
+
 def _merge_pending_by_usda(pending: list) -> list:
     """
     Merge pending items that resolve to the same USDA product (or same normalized name when no USDA).
@@ -208,7 +270,8 @@ def _is_pickles_or_spears(name: str) -> bool:
 def _merge_pending_by_similar_name_intent(pending: list) -> list:
     """
     Merge pendings that represent the same user mention but resolved to different products
-    (e.g. "frank's red hot" -> sauce and dill spears). Keep sauce/condiment, drop pickles/spears when names are similar.
+    (e.g. "frank's red hot" -> sauce + dill spears or jumbo franks). When names are similar, keep one:
+    prefer sauce/condiment when present; else keep the first.
     """
     if len(pending) < 2:
         return pending
@@ -219,7 +282,6 @@ def _merge_pending_by_similar_name_intent(pending: list) -> list:
         name_i = (pending[i]["payload"].get("name") or "").strip()
         usda_name_i = (pending[i].get("usda") or {}).get("name") or ""
         sauce_i = _is_sauce_or_condiment(name_i) or _is_sauce_or_condiment(usda_name_i)
-        pickles_i = _is_pickles_or_spears(name_i) or _is_pickles_or_spears(usda_name_i)
         for j in range(i + 1, len(pending)):
             if j in drop:
                 continue
@@ -228,12 +290,12 @@ def _merge_pending_by_similar_name_intent(pending: list) -> list:
                 continue
             usda_name_j = (pending[j].get("usda") or {}).get("name") or ""
             sauce_j = _is_sauce_or_condiment(name_j) or _is_sauce_or_condiment(usda_name_j)
-            pickles_j = _is_pickles_or_spears(name_j) or _is_pickles_or_spears(usda_name_j)
-            if sauce_i and pickles_j:
-                drop.add(j)
-            elif sauce_j and pickles_i:
+            # Same phrase -> one ingredient. Prefer sauce when present; else keep first (i).
+            if sauce_j and not sauce_i:
                 drop.add(i)
                 break
+            else:
+                drop.add(j)
     if not drop:
         return pending
     return [p for idx, p in enumerate(pending) if idx not in drop]
@@ -1607,7 +1669,8 @@ def parse_meal(meal_id):
         if len(parsed_deduped) < len(parsed):
             print(f"   📋 Deduped parsed ingredients: {len(parsed)} -> {len(parsed_deduped)}")
         parsed = parsed_deduped
-        
+        _align_quantity_from_meal_text(text, parsed)
+
         # Process and save ingredients (collect pending, then common-sense check, then insert)
         saved = []
         pending = []
