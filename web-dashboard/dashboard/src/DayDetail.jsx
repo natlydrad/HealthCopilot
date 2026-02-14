@@ -621,6 +621,115 @@ export default function DayDetail() {
 
 const BULK_REVIEW_DEBOUNCE_MS = 300;
 
+/** Slug from meal text for regression id (e.g. "green tea" -> "green-tea") */
+function slugFromText(text) {
+  if (!text || typeof text !== "string") return "meal";
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .slice(0, 40) || "meal";
+}
+
+function AddToRegressionModal({ meal, onClose }) {
+  const text = (meal?.text || "").trim() || "(add meal text)";
+  const [id, setId] = useState(() => slugFromText(text));
+  const [mealText, setMealText] = useState(text);
+  const [note, setNote] = useState("");
+  const [expectationsJson, setExpectationsJson] = useState('{\n  "ingredientCount": 1\n}');
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    let expectations;
+    try {
+      expectations = JSON.parse(expectationsJson);
+    } catch {
+      expectations = {};
+    }
+    const entry = {
+      id: id || slugFromText(mealText),
+      text: mealText,
+      expectations,
+      ...(note ? { note } : {}),
+    };
+    const snippet = JSON.stringify(entry, null, 2);
+    navigator.clipboard?.writeText(snippet).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-3">
+          <h2 className="text-lg font-semibold text-gray-800">Add to regression suite</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+        <p className="text-xs text-gray-500 mb-3">
+          Copy the JSON below and paste into regression_meals.json, then run the Regression Suite.
+        </p>
+        <div className="space-y-2 mb-3">
+          <label className="block text-sm font-medium text-gray-700">ID</label>
+          <input
+            type="text"
+            value={id}
+            onChange={(e) => setId(e.target.value)}
+            className="w-full p-2 border border-gray-300 rounded text-sm"
+            placeholder="short-unique-id"
+          />
+        </div>
+        <div className="space-y-2 mb-3">
+          <label className="block text-sm font-medium text-gray-700">Meal text</label>
+          <input
+            type="text"
+            value={mealText}
+            onChange={(e) => setMealText(e.target.value)}
+            className="w-full p-2 border border-gray-300 rounded text-sm"
+            placeholder="meal text to parse"
+          />
+        </div>
+        <div className="space-y-2 mb-3">
+          <label className="block text-sm font-medium text-gray-700">Expectations (JSON)</label>
+          <textarea
+            value={expectationsJson}
+            onChange={(e) => setExpectationsJson(e.target.value)}
+            className="w-full p-2 border border-gray-300 rounded text-sm font-mono min-h-[80px]"
+            placeholder='{"ingredientCount": 1}'
+          />
+        </div>
+        <div className="space-y-2 mb-3">
+          <label className="block text-sm font-medium text-gray-700">Note (optional)</label>
+          <input
+            type="text"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className="w-full p-2 border border-gray-300 rounded text-sm"
+            placeholder="context from bulk review"
+          />
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 text-sm"
+          >
+            {copied ? "Copied!" : "Copy JSON"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 text-sm"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTotalsRefresh, frameworkAttribution }) {
   const [ingredients, setIngredients] = useState([]);
   const [correcting, setCorrecting] = useState(null);
@@ -640,6 +749,7 @@ function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTota
   const [expandedNutrientId, setExpandedNutrientId] = useState(null);
 
   const [hasNonFoodLogs, setHasNonFoodLogs] = useState(false);
+  const [showAddToRegression, setShowAddToRegression] = useState(false);
 
   // Bulk-review annotations: { ingredientId: { category, reasoning } }, synced to localStorage
   const [annotations, setAnnotations] = useState({});
@@ -935,14 +1045,34 @@ function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTota
         )}
         
         <div className="flex-1">
-          <h2 className="font-semibold mb-1">
-            {meal.text || (meal.image ? "(image only)" : "(empty entry)")}
-          </h2>
-          <p className="text-gray-500 text-sm mb-2">
-            {meal.timestamp ? new Date(meal.timestamp.replace(' ', 'T')).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}
-          </p>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h2 className="font-semibold mb-1">
+                {meal.text || (meal.image ? "(image only)" : "(empty entry)")}
+              </h2>
+              <p className="text-gray-500 text-sm">
+                {meal.timestamp ? new Date(meal.timestamp.replace(' ', 'T')).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}
+              </p>
+            </div>
+            {(meal.text?.trim() || meal.image) && (
+              <button
+                type="button"
+                onClick={() => setShowAddToRegression(true)}
+                className="text-xs text-purple-600 hover:text-purple-800 hover:underline shrink-0"
+              >
+                Add to regression
+              </button>
+            )}
+          </div>
         </div>
       </div>
+
+      {showAddToRegression && (
+        <AddToRegressionModal
+          meal={meal}
+          onClose={() => setShowAddToRegression(false)}
+        />
+      )}
 
       {/* Empty parse result (0 ingredients) — so user knows why and can try again */}
       {emptyParseMessage && !parsing && (

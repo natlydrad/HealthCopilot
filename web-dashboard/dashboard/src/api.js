@@ -653,6 +653,29 @@ export function getParseApiUrl() {
   return PARSE_API_URL;
 }
 
+/** Regression Suite: fetch regression_meals.json from Parse API */
+export async function fetchRegressionSuite() {
+  const res = await _parseApiFetch("/regression/suite");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Regression suite fetch failed (${res.status})`);
+  }
+  return res.json();
+}
+
+/** Regression Suite: run one meal through parse + evaluate */
+export async function runRegressionMeal(text, expectations) {
+  const res = await _parseApiFetch("/regression/run-one", {
+    method: "POST",
+    body: JSON.stringify({ text, expectations }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || `Regression run failed (${res.status})`);
+  }
+  return data;
+}
+
 function _parseApiFetch(path, options = {}) {
   const useProxy = import.meta.env.DEV && !import.meta.env.VITE_PARSE_API_URL;
   const url = useProxy ? `/parse-api${path}` : `${PARSE_API_URL}${path}`;

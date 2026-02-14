@@ -20,6 +20,7 @@ from common_sense import common_sense_check
 from enrich_common_sense import apply_deterministic_rules
 import requests
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -2738,6 +2739,63 @@ def save_correction(ingredient_id):
     except Exception as e:
         print(f"❌ Error saving correction: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+# ============================================================
+# REGRESSION SUITE (dashboard integration)
+# ============================================================
+
+
+@app.route("/regression/suite", methods=["GET"])
+def regression_suite():
+    """
+    Return regression_meals.json for the dashboard Regression Suite view.
+    """
+    suite_path = Path(__file__).resolve().parent / "regression" / "regression_meals.json"
+    if not suite_path.exists():
+        return jsonify({"error": "regression_meals.json not found"}), 404
+    try:
+        with open(suite_path) as f:
+            data = json.load(f)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/regression/run-one", methods=["POST"])
+def regression_run_one():
+    """
+    Parse meal text and evaluate expectations. Uses REGRESSION_MODE (temp 0) for determinism.
+    Body: { "text": str, "expectations": dict }
+    Returns: { "ingredients": [...], "passed": bool, "failures": list[str] }
+    """
+    os.environ["REGRESSION_MODE"] = "true"
+    os.environ["USE_PARSING_CACHE"] = "false"
+    try:
+        from regression.regression_runner import (
+            parse_meal_text_to_ingredients,
+            evaluate_expectations,
+        )
+    except ImportError as e:
+        return jsonify({"error": f"Regression module not available: {e}"}), 500
+
+    data = request.get_json() or {}
+    text = data.get("text", "").strip()
+    expectations = data.get("expectations") or {}
+
+    if not text:
+        return jsonify({"error": "text required"}), 400
+
+    try:
+        ingredients = parse_meal_text_to_ingredients(text)
+        passed, failures = evaluate_expectations(ingredients, expectations)
+        return jsonify({
+            "ingredients": ingredients,
+            "passed": passed,
+            "failures": failures,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e), "ingredients": [], "passed": False, "failures": [str(e)]}), 500
 
 
 if __name__ == "__main__":

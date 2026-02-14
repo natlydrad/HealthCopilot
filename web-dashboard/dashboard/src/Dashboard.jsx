@@ -333,6 +333,12 @@ export default function Dashboard() {
           >
             Playground
           </Link>
+          <Link
+            to="/regression"
+            className="px-3 py-2 text-sm text-slate-600 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition-colors"
+          >
+            Regression
+          </Link>
         </div>
       </div>
 

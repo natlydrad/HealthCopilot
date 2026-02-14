@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Dashboard from "./Dashboard";
 import DayDetail from "./DayDetail";
 import Insights from "./Insights";
+import RegressionSuite from "./RegressionSuite";
 import FlowLogPanel from "./FlowLogPanel";
 import PlaygroundLayout from "./playground/PlaygroundLayout";
 import PlaygroundDashboard from "./playground/PlaygroundDashboard";
@@ -95,6 +96,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/day/:date" element={<DayDetail />} />
+        <Route path="/regression" element={<RegressionSuite />} />
         <Route path="/insights" element={<Insights />} />
         <Route path="/play" element={<PlaygroundLayout />}>
           <Route index element={<PlaygroundDashboard />} />
