@@ -88,10 +88,12 @@ def parse_ingredients(text: str, user_context: str = ""):
     Return empty array [] only if the input clearly contains no food/drink/supplement (e.g. empty, or only metadata like "tap to edit").
     """
 
-    resp = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}]
-    )
+    temperature = 0 if os.getenv("REGRESSION_MODE", "false").lower() == "true" else None
+    kwargs = {"model": "gpt-4o-mini", "messages": [{"role": "user", "content": prompt}]}
+    if temperature is not None:
+        kwargs["temperature"] = temperature
+
+    resp = client.chat.completions.create(**kwargs)
 
     raw = resp.choices[0].message.content.strip()
 

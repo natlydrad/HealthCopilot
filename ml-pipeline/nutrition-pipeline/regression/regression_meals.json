@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "description": "Problematic meals from bulk-review 2026-02-06",
+  "meals": [
+    {
+      "id": "tea-raspberry-hibiscus",
+      "text": "raspberry hibiscus tea",
+      "expectations": {
+        "noOolong": true,
+        "hasCaffeine": true,
+        "ingredientCount": 1
+      },
+      "note": "why is this oolong tea"
+    },
+    {
+      "id": "tea-earl-grey",
+      "text": "early grey tea",
+      "expectations": {
+        "noOolong": true,
+        "hasCaffeine": true,
+        "ingredientCount": 1
+      },
+      "note": "earl grey should be black tea, not oolong"
+    },
+    {
+      "id": "tea-green",
+      "text": "green tea",
+      "expectations": {
+        "hasCaffeine": true,
+        "ingredientCount": 1
+      },
+      "note": "green tea has caffeine"
+    },
+    {
+      "id": "tea-sleepy",
+      "text": "sleepy tea",
+      "expectations": {
+        "noOolong": true,
+        "ingredientCount": 1
+      },
+      "note": "sleepy tea is herbal, not oolong"
+    },
+    {
+      "id": "strawberries",
+      "text": "7 strawberries",
+      "expectations": {
+        "quantityMatches": {
+          "strawberries": { "quantity": 7 }
+        },
+        "sourceIsUsda": ["strawberries"]
+      },
+      "note": "preserve count (7), not convert to cups; use USDA; unit can be strawberries or count"
+    },
+    {
+      "id": "quantity-oats",
+      "text": "3/4 cup cooked steel cut oats",
+      "expectations": {
+        "quantityMatches": {
+          "steel cut oats": { "quantity": 0.75, "unit": "cup" }
+        }
+      },
+      "note": "preserve 3/4 cup"
+    },
+    {
+      "id": "quantity-turkey",
+      "text": "1 cup ground turkey",
+      "expectations": {
+        "quantityMatches": {
+          "ground turkey": { "quantity": 1, "unit": "cup" }
+        }
+      },
+      "note": "said 1 cup, not 3/4 or 2"
+    },
+    {
+      "id": "frank-hot-single",
+      "text": "tbsp frank's red hot",
+      "expectations": {
+        "ingredientCount": 1,
+        "noDuplicates": true
+      },
+      "note": "one phrase = one ingredient, no duplicates"
+    },
+    {
+      "id": "kiwi",
+      "text": "kiwi",
+      "expectations": {
+        "sourceIsUsda": ["kiwi"]
+      },
+      "note": "why is this gpt, it is literally a kiwi"
+    },
+    {
+      "id": "steel-oats-meal",
+      "text": "1 cup cabbage, tbsp frank's red hot, 3/4 cup cooked steel cut oats, 1 cup ground turkey",
+      "expectations": {
+        "quantityMatches": {
+          "steel cut oats": { "quantity": 0.75, "unit": "cup" },
+          "ground turkey": { "quantity": 1, "unit": "cup" }
+        },
+        "noDuplicates": true
+      },
+      "note": "quantityMatches for oats and turkey, no duplicates"
+    }
+  ]
+}

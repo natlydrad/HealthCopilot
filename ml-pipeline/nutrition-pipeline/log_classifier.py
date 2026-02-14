@@ -146,6 +146,7 @@ def classify_log(entry_text: str, verbose: bool = False, recent_meals_context: s
         user_content = f"RECENT MEALS CONTEXT: {recent_meals_context}\n\n{user_content}"
     
     try:
+        temp = 0 if os.getenv("REGRESSION_MODE", "false").lower() == "true" else 0.1
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -153,7 +154,7 @@ def classify_log(entry_text: str, verbose: bool = False, recent_meals_context: s
                 {"role": "user", "content": user_content}
             ],
             response_format={"type": "json_object"},
-            temperature=0.1
+            temperature=temp
         )
         
         result = json.loads(response.choices[0].message.content)
@@ -202,6 +203,7 @@ def classify_log_with_image(entry_text: str, meal: dict, pb_url: str, token: str
     ]
 
     try:
+        temp = 0 if os.getenv("REGRESSION_MODE", "false").lower() == "true" else 0.1
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -209,7 +211,7 @@ def classify_log_with_image(entry_text: str, meal: dict, pb_url: str, token: str
                 {"role": "user", "content": user_content},
             ],
             response_format={"type": "json_object"},
-            temperature=0.1,
+            temperature=temp,
         )
         result = json.loads(response.choices[0].message.content)
         if verbose:
