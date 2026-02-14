@@ -371,12 +371,62 @@ def _aggregate_servings(ingredients: list[dict]) -> dict:
     return agg
 
 
+MEAT_TERMS = ("pork", "beef", "chicken", "turkey", "fish", "salmon", "tuna", "lamb", "steak", "ground", "bacon", "sausage", "ham", "meat")
+
+# Stopwords to strip when comparing golden actual vs expected (same food, different display name)
+_CANONICAL_STOPWORDS = ("organic", "quick", "cook", "canned", "mature", "red")
+
+
+def _canonical_ingredient_name(name: str) -> str:
+    """
+    Normalize ingredient name for golden comparison: lowercase, hyphens to spaces,
+    strip stopwords, collapse spaces. E.g. "STEEL-CUT ORGANIC QUICK COOK OATS" and
+    "Steel cut oats" map to the same canonical form.
+    """
+    if not name or not isinstance(name, str):
+        return ""
+    s = name.lower().replace("-", " ").strip()
+    words = s.split()
+    kept = [w for w in words if w not in _CANONICAL_STOPWORDS]
+    return " ".join(kept).strip() if kept else s.strip()
+
+
+def compare_golden_actual_to_expected(
+    actual_ingredients: list[dict], expected_ingredients: list[dict]
+) -> tuple[bool, list[str]]:
+    """
+    Compare parsed actual output to golden expected. Returns (passed, failures).
+    (1) len(actual) == len(expected); (2) set of canonical names in actual equals set in expected.
+    """
+    failures = []
+    if len(actual_ingredients) != len(expected_ingredients):
+        failures.append(
+            f"Ingredient count mismatch: actual={len(actual_ingredients)}, expected={len(expected_ingredients)}"
+        )
+    actual_names = {_canonical_ingredient_name(ing.get("name") or "") for ing in actual_ingredients}
+    expected_names = {_canonical_ingredient_name(ing.get("name") or "") for ing in expected_ingredients}
+    if actual_names != expected_names:
+        only_actual = actual_names - expected_names
+        only_expected = expected_names - actual_names
+        if only_actual:
+            failures.append(f"Only in actual: {only_actual}")
+        if only_expected:
+            failures.append(f"Only in expected: {only_expected}")
+    return len(failures) == 0, failures
+
+
 def evaluate_production_checks(ingredients: list[dict]) -> tuple[bool, list[str]]:
     """
     Production-parity checks: servings sanity and nutrient sanity.
     Returns (passed, list of failure messages).
     """
     failures = []
+
+    # Duplicate ingredient names
+    names = [(ing.get("name") or "").strip().lower() for ing in ingredients]
+    if len(names) != len(set(names)):
+        dupes = [n for n in names if names.count(n) > 1]
+        failures.append(f"Duplicate ingredients: {set(dupes)}")
 
     # Servings: foodGroupServings non-negative, no NaN; aggregate non-negative
     for i, ing in enumerate(ingredients):
@@ -400,6 +450,17 @@ def evaluate_production_checks(ingredients: list[dict]) -> tuple[bool, list[str]
         if v != v or v < 0:
             failures.append(f"Aggregate servings {k} invalid: {v}")
 
+    # Meat/poultry/fish must contribute to protein (foodGroupServings.protein > 0)
+    for ing in ingredients:
+        name_lower = (ing.get("name") or "").strip().lower()
+        if not any(term in name_lower for term in MEAT_TERMS):
+            continue
+        fg = ing.get("foodGroupServings") or (ing.get("parsingMetadata") or {}).get("foodGroupServings")
+        if not isinstance(fg, dict) or float(fg.get("protein") or 0) <= 0:
+            failures.append(
+                f"'{ing.get('name')}' should contribute to protein (meat/poultry/fish must have foodGroupServings.protein > 0)"
+            )
+
     # Nutrient sanity: per-ingredient calories 0–5000, macros non-negative
     for ing in ingredients:
         macros = _get_macros(ing)
@@ -412,9 +473,9 @@ def evaluate_production_checks(ingredients: list[dict]) -> tuple[bool, list[str]
                 f"'{ing.get('name')}': negative macro (p={macros['protein']:.0f} c={macros['carbs']:.0f} f={macros['fat']:.0f})"
             )
 
-    # Meal total calories 0–5000
+    # Meal total calories 0–5000 (per meal)
     total_cal = sum(_get_macros(ing)["calories"] for ing in ingredients)
     if not (0 <= total_cal <= 5000):
-        failures.append(f"Meal total calories {total_cal:.0f} outside 0–5000")
+        failures.append(f"Meal total calories {total_cal:.0f} outside 0–5000 (per meal)")
 
     return len(failures) == 0, failures

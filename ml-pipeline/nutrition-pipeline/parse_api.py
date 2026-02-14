@@ -21,6 +21,7 @@ from enrich_common_sense import apply_deterministic_rules
 import requests
 import os
 from pathlib import Path
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -2856,6 +2857,207 @@ def regression_run_day():
                 "failures": [str(e)],
                 "ingredients": [],
             })
+
+    return jsonify({"results": results})
+
+
+def _golden_set_path():
+    return Path(__file__).resolve().parent / "regression" / "golden_set.json"
+
+
+def _sanitize_ingredient_for_golden(ing):
+    """Keep only fields needed for comparison; drop DB-only fields."""
+    if not isinstance(ing, dict):
+        return {}
+    keep = ("name", "quantity", "unit", "nutrition", "parsingMetadata", "source", "usda_matched_name")
+    return {k: ing[k] for k in keep if k in ing}
+
+
+def _slug_for_golden_id(text, existing_ids):
+    """Generate a unique id slug from meal text."""
+    slug = re.sub(r"[^a-z0-9]+", "-", (text or "").lower().strip())[:40].strip("-") or "meal"
+    base = slug
+    i = 1
+    while slug in existing_ids:
+        slug = f"{base}-{i}"
+        i += 1
+    return slug
+
+
+@app.route("/regression/golden-set", methods=["GET"])
+def regression_golden_set():
+    """Return golden_set.json for the UI and for running golden regression."""
+    path = _golden_set_path()
+    if not path.exists():
+        return jsonify({"error": "golden_set.json not found"}), 404
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/regression/golden-add", methods=["POST"])
+def regression_golden_add():
+    """
+    Add one entry to the golden set. Body: { "text": str, "ingredients": [ ... ], "category": "easy"|"normal"|"evil" (optional) }.
+    Returns: { "id": str, "added": true }.
+    """
+    data = request.get_json() or {}
+    text = (data.get("text") or "").strip()
+    ingredients = data.get("ingredients") or []
+    category = data.get("category") or "normal"
+    if category not in ("easy", "normal", "evil"):
+        category = "normal"
+
+    path = _golden_set_path()
+    if path.exists():
+        try:
+            with open(path) as f:
+                golden = json.load(f)
+        except Exception as e:
+            return jsonify({"error": f"Failed to read golden set: {e}"}), 500
+    else:
+        golden = {"version": 1, "description": "Golden set – ground truth for regression", "entries": []}
+
+    entries = golden.get("entries") or []
+    existing_ids = {e.get("id") for e in entries if e.get("id")}
+    entry_id = _slug_for_golden_id(text, existing_ids)
+
+    sanitized = [_sanitize_ingredient_for_golden(ing) for ing in ingredients]
+    entry = {
+        "id": entry_id,
+        "input": {"text": text},
+        "expected": {"ingredients": sanitized},
+        "category": category,
+        "addedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+    entries.append(entry)
+    golden["entries"] = entries
+
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(golden, f, indent=2)
+    except Exception as e:
+        return jsonify({"error": f"Failed to write golden set: {e}"}), 500
+
+    return jsonify({"id": entry_id, "added": True})
+
+
+@app.route("/regression/run-golden", methods=["POST"])
+def regression_run_golden():
+    """
+    Run golden set: for each entry parse input text, compare actual to expected, run production checks.
+    Returns: { "results": [ { "id", "text", "passed", "failures", "actualIngredients" }, ... ] }
+    """
+    os.environ["REGRESSION_MODE"] = "true"
+    os.environ["USE_PARSING_CACHE"] = "false"
+    try:
+        from regression.regression_runner import (
+            parse_meal_text_to_ingredients,
+            compare_golden_actual_to_expected,
+            evaluate_production_checks,
+        )
+    except ImportError as e:
+        return jsonify({"error": f"Regression module not available: {e}"}), 500
+
+    path = _golden_set_path()
+    if not path.exists():
+        return jsonify({"results": []}), 200
+    try:
+        with open(path) as f:
+            golden = json.load(f)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    entries = golden.get("entries") or []
+    results = []
+    for entry in entries:
+        entry_id = entry.get("id") or ""
+        text = (entry.get("input") or {}).get("text") or ""
+        expected_ingredients = (entry.get("expected") or {}).get("ingredients") or []
+        try:
+            actual = parse_meal_text_to_ingredients(text)
+            # Normalize nutrition (parse JSON string) like validate-ingredients
+            normalized = []
+            for ing in actual:
+                ing_copy = dict(ing) if isinstance(ing, dict) else {}
+                nut = ing_copy.get("nutrition")
+                if isinstance(nut, str):
+                    try:
+                        ing_copy["nutrition"] = json.loads(nut)
+                    except (TypeError, ValueError):
+                        pass
+                normalized.append(ing_copy)
+            actual = normalized
+
+            compare_ok, compare_failures = compare_golden_actual_to_expected(actual, expected_ingredients)
+            prod_ok, prod_failures = evaluate_production_checks(actual)
+            passed = compare_ok and prod_ok
+            failures = list(compare_failures) + list(prod_failures)
+            results.append({
+                "id": entry_id,
+                "text": text,
+                "passed": passed,
+                "failures": failures,
+                "actualIngredients": actual,
+            })
+        except Exception as e:
+            results.append({
+                "id": entry_id,
+                "text": text,
+                "passed": False,
+                "failures": [str(e)],
+                "actualIngredients": [],
+            })
+
+    return jsonify({"results": results})
+
+
+@app.route("/regression/validate-ingredients", methods=["POST"])
+def regression_validate_ingredients():
+    """
+    Validate already-saved ingredients (e.g. after clear + parse) with production checks.
+    Body: { "meals": [ { "mealId": str, "text": str, "ingredients": [ ... ] } ] }
+    Returns: { "results": [ { "mealId", "text", "passed", "failures", "ingredients" }, ... ] }
+    """
+    try:
+        from regression.regression_runner import evaluate_production_checks
+    except ImportError as e:
+        return jsonify({"error": f"Regression module not available: {e}"}), 500
+
+    data = request.get_json() or {}
+    meals = data.get("meals") or []
+    if not meals:
+        return jsonify({"results": [], "message": "No meals provided"}), 200
+
+    results = []
+    for m in meals:
+        meal_id = m.get("mealId") or m.get("id") or ""
+        text = (m.get("text") or "").strip()
+        ingredients = m.get("ingredients") or []
+        # Normalize for checks: nutrition may be JSON string from PocketBase
+        normalized = []
+        for ing in ingredients:
+            ing_copy = dict(ing) if isinstance(ing, dict) else {}
+            nut = ing_copy.get("nutrition")
+            if isinstance(nut, str):
+                try:
+                    ing_copy["nutrition"] = json.loads(nut)
+                except (TypeError, ValueError):
+                    pass
+            normalized.append(ing_copy)
+
+        passed, failures = evaluate_production_checks(normalized)
+        results.append({
+            "mealId": meal_id,
+            "text": text,
+            "passed": passed,
+            "failures": failures or [],
+            "ingredients": normalized,
+        })
 
     return jsonify({"results": results})
 

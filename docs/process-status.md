@@ -23,3 +23,9 @@ Carry context across sessions. At the end of a logical unit of work (or when you
 1. Phase B: Regression runner now adds `portionGrams` and `foodGroupServings` (via deterministic rules and parsingMetadata). Applied `foodGroupServings` from enrich_common_sense corrections in `_apply_corrections`. Added `evaluate_production_checks()`: servings sanity (foodGroupServings non-negative, no NaN; aggregate valid) and nutrient sanity (per-ingredient calories 0–5000, macros non-negative; meal total calories 0–5000). Wired production checks into `/regression/run-one`, `/regression/run-day`, and CLI `run_regression.py`. Phase C: Documented comprehensive checklist in regression README (parsing, source, nutrients, servings, nutrient sanity, USDA display name) and added expectation types for `caloriesInRange` and `usdaMatchNameExcludes`.
 2. None.
 3. N/A
+
+**2026-02-14 — Golden set + Mark as correct outcome**
+
+1. Golden set: new `regression/golden_set.json` with version, description, entries (id, input.text, expected.ingredients, category, addedAt). Parse API: GET `/regression/golden-set`, POST `/regression/golden-add` (sanitize ingredients, unique id from text slug), POST `/regression/run-golden` (parse each entry, compare actual vs expected, run production checks). Regression runner: `_canonical_ingredient_name()` and `compare_golden_actual_to_expected()` for count + canonical name set equality. Frontend: `addToGoldenSet()` in api.js; DayDetail "Add to golden set" button (when meal has ingredients) + AddToGoldenSetModal (category Easy/Normal/Evil, success message); Regression Suite "Run golden set" section with same pass/fail + expandable failures and actual ingredients.
+2. None.
+3. N/A

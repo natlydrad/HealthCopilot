@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchRegressionSuite, runRegressionMeal } from "./api";
+import { fetchRegressionSuite, runRegressionMeal, runGoldenSet } from "./api";
 
 const REGRESSION_CONCURRENCY = 3;
 
@@ -42,6 +42,9 @@ export default function RegressionSuite() {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [expandedId, setExpandedId] = useState(null);
+  const [goldenResults, setGoldenResults] = useState([]); // [ { id, text, passed, failures, actualIngredients }, ... ]
+  const [goldenRunning, setGoldenRunning] = useState(false);
+  const [goldenExpandedId, setGoldenExpandedId] = useState(null);
 
   useEffect(() => {
     async function load() {
@@ -122,6 +125,19 @@ export default function RegressionSuite() {
       setExpandedId(meal.id);
     } finally {
       setRunning(false);
+    }
+  };
+
+  const handleRunGoldenSet = async () => {
+    setGoldenRunning(true);
+    setGoldenResults([]);
+    try {
+      const data = await runGoldenSet();
+      setGoldenResults(data.results || []);
+    } catch (err) {
+      setGoldenResults([{ id: "_error", text: "", passed: false, failures: [err.message || "Failed to run golden set"], actualIngredients: [] }]);
+    } finally {
+      setGoldenRunning(false);
     }
   };
 
@@ -258,6 +274,81 @@ export default function RegressionSuite() {
                               <li key={i}>
                                 {ing.name} — {ing.quantity} {ing.unit} (source:{" "}
                                 {ing.source || "?"})
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <hr className="my-8 border-gray-200" />
+          <h2 className="text-xl font-semibold mb-2">Golden set</h2>
+          <p className="text-sm text-gray-600 mb-3">
+            Run regression against the golden set (meals marked as correct outcome). Pass = same ingredient count/names and production checks.
+          </p>
+          <div className="flex items-center gap-3 mb-4">
+            <button
+              type="button"
+              onClick={handleRunGoldenSet}
+              disabled={goldenRunning}
+              className="px-3 py-1.5 text-sm font-medium text-amber-700 bg-amber-100 rounded-lg hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {goldenRunning ? "Running…" : "Run golden set"}
+            </button>
+            {goldenResults.length > 0 && (
+              <span className="text-sm text-gray-600">
+                {goldenResults.filter((r) => r.passed).length} passed, {goldenResults.filter((r) => !r.passed).length} failed
+              </span>
+            )}
+          </div>
+          <div className="space-y-2">
+            {goldenResults.map((r) => {
+              const isExpanded = goldenExpandedId === r.id;
+              return (
+                <div
+                  key={r.id}
+                  className="border border-gray-200 rounded-lg bg-white overflow-hidden"
+                >
+                  <div
+                    className="flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-50"
+                    onClick={() => setGoldenExpandedId(isExpanded ? null : r.id)}
+                  >
+                    <span
+                      className={`w-16 shrink-0 text-xs font-medium px-2 py-0.5 rounded ${
+                        r.passed ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                      }`}
+                    >
+                      {r.passed ? "PASS" : "FAIL"}
+                    </span>
+                    <span className="flex-1 truncate text-sm" title={r.text}>
+                      {r.text || "(empty)"}
+                    </span>
+                    <span className="text-xs text-gray-500">{r.id}</span>
+                  </div>
+                  {isExpanded && (
+                    <div className="border-t border-gray-200 p-4 bg-gray-50 text-sm space-y-3">
+                      {r.failures?.length > 0 && (
+                        <div>
+                          <div className="font-medium text-red-700 mb-1">Failures</div>
+                          <ul className="list-disc list-inside text-red-700 space-y-0.5">
+                            {r.failures.map((f, i) => (
+                              <li key={i}>{f}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {r.actualIngredients?.length > 0 && (
+                        <div>
+                          <div className="font-medium text-gray-700 mb-1">Actual ingredients</div>
+                          <ul className="space-y-0.5 text-gray-600">
+                            {r.actualIngredients.map((ing, i) => (
+                              <li key={i}>
+                                {ing.name} — {ing.quantity} {ing.unit} (source: {ing.source || "?"})
                               </li>
                             ))}
                           </ul>

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { fetchMealsForDateRange, fetchIngredients, fetchHasNonFoodLogs, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getLearningStats, removeLearnedPattern, parseAndSaveMeal, clearMealIngredients, clearNonFoodClassification, sendCorrectionMessage, previewCorrection, saveCorrection, reparseIngredientFromText, getParseApiUrl, deleteIngredient, addIngredients, updateIngredientPortion } from "./api";
+import { fetchMealsForDateRange, fetchIngredients, fetchHasNonFoodLogs, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getLearningStats, removeLearnedPattern, parseAndSaveMeal, clearMealIngredients, clearNonFoodClassification, sendCorrectionMessage, previewCorrection, saveCorrection, reparseIngredientFromText, getParseApiUrl, deleteIngredient, addIngredients, updateIngredientPortion, runRegressionForDay, addToGoldenSet } from "./api";
 import { computeServingsByFramework, MYPLATE_TARGETS, DAILY_DOZEN_TARGETS, LONGEVITY_TARGETS, MATCHED_TO_EMOJI } from "./utils/foodFrameworks";
 import * as flowLog from "./utils/flowLog";
 
@@ -206,6 +206,9 @@ export default function DayDetail() {
   const [clearDayInProgress, setClearDayInProgress] = useState(false);
   const [clearDayProgress, setClearDayProgress] = useState({ current: 0, total: 0 });
   const [refreshIngredientsTrigger, setRefreshIngredientsTrigger] = useState(0);
+  const [dayRegressionRunning, setDayRegressionRunning] = useState(false);
+  const [dayRegressionResults, setDayRegressionResults] = useState(null);
+  const [dayRegressionExpandedId, setDayRegressionExpandedId] = useState(null);
 
   const refreshTotals = () => setTotalsRefreshTrigger((t) => t + 1);
 
@@ -431,6 +434,26 @@ export default function DayDetail() {
     }
   };
 
+  const handleRunDayRegression = async () => {
+    if (meals.length === 0) {
+      alert("No meals for this day.");
+      return;
+    }
+    setDayRegressionRunning(true);
+    setDayRegressionResults(null);
+    try {
+      const data = await runRegressionForDay(meals);
+      setDayRegressionResults(data.results || []);
+      setRefreshIngredientsTrigger((t) => t + 1);
+      refreshTotals();
+    } catch (err) {
+      console.error("Day regression failed:", err);
+      alert(`Regression failed: ${err?.message || err}`);
+    } finally {
+      setDayRegressionRunning(false);
+    }
+  };
+
   return (
     <div className="p-8 bg-gray-50 min-h-screen">
       <div className="flex items-center justify-between mb-4">
@@ -473,7 +496,75 @@ export default function DayDetail() {
         >
           Export day for review
         </button>
+        <button
+          type="button"
+          onClick={handleRunDayRegression}
+          disabled={dayRegressionRunning || meals.length === 0}
+          className="px-3 py-1.5 text-sm font-medium text-amber-700 bg-amber-100 rounded-lg hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {dayRegressionRunning ? "Running…" : "Run regression for this day"}
+        </button>
       </div>
+      {dayRegressionResults && dayRegressionResults.length > 0 && (
+        <div className="mb-4 p-4 bg-white border border-gray-200 rounded-lg">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold text-gray-800">Regression for this day</h2>
+            <span className="text-xs text-gray-600">
+              {dayRegressionResults.filter((r) => r.passed).length} passed, {dayRegressionResults.filter((r) => !r.passed).length} failed
+            </span>
+          </div>
+          <div className="space-y-2">
+            {dayRegressionResults.map((r) => {
+              const isExpanded = dayRegressionExpandedId === r.mealId;
+              return (
+                <div key={r.mealId} className="border border-gray-200 rounded bg-gray-50 overflow-hidden">
+                  <div
+                    className="flex items-center gap-3 p-2 cursor-pointer hover:bg-gray-100"
+                    onClick={() => setDayRegressionExpandedId(isExpanded ? null : r.mealId)}
+                  >
+                    <span
+                      className={`w-14 shrink-0 text-xs font-medium px-2 py-0.5 rounded ${
+                        r.passed ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                      }`}
+                    >
+                      {r.passed ? "PASS" : "FAIL"}
+                    </span>
+                    <span className="flex-1 truncate text-sm" title={r.text}>
+                      {r.text || "(empty)"}
+                    </span>
+                  </div>
+                  {isExpanded && (
+                    <div className="border-t border-gray-200 p-3 bg-white text-sm space-y-2">
+                      {r.failures && r.failures.length > 0 && (
+                        <div>
+                          <div className="font-medium text-red-700 mb-1">Failures</div>
+                          <ul className="list-disc list-inside text-red-700 space-y-0.5">
+                            {r.failures.map((f, i) => (
+                              <li key={i}>{f}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {r.ingredients && r.ingredients.length > 0 && (
+                        <div>
+                          <div className="font-medium text-gray-700 mb-1">Parsed ingredients</div>
+                          <ul className="space-y-0.5 text-gray-600">
+                            {r.ingredients.map((ing, i) => (
+                              <li key={i}>
+                                {ing.name} — {ing.quantity} {ing.unit} (source: {ing.source || "?"})
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {parseAllInProgress && parseAllProgress.total > 0 && (
         <div className="mb-4 w-full max-w-md flex flex-col gap-1">
           <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -730,6 +821,76 @@ function AddToRegressionModal({ meal, onClose }) {
   );
 }
 
+function AddToGoldenSetModal({ meal, ingredients, onClose, onAdded }) {
+  const [category, setCategory] = useState("normal");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
+
+  const handleAdd = async () => {
+    setError(null);
+    setSubmitting(true);
+    try {
+      await addToGoldenSet(meal?.text ?? "", ingredients ?? [], category);
+      setSuccess(true);
+      onAdded?.();
+      setTimeout(() => onClose(), 1500);
+    } catch (e) {
+      setError(e.message || "Failed to add to golden set");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-4">
+        <div className="flex justify-between items-center mb-3">
+          <h2 className="text-lg font-semibold text-gray-800">Add to golden set</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+        <p className="text-xs text-gray-500 mb-3">
+          Use this meal&apos;s current parse as the correct outcome for regression.
+        </p>
+        <div className="space-y-2 mb-3">
+          <label className="block text-sm font-medium text-gray-700">Category</label>
+          <div className="flex gap-2">
+            {["easy", "normal", "evil"].map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCategory(c)}
+                className={`px-3 py-1.5 rounded text-sm capitalize ${category === c ? "bg-amber-500 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+        {success && <p className="text-sm text-green-600 mb-2">Added to golden set</p>}
+        {error && <p className="text-sm text-red-600 mb-2">{error}</p>}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleAdd}
+            disabled={submitting}
+            className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50 text-sm"
+          >
+            {submitting ? "Adding…" : "Add"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 text-sm"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTotalsRefresh, frameworkAttribution }) {
   const [ingredients, setIngredients] = useState([]);
   const [correcting, setCorrecting] = useState(null);
@@ -750,6 +911,7 @@ function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTota
 
   const [hasNonFoodLogs, setHasNonFoodLogs] = useState(false);
   const [showAddToRegression, setShowAddToRegression] = useState(false);
+  const [showAddToGoldenSet, setShowAddToGoldenSet] = useState(false);
 
   // Bulk-review annotations: { ingredientId: { category, reasoning } }, synced to localStorage
   const [annotations, setAnnotations] = useState({});
@@ -1063,6 +1225,15 @@ function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTota
                 Add to regression
               </button>
             )}
+            {ingredients.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowAddToGoldenSet(true)}
+                className="text-xs text-amber-600 hover:text-amber-800 hover:underline shrink-0"
+              >
+                Add to golden set
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1071,6 +1242,17 @@ function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTota
         <AddToRegressionModal
           meal={meal}
           onClose={() => setShowAddToRegression(false)}
+        />
+      )}
+      {showAddToGoldenSet && (
+        <AddToGoldenSetModal
+          meal={meal}
+          ingredients={ingredients}
+          onClose={() => setShowAddToGoldenSet(false)}
+          onAdded={() => {
+            setShowAddToGoldenSet(false);
+            // Optional: show brief success (e.g. toast); for now just close
+          }}
         />
       )}
 

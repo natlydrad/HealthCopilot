@@ -676,6 +676,59 @@ export async function runRegressionMeal(text, expectations) {
   return data;
 }
 
+/** Validate saved ingredients with production checks. mealsWithIngredients: [ { mealId, text, ingredients } ]. */
+export async function validateRegressionIngredients(mealsWithIngredients) {
+  const res = await _parseApiFetch("/regression/validate-ingredients", {
+    method: "POST",
+    body: JSON.stringify({ meals: mealsWithIngredients }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || `Validate ingredients failed (${res.status})`);
+  }
+  return data;
+}
+
+/** Add current parse result to golden set. category: "easy" | "normal" | "evil" (default "normal"). Returns { id, added }. */
+export async function addToGoldenSet(text, ingredients, category) {
+  const res = await _parseApiFetch("/regression/golden-add", {
+    method: "POST",
+    body: JSON.stringify({ text, ingredients, category: category || "normal" }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || `Add to golden set failed (${res.status})`);
+  }
+  return data;
+}
+
+/** Run golden set regression. Returns { results: [ { id, text, passed, failures, actualIngredients }, ... ] }. */
+export async function runGoldenSet() {
+  const res = await _parseApiFetch("/regression/run-golden", { method: "POST" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || `Run golden set failed (${res.status})`);
+  }
+  return data;
+}
+
+/** Regression by day: clear day, parse everything (production), then validate saved ingredients. Returns { results: [...] }. */
+export async function runRegressionForDay(meals) {
+  if (!meals?.length) return { results: [] };
+  for (const meal of meals) {
+    await clearMealIngredients(meal.id);
+  }
+  for (const meal of meals) {
+    await parseAndSaveMeal(meal);
+  }
+  const mealsWithIngredients = [];
+  for (const meal of meals) {
+    const ingredients = await fetchIngredients(meal.id);
+    mealsWithIngredients.push({ mealId: meal.id, text: meal.text ?? "", ingredients });
+  }
+  return validateRegressionIngredients(mealsWithIngredients);
+}
+
 function _parseApiFetch(path, options = {}) {
   const useProxy = import.meta.env.DEV && !import.meta.env.VITE_PARSE_API_URL;
   const url = useProxy ? `/parse-api${path}` : `${PARSE_API_URL}${path}`;
