@@ -54,7 +54,7 @@ def _has_specific_portion(ing: dict) -> bool:
     """True if the ingredient has an explicit quantity/unit (e.g. 1 cup, 2 oz). Don't overwrite with learned portion."""
     u = (ing.get("unit") or "").strip().lower()
     q = float(ing.get("quantity", 1) or 1)
-    specific_units = ("cup", "cups", "oz", "tbsp", "tsp", "piece", "pieces", "eggs", "egg", "slice", "slices", "g", "gram", "grams")
+    specific_units = ("cup", "cups", "oz", "tbsp", "tsp", "piece", "pieces", "eggs", "egg", "slice", "slices", "g", "gram", "grams", "strawberries", "strawberry", "blueberries", "blueberry", "raspberries", "raspberry", "blackberries", "blackberry", "grapes", "grape", "cherries", "cherry")
     if u in specific_units:
         return True
     if u in ("serving", "servings") and q != 1:

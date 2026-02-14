@@ -153,13 +153,20 @@ def scale_nutrition(nutrients: list, quantity: float, unit: str, serving_size_g:
 
 
 def extract_macros(nutrients: list) -> dict:
-    """Extract key macros from USDA nutrient array. Values are per 100g."""
+    """Extract key macros from USDA nutrient array. Values are per 100g. Handles both value and amount (nested FDC format)."""
     macros = {"calories": 0, "protein": 0, "carbs": 0, "fat": 0}
     
     for n in nutrients:
-        name = n.get("nutrientName", "").lower()
-        value = n.get("value", 0) or 0
-        unit = (n.get("unitName") or "").upper()
+        name_raw = n.get("nutrientName") or (n.get("nutrient") or {}).get("name")
+        name = (str(name_raw) if name_raw else "").lower()
+        value = n.get("value")
+        if value is None and "amount" in n:
+            try:
+                value = float(n["amount"])
+            except (TypeError, ValueError):
+                value = 0
+        value = (value or 0) if value is not None else 0
+        unit = (n.get("unitName") or (n.get("nutrient") or {}).get("unitName") or "").upper()
         
         if "energy" in name:
             if unit == "KCAL" or unit == "CAL":
@@ -308,6 +315,7 @@ def _normalize_usda_nutrient(n: dict) -> dict | None:
     """
     Normalize a single USDA foodNutrient to {nutrientName, unitName, value}.
     Handles both API shapes: value/nutrientName (already flat) and amount/nutrient.name (raw FDC).
+    Treats null value for one nutrient as skip (don't include); partial data still extracts.
     """
     if not n or not isinstance(n, dict):
         return None
@@ -319,8 +327,10 @@ def _normalize_usda_nutrient(n: dict) -> dict | None:
             val = float(n["amount"])
         except (TypeError, ValueError):
             return None
-    if name is None or val is None:
+    if name is None:
         return None
+    if val is None:
+        return None  # skip this nutrient, don't treat as "no data" for whole food
     return {"nutrientName": name.strip(), "unitName": (unit or "").strip(), "value": round(float(val), 2)}
 
 
@@ -441,6 +451,7 @@ def _score_drink_match(query_lower: str, matched_name: str, raw_nutrients: list)
     Score how well a USDA candidate fits a drink-like query. Higher = better.
     Prefer brewed/beverage forms; for tea/coffee prefer caffeine when user didn't say decaf/sleepy;
     for sleepy/herbal prefer 0 caffeine; prefer name overlap (e.g. green tea -> match with "green").
+    Penalize tea-type mismatch: earl grey -> oolong gets negative; green -> oolong gets negative.
     """
     if not _is_drink_like_query(query_lower):
         return 0.0
@@ -460,13 +471,35 @@ def _score_drink_match(query_lower: str, matched_name: str, raw_nutrients: list)
         score += 15.0
     elif _query_implies_caffeine(query_lower) and caffeine == 0:
         score -= 5.0
+    # Tea-type consistency: prefer match whose name shares key descriptors (green, earl, black, hibiscus, etc.)
     query_words = set(re.findall(r"[a-z0-9]{2,}", query_lower))
     query_words -= {"tea", "coffee", "the", "and", "with", "cup", "cups"}
+    has_overlap = False
     for w in query_words:
         if w in matched_lower:
-            score += 5.0
+            score += 8.0  # stronger bonus for type match
+            has_overlap = True
             break
+    # Penalize mismatch: specialty tea (earl grey, raspberry hibiscus, green) matched to generic oolong/black
+    tea_type_terms = ("green", "earl", "grey", "oolong", "black", "hibiscus", "chamomile", "peppermint", "raspberry")
+    query_tea_type = [t for t in tea_type_terms if t in query_lower]
+    matched_tea_type = [t for t in tea_type_terms if t in matched_lower]
+    if query_tea_type and not matched_tea_type and not has_overlap:
+        score -= 15.0  # strong penalty: wrong tea type (e.g. earl grey -> oolong)
     return score
+
+
+def _prefer_cooked_for_meat(query_lower: str, matched_name: str) -> float:
+    """Return bonus to subtract from cal_score when match is cooked and query implies cooked (meat without 'raw')."""
+    meat_terms = ["chicken", "beef", "steak", "pork", "turkey", "lamb", "salmon", "tuna", "fish", "ground"]
+    if not any(m in query_lower for m in meat_terms):
+        return 0.0
+    if "raw" in query_lower:
+        return 0.0
+    matched_lower = (matched_name or "").lower()
+    if "cooked" in matched_lower:
+        return 50.0  # prefer cooked (lower cal_score = better rank)
+    return 0.0
 
 
 def _has_nutrition_data(raw_nutrients: list, macros: dict) -> bool:
@@ -608,6 +641,7 @@ def usda_lookup(ingredient_name):
                 carbs = macros.get("carbs", 0) or 0
                 if is_composite and carbs == 0:
                     cal_score += 500
+                cal_score -= _prefer_cooked_for_meat(ingredient_lower, matched_name)
                 valid.append((cal_score, carbs, f, macros, matched_name, raw_nutrients))
 
             if not valid:
@@ -622,9 +656,19 @@ def usda_lookup(ingredient_name):
                 if _is_drink_like_query(ingredient_lower) and len(valid) > 1:
                     valid.sort(key=lambda x: (-_score_drink_match(ingredient_lower, x[4], x[5]), x[0]))
                 best = valid[0]
-                while valid and not _has_nutrition_data(best[5], best[3]):
-                    valid.pop(0)
-                    best = valid[0] if valid else None
+                while valid:
+                    if not _has_nutrition_data(best[5], best[3]):
+                        valid.pop(0)
+                        best = valid[0] if valid else None
+                        continue
+                    # Reject drink match with bad tea-type fit (e.g. earl grey -> oolong); prefer GPT fallback
+                    if _is_drink_like_query(ingredient_lower):
+                        drink_score = _score_drink_match(ingredient_lower, best[4], best[5])
+                        if drink_score < 0:
+                            valid.pop(0)
+                            best = valid[0] if valid else None
+                            continue
+                    break
 
             if best:
                 score, _, f, macros, matched_name, raw_nutrients = best
@@ -806,6 +850,7 @@ def _alternative_usda_queries(ingredient_name: str) -> list[str]:
     # Fruits/veg: add "raw" to get whole fruit, not juice/dried/canned
     raw_foods = ["orange", "oranges", "apple", "apples", "banana", "bananas", "grape", "grapes",
                  "strawberry", "strawberries", "blueberry", "blueberries", "peach", "peaches",
+                 "kiwi", "kiwis", "pear", "pears", "plum", "plums",
                  "carrot", "carrots", "broccoli", "celery", "cucumber", "tomato", "tomatoes",
                  "lettuce", "spinach", "pepper", "peppers", "melon", "watermelon", "mango", "mangoes"]
     if any(f in lower for f in raw_foods):
@@ -815,17 +860,21 @@ def _alternative_usda_queries(ingredient_name: str) -> list[str]:
             queries.append(f"{base} raw")
             if not base.endswith("s") and base.lower() not in ("grape", "mango", "peach", "melon"):
                 queries.append(f"{base}s raw")
-    # Meats: add "raw" to get plain meat, not fried/breaded (which inflates calories)
-    meat_terms = ["chicken", "beef", "steak", "pork", "turkey", "lamb", "salmon", "tuna", "fish"]
+    # Meats: add "cooked" when user doesn't say raw (meal context usually means cooked); also "raw" for plain meat
+    meat_terms = ["chicken", "beef", "steak", "pork", "turkey", "lamb", "salmon", "tuna", "fish", "ground"]
     if any(m in lower for m in meat_terms):
-        if "raw" not in lower and "fried" not in lower and "breaded" not in lower and "battered" not in lower:
+        if "fried" not in lower and "breaded" not in lower and "battered" not in lower:
             base = name.split(",")[0].strip()
-            if "wing" in lower:
-                queries.append("chicken wings raw")
-                queries.append("chicken wing raw")
-            elif "chicken" in lower and "breast" not in lower:
-                queries.append("chicken breast raw")
-            queries.append(f"{base} raw")
+            if "raw" not in lower:
+                # User implied cooked (e.g. "ground turkey" in meal) — prefer cooked form
+                queries.append(f"{base} cooked")
+            if "raw" not in lower and "cooked" not in lower:
+                if "wing" in lower:
+                    queries.append("chicken wings raw")
+                    queries.append("chicken wing raw")
+                elif "chicken" in lower and "breast" not in lower:
+                    queries.append("chicken breast raw")
+                queries.append(f"{base} raw")
     # Plant milks: branded search may return sweetened/creamer first; try base "soy milk" etc.
     plant_milks = ["soy milk", "oat milk", "almond milk", "coconut milk", "cashew milk", "pea milk"]
     if any(p in lower for p in plant_milks):

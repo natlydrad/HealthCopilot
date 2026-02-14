@@ -83,7 +83,7 @@ def _has_specific_portion(ing: dict) -> bool:
     """True if the ingredient has an explicit quantity/unit (e.g. 1 cup, 2 oz). Don't overwrite with learned portion."""
     u = (ing.get("unit") or "").strip().lower()
     q = float(ing.get("quantity", 1) or 1)
-    specific_units = ("cup", "cups", "oz", "tbsp", "tsp", "piece", "pieces", "eggs", "egg", "slice", "slices", "g", "gram", "grams")
+    specific_units = ("cup", "cups", "oz", "tbsp", "tsp", "piece", "pieces", "eggs", "egg", "slice", "slices", "g", "gram", "grams", "strawberries", "strawberry", "blueberries", "blueberry", "raspberries", "raspberry", "blackberries", "blackberry", "grapes", "grape", "cherries", "cherry")
     if u in specific_units:
         return True
     if u in ("serving", "servings") and q != 1:
@@ -92,7 +92,7 @@ def _has_specific_portion(ing: dict) -> bool:
 
 
 def _merge_ingredients_by_name(parsed: list) -> list:
-    """Merge ingredients with the same normalized name: sum quantities when same unit, else keep first."""
+    """Merge ingredients with the same normalized name: sum quantities when same unit, else keep first. Avoids duplicate rows when parser emits same item with slightly different quantity/unit."""
     from collections import defaultdict
     groups = defaultdict(list)
     for ing in parsed:
@@ -103,22 +103,33 @@ def _merge_ingredients_by_name(parsed: list) -> list:
         groups[key].append(ing)
     merged = []
     for _key, group in groups.items():
+        first = dict(group[0]) if isinstance(group[0], dict) else dict(group[0])
         if len(group) == 1:
-            merged.append(group[0])
+            merged.append(first)
             continue
-        first = dict(group[0])
-        first_name = first.get("name", "").strip()
-        u0 = (first.get("unit") or "serving").strip().lower()
-        q0 = float(first.get("quantity", 1) or 1)
-        for ing in group[1:]:
-            u = (ing.get("unit") or "serving").strip().lower()
-            if u == u0:
-                q0 += float(ing.get("quantity", 1) or 1)
-        first["quantity"] = q0
-        first["unit"] = first.get("unit") or "serving"
-        first["name"] = first_name
+        # Sum quantities when units are compatible (same or both "serving")
+        units = [(float(ing.get("quantity", 1) or 1), (ing.get("unit") or "serving").strip().lower()) for ing in group]
+        u0 = units[0][1]
+        if all(u == u0 for _, u in units):
+            first["quantity"] = sum(q for q, _ in units)
+            first["unit"] = group[0].get("unit") or "serving"
+        # else keep first (incompatible units, don't sum)
         merged.append(first)
     return merged
+
+
+def _is_common_whole_food(name: str) -> bool:
+    """True if name looks like common produce (short, no brand) — prefer USDA over GPT."""
+    if not name or len(name) < 2:
+        return False
+    words = (name or "").lower().strip().split()
+    if len(words) > 2:
+        return False
+    brand_like = ("wegmans", "silk", "oatly", "starbucks", "chipotle", "mcdonald", "trader joe", "whole food")
+    n = name.lower()
+    if any(b in n for b in brand_like):
+        return False
+    return True
 
 
 def _usda_display_name_ok(parsed_name: str, usda_name: str) -> bool:
@@ -635,6 +646,10 @@ def _process_and_insert_parsed_ingredient(ing, meal_id, user_context, source="ad
     portion_grams = None
     print(f"🔎 Looking up USDA for: '{name}'")
     usda = usda_lookup(name)
+    if not usda and _is_common_whole_food(name):
+        usda = usda_lookup_valid_for_portion(name, quantity, unit)
+        if usda:
+            print(f"   ✅ USDA (retry for common whole food): '{usda.get('name')}'")
     if usda:
         serving_size = usda.get("serving_size_g", 100.0)
         unit_lower = (unit or "").lower()
@@ -1523,6 +1538,10 @@ def parse_meal(meal_id):
                     print(f"🔎 Looking up USDA nutrition for: '{name}'")
                     _trace_append(trace, "usda_lookup", f"USDA lookup: {name}")
                     usda = usda_lookup(name)
+                    if not usda and _is_common_whole_food(name):
+                        usda = usda_lookup_valid_for_portion(name, quantity, unit)
+                        if usda:
+                            print(f"   ✅ USDA (retry for common whole food): '{usda.get('name')}'")
                 if usda:
                     # Use food-specific piece weight when unit is piece/pieces, or "serving" with small count (e.g. 7 strawberries)
                     serving_size = usda.get("serving_size_g", 100.0)

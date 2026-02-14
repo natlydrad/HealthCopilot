@@ -46,7 +46,7 @@ function matchedFromKeywords(name) {
   if (name.includes('flax') || name.includes('chia')) return 'Flaxseed/chia';
   if (name.includes('turmeric') || name.includes('cumin') || name.includes('cinnamon') || name.includes('spice')) return 'Spices';
   if (GRAINS_ALL.some(g => name.includes(g))) return WHOLE_GRAINS.some(g => name.includes(g)) ? 'Whole grains' : 'Grains';
-  if (PROTEIN.some(p => name.includes(p)) && !BEANS.some(b => name.includes(b))) return 'Protein (animal)';
+  if (PROTEIN.some(p => name.includes(p)) && !BEANS.some(b => name.includes(b)) && !DRINK_TERMS.some(d => n.includes(d))) return 'Protein (animal)';
   if (DAIRY.some(d => name.includes(d))) return 'Dairy';
   return null;
 }
