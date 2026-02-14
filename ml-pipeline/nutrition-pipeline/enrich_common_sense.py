@@ -3,6 +3,7 @@ Deterministic common-sense enrichment. Applies rules from common_sense_rules.yam
 BEFORE the GPT-based common_sense_check. Returns corrections in the same format.
 """
 
+import re
 import yaml
 from pathlib import Path
 
@@ -56,6 +57,36 @@ def _find_best_dict_match(name: str, d: dict) -> tuple:
     best_val = None
     for k, v in d.items():
         if k and k.lower() in name_lower and len(k) > best_len:
+            best_key = k
+            best_len = len(k)
+            best_val = v
+    return best_key, best_val
+
+
+def _find_best_caffeine_match(name: str, caffeine_rules: dict) -> tuple:
+    """
+    Match caffeine rules using word-based matching for USDA-style names.
+    E.g. 'Beverages, tea, Oolong, brewed' matches 'oolong tea' (contains 'oolong' and 'tea').
+    Falls back to substring match for regular names.
+    """
+    if not caffeine_rules:
+        return None, None
+    name_lower = (name or "").lower()
+    name_words = set(re.findall(r"[a-z0-9]{2,}", name_lower))
+    best_key = None
+    best_len = 0
+    best_val = None
+    for k, v in caffeine_rules.items():
+        if not k:
+            continue
+        key_lower = k.lower()
+        key_words = set(re.findall(r"[a-z0-9]{2,}", key_lower))
+        if key_words and key_words <= name_words:
+            if len(k) > best_len:
+                best_key = k
+                best_len = len(k)
+                best_val = v
+        elif key_lower in name_lower and len(k) > best_len:
             best_key = k
             best_len = len(k)
             best_val = v
@@ -148,7 +179,7 @@ def apply_deterministic_rules(ingredients: list[dict]) -> list[dict]:
             # Exclude zero-caffeine patterns from triggering an "add"
             zero_caff = {"decaf", "decaffeinated", "herbal", "peppermint", "chamomile", "rooibos"}
             if not any(z in name_lower for z in zero_caff):
-                _, mg_per_serv = _find_best_dict_match(name, caffeine_rules)
+                _, mg_per_serv = _find_best_caffeine_match(name, caffeine_rules)
                 if mg_per_serv is not None:
                     servings = _servings_from_quantity_unit(quantity, unit)
                     total_mg = round(mg_per_serv * servings, 1)

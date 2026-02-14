@@ -38,6 +38,8 @@ zero_calorie:
 caffeine_mg_per_serving:
   green tea: 30
   black tea: 47
+  earl grey: 47
+  earl gray: 47
   white tea: 28
   oolong tea: 37
   matcha: 70
