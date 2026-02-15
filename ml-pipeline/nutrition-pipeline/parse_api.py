@@ -2950,6 +2950,7 @@ def regression_golden_add():
 def regression_run_golden():
     """
     Run golden set: for each entry parse input text, compare actual to expected, run production checks.
+    Body (optional): { "tier": "mvp" | "full" }. Default tier from env PARSE_FLOW_TIER or "full".
     Returns: { "results": [ { "id", "text", "passed", "failures", "actualIngredients" }, ... ] }
     """
     os.environ["REGRESSION_MODE"] = "true"
@@ -2959,9 +2960,15 @@ def regression_run_golden():
             parse_meal_text_to_ingredients,
             compare_golden_actual_to_expected,
             evaluate_production_checks,
+            evaluate_invariants,
         )
     except ImportError as e:
         return jsonify({"error": f"Regression module not available: {e}"}), 500
+
+    data = request.get_json() or {}
+    tier = (data.get("tier") or os.getenv("PARSE_FLOW_TIER") or "full").strip().lower()
+    if tier not in ("mvp", "full"):
+        tier = "full"
 
     path = _golden_set_path()
     if not path.exists():
@@ -2977,9 +2984,14 @@ def regression_run_golden():
     for entry in entries:
         entry_id = entry.get("id") or ""
         text = (entry.get("input") or {}).get("text") or ""
-        expected_ingredients = (entry.get("expected") or {}).get("ingredients") or []
+        expected_dict = entry.get("expected") or {}
+        expected_ingredients = expected_dict.get("ingredients") or []
+        expected_options = {k: v for k, v in expected_dict.items() if k != "ingredients"}
+        category = (entry.get("category") or "normal").strip().lower()
+        if category not in ("easy", "normal", "evil"):
+            category = "normal"
         try:
-            actual = parse_meal_text_to_ingredients(text)
+            actual = parse_meal_text_to_ingredients(text, tier=tier)
             # Normalize nutrition (parse JSON string) like validate-ingredients
             normalized = []
             for ing in actual:
@@ -2993,16 +3005,20 @@ def regression_run_golden():
                 normalized.append(ing_copy)
             actual = normalized
 
-            compare_ok, compare_failures = compare_golden_actual_to_expected(actual, expected_ingredients)
+            compare_ok, compare_failures = compare_golden_actual_to_expected(
+                actual, expected_ingredients, expected_options
+            )
             prod_ok, prod_failures = evaluate_production_checks(actual)
-            passed = compare_ok and prod_ok
-            failures = list(compare_failures) + list(prod_failures)
+            inv_ok, inv_failures = evaluate_invariants(actual)
+            passed = compare_ok and prod_ok and inv_ok
+            failures = list(compare_failures) + list(prod_failures) + list(inv_failures)
             results.append({
                 "id": entry_id,
                 "text": text,
                 "passed": passed,
                 "failures": failures,
                 "actualIngredients": actual,
+                "category": category,
             })
         except Exception as e:
             results.append({
@@ -3011,7 +3027,40 @@ def regression_run_golden():
                 "passed": False,
                 "failures": [str(e)],
                 "actualIngredients": [],
+                "category": category,
             })
+
+    # Optional: append score to golden_results.jsonl (query log=1 or header X-Log-Results: true)
+    log_requested = request.args.get("log") == "1" or (request.headers.get("X-Log-Results") or "").strip().lower() == "true"
+    if log_requested and results:
+        pass_count = sum(1 for r in results if r["passed"])
+        total = len(results)
+        pass_rate = round(pass_count / total * 100, 2) if total else 0
+        by_category = {}
+        for r in results:
+            c = r.get("category") or "normal"
+            if c not in by_category:
+                by_category[c] = {"pass": 0, "fail": 0}
+            if r["passed"]:
+                by_category[c]["pass"] += 1
+            else:
+                by_category[c]["fail"] += 1
+        log_row = {
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "version": os.getenv("PARSE_PROMPT_VERSION", "unknown").strip(),
+            "tier": tier,
+            "pass_count": pass_count,
+            "fail_count": total - pass_count,
+            "total": total,
+            "pass_rate": pass_rate,
+            "by_category": by_category,
+        }
+        log_path = _golden_set_path().parent / "golden_results.jsonl"
+        try:
+            with open(log_path, "a") as f:
+                f.write(json.dumps(log_row) + "\n")
+        except Exception:
+            pass
 
     return jsonify({"results": results})
 

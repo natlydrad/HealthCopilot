@@ -26,6 +26,7 @@ from regression.regression_runner import (
     parse_meal_text_to_ingredients,
     evaluate_expectations,
     evaluate_production_checks,
+    evaluate_invariants,
 )
 
 
@@ -39,7 +40,10 @@ def main():
         suite = json.load(f)
 
     meals = suite.get("meals", [])
-    print(f"Running {len(meals)} regression meals...")
+    tier = os.getenv("PARSE_FLOW_TIER", "full").strip().lower() or "full"
+    if tier not in ("mvp", "full"):
+        tier = "full"
+    print(f"Running {len(meals)} regression meals (tier={tier})...")
     print()
 
     passed = 0
@@ -50,7 +54,7 @@ def main():
         expectations = meal.get("expectations", {})
 
         try:
-            actual = parse_meal_text_to_ingredients(text)
+            actual = parse_meal_text_to_ingredients(text, tier=tier)
         except Exception as e:
             print(f"FAIL {mid}: Exception during parse: {e}")
             failed += 1
@@ -58,8 +62,12 @@ def main():
 
         ok, failures = evaluate_expectations(actual, expectations)
         prod_ok, prod_failures = evaluate_production_checks(actual)
+        inv_ok, inv_failures = evaluate_invariants(actual)
         if not prod_ok:
             failures = list(failures) + prod_failures
+            ok = False
+        if not inv_ok:
+            failures = list(failures) + inv_failures
             ok = False
         if ok:
             print(f"PASS {mid}: {text[:50]}...")

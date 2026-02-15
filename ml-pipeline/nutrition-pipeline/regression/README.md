@@ -15,12 +15,13 @@ cd ml-pipeline/nutrition-pipeline
 USE_PARSING_CACHE=false REGRESSION_MODE=true python regression/run_regression.py
 ```
 
-**Day-based (dashboard):** In the Day view for a date, click **Run regression for this day**. The dashboard sends that day’s meals to the Parse API (`POST /regression/run-day`); each meal text is run through the same text-only parse pipeline. Pass = parse completed, at least one ingredient for non-empty text, and **production checks** (servings + nutrient sanity) pass. Results show per-meal pass/fail with expandable parsed ingredients and failure messages.
+**Day-based (dashboard):** In the Day view for a date, click **Run regression for this day**. This runs the **production** flow: clear the day (POST /clear per meal), parse everything (POST /parse per meal, same as “Parse everything”), then validate the saved ingredients via POST /regression/validate-ingredients. Pass/fail is on the same data you see in the day view. Results show per-meal pass/fail with expandable failure messages and ingredients; the day view refreshes to show the newly parsed data.
 
 Environment variables:
 
 - `USE_PARSING_CACHE=false` – Disable parsing cache so every run uses fresh GPT/USDA results
 - `REGRESSION_MODE=true` – Sets GPT temperature to 0 for deterministic parsing/classification
+- `PARSE_FLOW_TIER=mvp|full` – `mvp` = parser + USDA/GPT only (no deterministic rules, no common_sense); `full` = add rules + GPT common_sense (default, matches production text→ingredients)
 
 Requires `OPENAI_API_KEY` and `USDA_KEY` in `.env` (or environment).
 
@@ -84,7 +85,15 @@ Every run (CLI suite, run-one, run-day) evaluates:
 5. **Nutrient sanity (production checks)** – Per ingredient: calories in 0–5000, protein/carbs/fat non-negative. Meal total calories in 0–5000.
 6. **USDA display name** – `usdaMatchNameExcludes` to reject wrong matches (e.g. Oolong for non-tea).
 
-Declarative expectations in `regression_meals.json` are evaluated first; then `evaluate_production_checks()` runs on the parsed ingredients (servings + nutrient sanity). Any failure is reported in `failures`.
+Declarative expectations in `regression_meals.json` are evaluated first; then `evaluate_production_checks()` and `evaluate_invariants()` run (servings, nutrient sanity, calories ≈ 4P+4C+9F, non-negative values, portionGrams 0–2000). Any failure is reported in `failures`.
+
+## Golden set (golden_set.json)
+
+Used by POST `/regression/run-golden` and CLI `run_golden.py`. Each entry has `input.text` and `expected.ingredients` (ground truth). Comparison checks count + canonical names; optionally (per entry) quantity/unit, calories (via `acceptableRanges.caloriesTolerancePercent` or per-ingredient `caloriesMin`/`caloriesMax`), and `sourceExpectations` (e.g. `{"eggs": "usda"}` by name substring). Entries may include `category` (easy/normal/evil) for per-category scoring.
+
+**Run golden (CLI):** `python regression/run_golden.py` — runs golden set, prints summary, appends one row to `golden_results.jsonl` (timestamp, version from `PARSE_PROMPT_VERSION`, tier, pass_count, pass_rate, by_category).
+
+**Stability judge:** `python regression/run_stability.py [--n 5] [--tier mvp|full]` — runs each golden entry N times and reports exact-structure match rate, field stability %, and calorie std variance. Use to detect prompt ambiguity at temp=0.
 
 ## When Bulk-Review Fails but Regression Passes
 

@@ -29,3 +29,9 @@ Carry context across sessions. At the end of a logical unit of work (or when you
 1. Golden set: new `regression/golden_set.json` with version, description, entries (id, input.text, expected.ingredients, category, addedAt). Parse API: GET `/regression/golden-set`, POST `/regression/golden-add` (sanitize ingredients, unique id from text slug), POST `/regression/run-golden` (parse each entry, compare actual vs expected, run production checks). Regression runner: `_canonical_ingredient_name()` and `compare_golden_actual_to_expected()` for count + canonical name set equality. Frontend: `addToGoldenSet()` in api.js; DayDetail "Add to golden set" button (when meal has ingredients) + AddToGoldenSetModal (category Easy/Normal/Evil, success message); Regression Suite "Run golden set" section with same pass/fail + expandable failures and actual ingredients.
 2. None.
 3. N/A
+
+**2026-02-14 — Parse flow gaps (tier, invariants, golden comparison, versioning, stability)**
+
+1. Implemented full parse-flow-gaps plan: (1) Pipeline parity and MVP vs full tier: `parse_meal_text_to_ingredients(text, tier)` with `PARSE_FLOW_TIER=mvp|full`; tier=full runs deterministic rules + `common_sense_check` in regression; tier=mvp skips both. Extended `_apply_corrections` for common_sense (quantity/unit/serving_size_g re-resolve USDA, added_sugar_g/sodium_mg). (2) Invariants: `evaluate_invariants()` (calories ≈ 4P+4C+9F, non-negative, portionGrams 0–2000); wired into run_regression and run-golden. (3) Extended golden comparison: `compare_golden_actual_to_expected(..., expected_options)` for quantity/unit, acceptableRanges, sourceExpectations. (4) Versioning and score log: `run_golden.py` and run-golden API (optional ?log=1) append to `golden_results.jsonl`. (5) Stability judge: `run_stability_check()` and `run_stability.py` CLI.
+2. None.
+3. N/A
