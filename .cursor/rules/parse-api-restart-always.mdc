@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Parse API: Always restart yourself
 
-When you make changes that affect the parse API (e.g. in `ml-pipeline/nutrition-pipeline/` or anything that would require the API to reload), **restart the parse API yourself**. Do not ask the user to restart.
+When you make changes that affect the parse API, **restart the parse API yourself**. The parse API is considered affected when you change code in `ml-pipeline/nutrition-pipeline/` or anything that would require the API to reload (e.g. `parse_api.py`, `parser_gpt.py`, `lookup_usda.py`, `log_classifier.py`, or other files in that directory). Do not ask the user to restart.
 
 Run in the background from repo root:
 

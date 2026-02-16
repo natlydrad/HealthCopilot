@@ -20,3 +20,5 @@ When you complete a **logical unit of work**—e.g. a feature is done, a bug is 
 3. **Push**: `git push` (request **git_write** and **network** permissions when running these commands).
 
 Do not commit after every single tiny edit—only after a completed chunk of work. When in doubt, commit and push at the end of the conversation turn where you finished the task.
+
+When completing a logical unit of work, suggest appending a 2–3 line summary to `docs/process-status.md` before committing (what was done, any issues and fixes). The user or AI can add it; this keeps context for the next session.

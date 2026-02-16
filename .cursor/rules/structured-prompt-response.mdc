@@ -1,0 +1,19 @@
+---
+description: When the user's request is vague, propose a structured plan and wait for confirmation before editing
+alwaysApply: true
+---
+
+# Respond to vague prompts with a plan, not edits
+
+When the user's request is **vague or missing context** (e.g. no @-mentions, no current/desired behavior, no clear scope), **do not start implementing**.
+
+Instead:
+
+1. **Restate** the request as a one-line goal.
+2. **List what you need** – relevant files or docs, current vs desired behavior, acceptance criteria if obvious.
+3. **Propose** a short step-by-step plan.
+4. **Ask** the user to confirm or correct before making any edits.
+
+Only after the user confirms (or refines) the plan should you proceed with implementation.
+
+If the request is already specific (clear goal, @-mentions or file context, and/or current/desired behavior), you may proceed as usual while still following the "plan before code" rule (state understanding and steps, then edit).

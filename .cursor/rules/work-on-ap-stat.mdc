@@ -1,0 +1,12 @@
+---
+description: Do all development on branch ap-stat; do not commit to other branches unless asked.
+alwaysApply: true
+---
+
+# Work on branch ap-stat
+
+All development work for this project should be done on the **ap-stat** branch.
+
+- When making commits or pushing, use branch **ap-stat** (checkout ap-stat first if needed).
+- Do not commit or push to other branches (e.g. frog-play, main) unless the user explicitly asks.
+- If starting work and the repo is on another branch, switch to ap-stat before making changes: `git checkout ap-stat && git pull origin ap-stat`

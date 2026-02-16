@@ -1,0 +1,14 @@
+---
+description: State understanding and steps before editing; ask if scope is unclear
+alwaysApply: true
+---
+
+# Plan before code
+
+When in **Agent mode** or when the user asks for a **feature**, **fix**, or **refactor**:
+
+1. **State your understanding** in one line (what you will do).
+2. **List implementation steps** (or key assumptions).
+3. **Only then** make edits.
+
+If scope is unclear or ambiguous, **ask** before implementing. Do not over-execute beyond what was asked.
