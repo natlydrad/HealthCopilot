@@ -96,7 +96,7 @@ def plausibility_check_one(
     fat_g = macros["fat_g"]
     fiber_g = macros["fiber_g"]
 
-    prompt = f"""You are a nutrition plausibility checker. For ONE logged ingredient, decide if the macros pass a "smell test" or suggest a unit/raw-cooked/database error.
+    prompt = f"""You are a nutrition plausibility checker. For ONE logged ingredient, YOU perform the checks below and report the result of each. The user does not verify manually—you decide.
 
 Ingredient:
 - name: "{name}"
@@ -108,24 +108,23 @@ Ingredient:
 - fat_g: {fat_g}
 - fiber_g: {fiber_g}
 
-Tasks:
-A) Identify food type from the name (e.g. meat, legume, pure fat, veggie condiment).
-B) Infer typical macro profile for that food (e.g. meat: high protein per calorie; pure fats: calories, near-zero protein/carbs; legumes: raw vs cooked differs).
-C) Run plausibility checks:
-   - Protein density: for meat/protein-dense foods, protein per calorie should not be implausibly low (e.g. 277 kcal with 15g protein for cooked ground beef → likely_wrong; should be ~25–30g).
-   - Macro–calorie consistency: expected_cal ≈ 4×protein + 4×carbs + 9×fat. Large drift → wrong serving or missing fields.
-   - Unit reasonableness: volume (cups, tbsp) for dense foods (meat, cheese, nut butter) often cause errors; suggest "Consider weighing in grams" in whatToVerify.
-D) If volume units, mentally estimate typical weight and check if macros are wildly off.
-E) Output exactly one JSON object (no array, no markdown, no explanation):
+Perform these checks yourself and report each result:
 
-{{"status": "ok" | "suspicious" | "likely_wrong", "why": "Human-readable reason", "whatToVerify": ["item1", "item2"], "confidence": 0.0-1.0, "suggestedCorrection": "Optional short suggestion or null"}}
+1) Unit conversion / portion: For this quantity and unit, are the resulting calories and macros plausible for this food? For volume portions (cups, tbsp) of dense or variable-density foods (meat, cheese, nut butter, legumes), consider whether the stated calories and macros fit that volume; if they are inconsistent with typical cooked vs raw or serving size, flag and suggest verifying cooked vs raw or weighing in grams. Result: "ok" or "suspicious" or "fail", and a one-line reason.
+2) Macro–calorie consistency: expected_cal ≈ 4×protein + 4×carbs + 9×fat (within ~15%). Is the logged calorie count consistent? Result: "ok" or "fail", reason.
+3) Fat / serving: For this food type and portion, is the fat amount plausible? Result: "ok" or "suspicious" or "fail", reason.
+4) Protein density (only for meat, fish, poultry, eggs, high-protein dairy): Protein per calorie must be plausible for that food. If calories look reasonable for the portion but protein is implausibly low (or vice versa), treat as fail or suspicious and mention possible raw vs cooked, wrong USDA serving, or unit/portion. Do not rely on a single numeric example—apply the same logic to any implausible combo. Result: "ok" or "na" or "fail", reason.
+
+Only set status to "suspicious" or "likely_wrong" if at least one check is "suspicious" or "fail". If all checks are "ok" (or "na" where applicable), set status to "ok".
+
+Output exactly one JSON object (no array, no markdown, no explanation):
+
+{{"status": "ok" | "suspicious" | "likely_wrong", "why": "One sentence summary of why this status (or 'All checks passed' if ok).", "whatToVerify": ["only include items that actually failed or were suspicious"], "confidence": 0.0-1.0, "suggestedCorrection": "One sentence or null", "checks": [{{"name": "Unit conversion", "result": "ok"|"suspicious"|"fail"|"na", "reason": "one line"}}, {{"name": "Macro–calorie consistency", "result": "ok"|"fail", "reason": "one line"}}, {{"name": "Fat / serving", "result": "ok"|"suspicious"|"fail"|"na", "reason": "one line"}}, {{"name": "Protein density", "result": "ok"|"na"|"fail", "reason": "one line"}}]}}
 
 Rules:
-- status "ok" when macros look reasonable for the food type and portion.
-- status "suspicious" when something may be off (e.g. raw vs cooked ambiguity, volume unit for dense food).
-- status "likely_wrong" when macros clearly fail the smell test (e.g. meat with very low protein for that calorie amount).
-- whatToVerify: list of short strings (e.g. "raw vs cooked", "fat % of USDA entry", "unit conversion (cups → grams)").
-- suggestedCorrection: one sentence or null.
+- You MUST perform each check and report result and reason. "na" only when the check does not apply (e.g. protein density for non-protein-dense foods).
+- status "likely_wrong" when any check is "fail" and the error is severe (e.g. macros clearly wrong). status "suspicious" when any check is "suspicious" or "fail" but not severe.
+- Use general principles only; do not encode or rely on a single numeric example (e.g. one specific kcal/protein pair). Apply protein-density and portion reasonableness to all meat/volume entries.
 - Output ONLY the JSON object, nothing else."""
 
     def _parse_raw(raw: str) -> dict | None:
@@ -144,19 +143,30 @@ Rules:
             resp = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=400,
+                max_tokens=600,
             )
             raw = (resp.choices[0].message.content or "").strip()
             out = _parse_raw(raw)
             if out is not None and isinstance(out, dict):
                 status = out.get("status")
                 if status in ("ok", "suspicious", "likely_wrong"):
+                    checks_raw = out.get("checks")
+                    checks = []
+                    if isinstance(checks_raw, list):
+                        for c in checks_raw:
+                            if isinstance(c, dict) and c.get("name"):
+                                checks.append({
+                                    "name": str(c.get("name", "")),
+                                    "result": c.get("result") if c.get("result") in ("ok", "suspicious", "fail", "na") else "ok",
+                                    "reason": str(c.get("reason") or ""),
+                                })
                     return {
                         "status": status,
                         "why": out.get("why") or "",
                         "whatToVerify": out.get("whatToVerify") if isinstance(out.get("whatToVerify"), list) else [],
                         "confidence": float(out.get("confidence", 0.5)) if out.get("confidence") is not None else 0.5,
                         "suggestedCorrection": out.get("suggestedCorrection"),
+                        "checks": checks,
                     }
             if attempt == 0:
                 print(f"   ⚠️ plausibility_check_one parse failed for '{name}' (raw length={len(raw)}), retrying once...")

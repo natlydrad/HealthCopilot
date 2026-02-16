@@ -71,3 +71,9 @@ Carry context across sessions. At the end of a logical unit of work (or when you
 1. Implemented GPT-based per-ingredient plausibility check: new `plausibility.py` with `plausibility_check_one(name, quantity, unit, nutrition)` returning status (ok/suspicious/likely_wrong), why, whatToVerify, confidence, suggestedCorrection. Integrated in parse_api after common_sense, before insert_ingredient; copy flow includes plausibilityStatus/plausibilityResult. PocketBase migration 1759900012 adds plausibilityStatus (text) and plausibilityResult (json) to ingredients. DayDetail: row color by plausibility (red/amber), "Verify" badge with tooltip (why, whatToVerify, suggestedCorrection).
 2. None.
 3. N/A
+
+**2026-02-16 — Plausibility prompt: principle-based only (no fixed numeric examples)**
+
+1. Updated plausibility checker prompt and doc so the model generalizes: removed single numeric examples (e.g. 277 kcal / 15g protein, 25–30g) from `plausibility.py` and `docs/plausibility-check-prompt.md`. Check 1 (unit/portion) now states principles for volume portions of dense foods (meat, cheese, nut butter, legumes): consider cooked vs raw and serving; flag and suggest verifying or weighing in grams. Check 4 (protein density): protein per calorie must be plausible for that food; flag when implausibly low/high and mention raw vs cooked, wrong USDA serving, unit/portion. Added rule: use general principles only, no single numeric example. Doc examples rewritten as principle-based (meat/volume, legumes raw/cooked) without fixed numbers.
+2. None.
+3. N/A
