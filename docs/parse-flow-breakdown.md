@@ -6,6 +6,18 @@ Each piece has a unique **3-digit ID** (e.g. `001`, `101`). Hundreds digit: `0` 
 
 ---
 
+## Parse flow variants (PARSE_FLOW)
+
+**Env:** `PARSE_FLOW` = `name_first` (default) | `gpt_first`.
+
+- **name_first:** Text is parsed with `parse_ingredients` (names/portions only); then per ingredient: pantry → label → USDA lookup → validate → GPT fallback. This is the default and production path.
+- **gpt_first:** Text is parsed with `parse_ingredients_with_nutrition` (one GPT call returns ingredients plus calories/protein/carbs/fat). Per ingredient, `usda_closest_match_to_estimate` picks the USDA candidate whose scaled nutrition best matches the GPT estimate (or keeps GPT estimate if no good USDA fit). Image-only or image+text: image-derived ingredients still use name_first (USDA + GPT fallback); only **text-derived** ingredients use the consolidated GPT + closest-match path. After pending is built, both flows rejoin: merge by USDA / merge by intent → deterministic rules → GPT common_sense (if tier=full) → plausibility → insert.
+
+**Golden set:** Run with `PARSE_FLOW=name_first` for baseline, then `PARSE_FLOW=gpt_first` to compare. Example:
+`PARSE_FLOW=gpt_first USE_PARSING_CACHE=false REGRESSION_MODE=true python regression/run_golden.py`. Each run appends a row to `regression/golden_results.jsonl` with a `flow` field (`name_first` or `gpt_first`).
+
+---
+
 ## True MVP
 
 Minimal path: button → call Parse API → classify → GPT parse → USDA or GPT nutrition → save → show ingredients with source.

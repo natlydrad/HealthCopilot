@@ -83,9 +83,12 @@ def main():
     tier = (os.getenv("PARSE_FLOW_TIER") or "full").strip().lower()
     if tier not in ("mvp", "full"):
         tier = "full"
+    flow = (os.getenv("PARSE_FLOW") or "name_first").strip().lower()
+    if flow not in ("name_first", "gpt_first"):
+        flow = "name_first"
     version = (os.getenv("PARSE_PROMPT_VERSION") or "unknown").strip()
 
-    print(f"Running golden set: {len(entries)} entries (tier={tier}, version={version})")
+    print(f"Running golden set: {len(entries)} entries (tier={tier}, flow={flow}, version={version})")
     if filter_tags:
         print(f"Filter: tags in {filter_tags}")
     print()
@@ -105,7 +108,7 @@ def main():
         entry_tags = entry.get("tags") or []
 
         try:
-            actual = parse_meal_text_to_ingredients(text, tier=tier)
+            actual = parse_meal_text_to_ingredients(text, tier=tier, flow=flow)
             normalized = []
             for ing in actual:
                 ing_copy = dict(ing) if isinstance(ing, dict) else {}
@@ -155,6 +158,7 @@ def main():
         "timestamp": __import__("datetime").datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "version": version,
         "tier": tier,
+        "flow": flow,
         "pass_count": pass_count,
         "fail_count": fail_count,
         "total": total,

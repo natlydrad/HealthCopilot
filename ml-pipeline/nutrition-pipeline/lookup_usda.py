@@ -1318,6 +1318,127 @@ def resolve_usda_for_ingredient(
     return usda, scaled_nutrition, source, usda_matched_name if usda else None
 
 
+# Default max weighted relative error for accepting a USDA match in gpt_first flow (lower = stricter)
+GPT_FIRST_USDA_FIT_THRESHOLD_DEFAULT = 0.45
+
+
+def _scaled_macros_from_nutrition(scaled_nutrition: list) -> dict:
+    """Extract calories, protein, carbs, fat from scaled nutrition array."""
+    cal = next(
+        (n.get("value", 0) for n in (scaled_nutrition or []) if n.get("nutrientName") == "Energy" and n.get("unitName") == "KCAL"),
+        0,
+    )
+    prot = next((n.get("value", 0) for n in (scaled_nutrition or []) if n.get("nutrientName") == "Protein"), 0)
+    carbs = next(
+        (n.get("value", 0) for n in (scaled_nutrition or []) if "carbohydrate" in (n.get("nutrientName") or "").lower()),
+        0,
+    )
+    fat = next(
+        (
+            n.get("value", 0)
+            for n in (scaled_nutrition or [])
+            if "lipid" in (n.get("nutrientName") or "").lower() or n.get("nutrientName") == "Total lipid (fat)"
+        ),
+        0,
+    )
+    return {"calories": cal or 0, "protein": prot or 0, "carbs": carbs or 0, "fat": fat or 0}
+
+
+def usda_closest_match_to_estimate(
+    ingredient_name: str,
+    quantity: float,
+    unit: str,
+    gpt_cal: float,
+    gpt_protein: float,
+    gpt_carbs: float,
+    gpt_fat: float,
+) -> tuple[dict | None, list, str]:
+    """
+    GPT-first flow: find USDA candidate whose scaled nutrition best matches the GPT estimate.
+    Returns (usda_dict | None, scaled_nutrition_list, source "usda"|"gpt").
+    If no USDA candidate is within threshold, returns (None, [], "gpt") and caller uses GPT estimate.
+    """
+    threshold = float(os.getenv("GPT_FIRST_USDA_FIT_THRESHOLD", str(GPT_FIRST_USDA_FIT_THRESHOLD_DEFAULT)))
+    if not USDA_KEY:
+        return None, [], "gpt"
+    params = {"query": ingredient_name, "api_key": USDA_KEY, "pageSize": 10}
+    try:
+        r = requests.get(USDA_URL, params=params)
+        if r.status_code != 200:
+            return None, [], "gpt"
+        foods = r.json().get("foods", [])
+    except Exception:
+        return None, [], "gpt"
+
+    ingredient_lower = (ingredient_name or "").lower()
+    unit_lower = (unit or "serving").lower().strip()
+    piece_g = get_piece_grams(ingredient_name)
+    candidates = []
+
+    for f in foods:
+        raw_nutrients = f.get("foodNutrients", [])
+        macros = extract_macros(raw_nutrients)
+        matched_name = f.get("description", "")
+        is_valid, _ = validate_usda_match(ingredient_name, matched_name, macros, quantity, unit)
+        if not is_valid:
+            continue
+        if _is_drink_like_query(ingredient_lower) and _query_implies_caffeine(ingredient_lower):
+            if (macros.get("calories") or 0) == 0 and (extract_caffeine_mg_per_100g(raw_nutrients) or 0) == 0:
+                continue
+        if _query_implies_decaf_or_herbal(ingredient_lower):
+            if (extract_caffeine_mg_per_100g(raw_nutrients) or 0) > 5:
+                continue
+        if _is_drink_like_query(ingredient_lower):
+            if not _drink_match_has_query_overlap(ingredient_lower, matched_name):
+                continue
+            if _tea_type_mismatch(ingredient_lower, matched_name):
+                continue
+        if not _has_nutrition_data(raw_nutrients, macros):
+            continue
+
+        serving_size_g = f.get("servingSize", 100) or 100
+        if use_piece_grams_for_portion(unit_lower, ingredient_lower, quantity, piece_g) and piece_g is not None:
+            serving_size_g = piece_g
+        scaled = scale_nutrition(
+            raw_nutrients, quantity, unit, serving_size_g, ingredient_name=ingredient_name, quiet=True
+        )
+        scaled_mac = _scaled_macros_from_nutrition(scaled)
+        # Relative errors (avoid div-by-zero)
+        denom_cal = max(gpt_cal, 1)
+        denom_p = max(gpt_protein, 0.1)
+        denom_c = max(gpt_carbs, 0.1)
+        denom_f = max(gpt_fat, 0.1)
+        e_cal = abs((scaled_mac.get("calories") or 0) - gpt_cal) / denom_cal
+        e_p = abs((scaled_mac.get("protein") or 0) - gpt_protein) / denom_p
+        e_c = abs((scaled_mac.get("carbs") or 0) - gpt_carbs) / denom_c
+        e_f = abs((scaled_mac.get("fat") or 0) - gpt_fat) / denom_f
+        score = 0.5 * e_cal + 0.2 * e_p + 0.2 * e_c + 0.1 * e_f
+        candidates.append((score, f, macros, matched_name, raw_nutrients, serving_size_g, scaled))
+
+    if not candidates:
+        return None, [], "gpt"
+    candidates.sort(key=lambda x: x[0])
+    best_score, f, macros, matched_name, raw_nutrients, serving_size_g, scaled_nutrition = candidates[0]
+    if best_score >= threshold:
+        return None, [], "gpt"
+    # Validate scaled result (same sanity as name-first)
+    cal_val = _scaled_macros_from_nutrition(scaled_nutrition).get("calories", 0)
+    is_valid, _ = validate_scaled_calories(ingredient_name, quantity, unit, cal_val)
+    if not is_valid:
+        return None, [], "gpt"
+    is_protein_ok, _ = validate_scaled_protein(ingredient_name, scaled_nutrition)
+    if not is_protein_ok:
+        return None, [], "gpt"
+    usda_dict = {
+        "usdaCode": f["fdcId"],
+        "name": matched_name,
+        "nutrition": normalize_usda_food_nutrients(raw_nutrients),
+        "macros_per_100g": macros,
+        "serving_size_g": serving_size_g,
+    }
+    return usda_dict, scaled_nutrition, "usda"
+
+
 def usda_lookup_valid_for_portion(
     ingredient_name: str, quantity: float, unit: str
 ) -> dict | None:

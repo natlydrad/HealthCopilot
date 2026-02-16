@@ -40,8 +40,8 @@ from pb_client import (
     delete_golden_entry_by_meal_id,
     set_meal_in_golden_set,
 )
-from parser_gpt import parse_ingredients, parse_ingredients_from_image, correction_chat, get_image_base64, gpt_estimate_nutrition, expand_recipe
-from lookup_usda import usda_lookup, usda_lookup_by_fdc_id, usda_lookup_valid_for_portion, usda_search_options, scale_nutrition, get_piece_grams, get_grams_for_scaling, use_piece_grams_for_portion, validate_scaled_calories, validate_scaled_protein, UNIT_TO_GRAMS, PIECE_GRAMS_BY_FOOD, zero_calorie_nutrition_array
+from parser_gpt import parse_ingredients, parse_ingredients_with_nutrition, parse_ingredients_from_image, correction_chat, get_image_base64, gpt_estimate_nutrition, expand_recipe
+from lookup_usda import usda_lookup, usda_lookup_by_fdc_id, usda_lookup_valid_for_portion, usda_search_options, usda_closest_match_to_estimate, scale_nutrition, get_piece_grams, get_grams_for_scaling, use_piece_grams_for_portion, validate_scaled_calories, validate_scaled_protein, UNIT_TO_GRAMS, PIECE_GRAMS_BY_FOOD, zero_calorie_nutrition_array
 from log_classifier import classify_log, classify_log_with_image
 from common_sense import common_sense_check
 from plausibility import plausibility_check_one
@@ -1684,6 +1684,9 @@ def parse_meal(meal_id):
                     "trace": trace,
                 }), 200
         
+        parse_flow = (os.getenv("PARSE_FLOW") or "name_first").strip().lower()
+        if parse_flow not in ("name_first", "gpt_first"):
+            parse_flow = "name_first"
         # Parse with GPT
         parsed = []
         no_parse_reason = None  # for "No ingredients detected" response so dashboard can show why
@@ -1691,9 +1694,10 @@ def parse_meal(meal_id):
 
         # Caption "1 serving" etc. is not a food name — parse image only so we don't get [] from text and waste a call
         generic_caption = (text or "").strip().lower() in ("1 serving", "serving", "one serving", "")
+        _parse_text_fn = parse_ingredients_with_nutrition if parse_flow == "gpt_first" else parse_ingredients
         if text and image_field and not generic_caption:
             print("🧠 GPT: Parsing both text + image...")
-            ingredients_text = parse_ingredients(text, user_context)
+            ingredients_text = _parse_text_fn(text, user_context)
             ingredients_image = parse_ingredients_from_image(meal, PB_URL, token, user_context, image_b64=image_b64, caption=text)
             print(f"   from text: {len(ingredients_text)}, from image: {len(ingredients_image)}")
             parsed = ingredients_text + ingredients_image
@@ -1703,7 +1707,7 @@ def parse_meal(meal_id):
             # Fallback: if both returned 0, retry text-only once (in case image path failed)
             if not parsed and text:
                 print("   gpt_both returned 0, retrying text-only...")
-                parsed = parse_ingredients(text, user_context)
+                parsed = _parse_text_fn(text, user_context)
                 if parsed:
                     source = "gpt_text"
                     no_parse_reason = None
@@ -1718,7 +1722,7 @@ def parse_meal(meal_id):
             source = "gpt_image"
         else:
             print("🧠 GPT: Parsing text...")
-            parsed = parse_ingredients(text, user_context)
+            parsed = _parse_text_fn(text, user_context)
             source = "gpt_text"
             # #region agent log
             try:
@@ -1768,7 +1772,7 @@ def parse_meal(meal_id):
                             parsed = new_list
                             _trace_append(trace, "recipe_expansion", f"Expanded to {len(parsed)} ingredients", {"composite": composite_name})
 
-        _trace_append(trace, "parse_done", f"Parsing done ({source})", {"parsedCount": len(parsed)})
+        _trace_append(trace, "parse_done", f"Parsing done ({source})", {"parsedCount": len(parsed), "flow": parse_flow})
 
         if not parsed:
             print(f"⚠️ No ingredients detected: had_text={bool(text)}, had_image={bool(image_field)}, source={source}")
@@ -1918,7 +1922,28 @@ def parse_meal(meal_id):
                         usda = usda_lookup_by_fdc_id(pantry_match["usdaCode"])
                         if usda:
                             print(f"   🏪 Pantry match: using USDA for '{pantry_match.get('name', name)}'")
-                if not usda:
+                if not scaled_nutrition and parse_flow == "gpt_first" and any(ing.get(k) is not None for k in ("calories", "protein", "carbs", "fat")):
+                    # GPT-first: pick USDA candidate that best matches GPT estimate, or use GPT estimate
+                    gpt_cal = float(ing.get("calories") or 0)
+                    gpt_protein = float(ing.get("protein") or 0)
+                    gpt_carbs = float(ing.get("carbs") or 0)
+                    gpt_fat = float(ing.get("fat") or 0)
+                    usda, scaled_nutrition, source_ing = usda_closest_match_to_estimate(
+                        name, quantity, unit, gpt_cal, gpt_protein, gpt_carbs, gpt_fat
+                    )
+                    if source_ing == "gpt":
+                        scaled_nutrition = [
+                            {"nutrientName": "Energy", "unitName": "KCAL", "value": round(gpt_cal, 2)},
+                            {"nutrientName": "Protein", "unitName": "G", "value": round(gpt_protein, 2)},
+                            {"nutrientName": "Carbohydrate, by difference", "unitName": "G", "value": round(gpt_carbs, 2)},
+                            {"nutrientName": "Total lipid (fat)", "unitName": "G", "value": round(gpt_fat, 2)},
+                        ]
+                        portion_grams = None
+                    else:
+                        if usda:
+                            serving_size_g_used = usda.get("serving_size_g", 100)
+                        portion_grams = round(get_grams_for_scaling(name, quantity, unit, usda.get("serving_size_g", 100) if usda else 100), 1)
+                if not scaled_nutrition and not usda:
                     print(f"🔎 Looking up USDA nutrition for: '{name}'")
                     _trace_append(trace, "usda_lookup", f"USDA lookup: {name}")
                     usda = usda_lookup(name, quantity, unit)
@@ -1926,7 +1951,7 @@ def parse_meal(meal_id):
                         usda = usda_lookup_valid_for_portion(name, quantity, unit)
                         if usda:
                             print(f"   ✅ USDA (retry for common whole food): '{usda.get('name')}'")
-                if usda:
+                if usda and not scaled_nutrition:
                     # Use food-specific piece weight when unit is piece/pieces/count, serving with small count, or unit matches food (e.g. 7 strawberries)
                     serving_size = usda.get("serving_size_g", 100.0)
                     serving_size_g_used = serving_size
@@ -2170,6 +2195,7 @@ def parse_meal(meal_id):
                         "whatToVerify": result_plaus.get("whatToVerify") or [],
                         "confidence": result_plaus.get("confidence"),
                         "suggestedCorrection": result_plaus.get("suggestedCorrection"),
+                        "checks": result_plaus.get("checks") or [],
                     }
                     _trace_append(trace, "plausibility", f"Plausibility: {name} -> {result_plaus['status']}", {"status": result_plaus["status"]})
                 else:
@@ -3124,7 +3150,8 @@ def regression_golden_import():
 def regression_run_golden():
     """
     Run golden set: for each entry parse input text, compare actual to expected, run production checks.
-    Body (optional): { "tier": "mvp" | "full" }. Default tier from env PARSE_FLOW_TIER or "full".
+    Body (optional): { "tier": "mvp" | "full", "flow": "name_first" | "gpt_first" }.
+    Default tier from env PARSE_FLOW_TIER or "full"; default flow from env PARSE_FLOW or "name_first".
     Returns: { "results": [ { "id", "text", "passed", "failures", "actualIngredients" }, ... ] }
     """
     os.environ["REGRESSION_MODE"] = "true"
@@ -3143,6 +3170,9 @@ def regression_run_golden():
     tier = (data.get("tier") or os.getenv("PARSE_FLOW_TIER") or "full").strip().lower()
     if tier not in ("mvp", "full"):
         tier = "full"
+    flow = (data.get("flow") or os.getenv("PARSE_FLOW") or "name_first").strip().lower()
+    if flow not in ("name_first", "gpt_first"):
+        flow = "name_first"
     # Optional filter: only run entries that have at least one of these tags (query ?tags= or body tags)
     filter_tags = None
     tags_param = request.args.get("tags") or (data.get("tags") if isinstance(data.get("tags"), str) else None)
@@ -3187,7 +3217,7 @@ def regression_run_golden():
             category = "normal"
         entry_tags = entry.get("tags") or []
         try:
-            actual = parse_meal_text_to_ingredients(text, tier=tier)
+            actual = parse_meal_text_to_ingredients(text, tier=tier, flow=flow)
             # Normalize nutrition (parse JSON string) like validate-ingredients
             normalized = []
             for ing in actual:
