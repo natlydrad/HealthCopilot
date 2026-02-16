@@ -24,6 +24,29 @@ function getCalories(ing) {
   return n != null ? Number(n.value) : null;
 }
 
+/** Extract key nutrients from ingredient nutrition array (matches backend _get_nutrients). */
+function getNutrients(ing) {
+  const nut = ing?.nutrition;
+  if (!Array.isArray(nut)) return {};
+  const out = { calories: null, protein: null, carbs: null, fat: null, fiber_g: null, sugar_g: null, sodium_mg: null, caffeine_mg: null };
+  for (const n of nut) {
+    if (!n || typeof n !== "object") continue;
+    const nn = (n.nutrientName || "").toLowerCase();
+    const un = (n.unitName || "").toUpperCase();
+    const val = Number(n.value);
+    if (Number.isNaN(val)) continue;
+    if (nn.includes("energy") && !nn.includes("kj")) out.calories = val;
+    else if (nn === "protein") out.protein = val;
+    else if (nn.includes("carbohydrate")) out.carbs = val;
+    else if (nn.includes("lipid") || nn === "fat") out.fat = val;
+    else if (nn.includes("fiber") && nn.includes("dietary") && un === "G") out.fiber_g = val;
+    else if ((nn.includes("sugars") || nn.includes("sugar")) && un === "G") out.sugar_g = val;
+    else if (nn.includes("sodium") && nn.includes("na") && un === "MG") out.sodium_mg = val;
+    else if (nn === "caffeine" && un === "MG") out.caffeine_mg = val;
+  }
+  return out;
+}
+
 async function runWithConcurrency(tasks, maxConcurrent, onProgress) {
   const results = [];
   let completed = 0;
@@ -267,158 +290,6 @@ export default function RegressionSuite() {
 
       {suite && (
         <>
-          <div className="flex items-center gap-3 mb-4">
-            <button
-              type="button"
-              onClick={handleRunAll}
-              disabled={running || meals.length === 0}
-              className="px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-100 rounded-lg hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {running ? "Running…" : "Run All"}
-            </button>
-            {hasResults && (
-              <span className="text-sm text-gray-600">
-                {passedCount} passed, {failedCount} failed
-              </span>
-            )}
-          </div>
-
-          {running && progress.total > 0 && (
-            <div className="mb-4 w-full max-w-md">
-              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-blue-500 rounded-full transition-all duration-300"
-                  style={{
-                    width: `${(progress.current / progress.total) * 100}%`,
-                  }}
-                />
-              </div>
-              <span className="text-xs text-gray-600">
-                Meal {progress.current} of {progress.total}
-              </span>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            {meals.map((meal) => {
-              const r = results[meal.id];
-              const isExpanded = expandedId === meal.id;
-
-              return (
-                <div
-                  key={meal.id}
-                  className="border border-gray-200 rounded-lg bg-white overflow-hidden"
-                >
-                  <div
-                    className="flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-50"
-                    onClick={() => setExpandedId(isExpanded ? null : meal.id)}
-                  >
-                    <span
-                      className={`w-16 shrink-0 text-xs font-medium px-2 py-0.5 rounded ${
-                        r === undefined
-                          ? "bg-gray-200 text-gray-600"
-                          : r.passed
-                          ? "bg-green-100 text-green-800"
-                          : "bg-red-100 text-red-800"
-                      }`}
-                    >
-                      {r === undefined ? "—" : r.passed ? "PASS" : "FAIL"}
-                    </span>
-                    <span className="flex-1 truncate text-sm" title={meal.text}>
-                      {meal.text || "(empty)"}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRunOne(meal);
-                      }}
-                      disabled={running}
-                      className="text-xs text-blue-600 hover:underline disabled:opacity-50"
-                    >
-                      Run
-                    </button>
-                  </div>
-
-                  {isExpanded && (
-                    <div className="border-t border-gray-200 p-4 bg-gray-50 text-sm space-y-3">
-                      {meal.note && (
-                        <p className="text-gray-600 italic">Note: {meal.note}</p>
-                      )}
-                      {r?.failures?.length > 0 && (
-                        <div>
-                          <div className="font-medium text-red-700 mb-1">
-                            Failures
-                          </div>
-                          <ul className="list-disc list-inside text-red-700 space-y-0.5">
-                            {r.failures.map((f, i) => (
-                              <li key={i}>{f}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {r?.ingredients?.length > 0 && (
-                        <div>
-                          <div className="font-medium text-gray-700 mb-1">
-                            Parsed ingredients
-                          </div>
-                          <ul className="space-y-2 text-gray-600">
-                            {r.ingredients.map((ing, i) => {
-                              const cal = getCalories(ing);
-                              return (
-                                <li key={i} className="border-b border-gray-100 pb-2 last:border-0 last:pb-0">
-                                  <span>
-                                    {ing.name} — {ing.quantity} {ing.unit} (source: {ing.source || "?"})
-                                    {ing.usda_matched_name && (
-                                      <span className="text-gray-500 text-xs ml-1">
-                                        USDA: {ing.usda_matched_name}
-                                      </span>
-                                    )}
-                                  </span>
-                                  {cal != null && (
-                                    <span className="text-gray-500 text-xs block mt-0.5">
-                                      Calories: {Math.round(cal)}
-                                    </span>
-                                  )}
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </div>
-                      )}
-                      {r?.checkDetails?.length > 0 && (
-                        <div>
-                          <div className="font-medium text-gray-700 mb-1">
-                            Check results
-                          </div>
-                          <ul className="space-y-1">
-                            {r.checkDetails.map((c, i) => (
-                              <li
-                                key={i}
-                                className={`text-xs px-2 py-1 rounded inline-block mr-1 mb-1 ${
-                                  c.passed ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
-                                }`}
-                              >
-                                {c.checkType}: {typeof c.expected === "object" && c.expected != null
-                                  ? JSON.stringify(c.expected)
-                                  : String(c.expected)}{" "}
-                                → {typeof c.actual === "object" && c.actual != null
-                                  ? JSON.stringify(c.actual)
-                                  : String(c.actual)}{" "}
-                                {c.passed ? "✓" : "✗"}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          <hr className="my-8 border-gray-200" />
           <h2 className="text-xl font-semibold mb-2">Golden set builder</h2>
           <p className="text-sm text-gray-600 mb-3">
             Load recent meals, then add selected ones to the golden set (or clear and start over). Use mealId so the same meal is not added twice.
@@ -583,15 +454,24 @@ export default function RegressionSuite() {
                           <div className="font-medium text-gray-700 mb-1">Actual ingredients</div>
                           <ul className="space-y-2 text-gray-600">
                             {r.actualIngredients.map((ing, i) => {
-                              const cal = getCalories(ing);
+                              const nutrients = getNutrients(ing);
+                              const parts = [];
+                              if (nutrients.calories != null) parts.push(`Cal: ${Math.round(nutrients.calories)}`);
+                              if (nutrients.protein != null) parts.push(`P: ${nutrients.protein}g`);
+                              if (nutrients.carbs != null) parts.push(`C: ${nutrients.carbs}g`);
+                              if (nutrients.fat != null) parts.push(`F: ${nutrients.fat}g`);
+                              if (nutrients.fiber_g != null) parts.push(`Fiber: ${nutrients.fiber_g}g`);
+                              if (nutrients.sugar_g != null) parts.push(`Sugar: ${nutrients.sugar_g}g`);
+                              if (nutrients.sodium_mg != null) parts.push(`Na: ${nutrients.sodium_mg}mg`);
+                              if (nutrients.caffeine_mg != null) parts.push(`Caff: ${nutrients.caffeine_mg}mg`);
                               return (
                                 <li key={i} className="border-b border-gray-100 pb-2 last:border-0 last:pb-0">
                                   {ing.name} — {ing.quantity} {ing.unit} (source: {ing.source || "?"})
                                   {ing.usda_matched_name && (
                                     <span className="text-gray-500 text-xs block">USDA: {ing.usda_matched_name}</span>
                                   )}
-                                  {cal != null && (
-                                    <span className="text-gray-500 text-xs block">Calories: {Math.round(cal)}</span>
+                                  {parts.length > 0 && (
+                                    <span className="text-gray-500 text-xs block">{parts.join(" · ")}</span>
                                   )}
                                 </li>
                               );
@@ -640,6 +520,172 @@ export default function RegressionSuite() {
               );
             })}
           </div>
+
+          <hr className="my-8 border-gray-200" />
+          <h2 className="text-xl font-semibold mb-2">Regression suite (fixed meals)</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Uses regression_meals.json. Run All to parse each meal and evaluate expectations.
+          </p>
+          <div className="flex items-center gap-3 mb-4">
+            <button
+              type="button"
+              onClick={handleRunAll}
+              disabled={running || meals.length === 0}
+              className="px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-100 rounded-lg hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {running ? "Running…" : "Run All"}
+            </button>
+            {hasResults && (
+              <span className="text-sm text-gray-600">
+                {passedCount} passed, {failedCount} failed
+              </span>
+            )}
+          </div>
+
+          {running && progress.total > 0 && (
+            <div className="mb-4 w-full max-w-md">
+              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                  style={{
+                    width: `${(progress.current / progress.total) * 100}%`,
+                  }}
+                />
+              </div>
+              <span className="text-xs text-gray-600">
+                Meal {progress.current} of {progress.total}
+              </span>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            {meals.map((meal) => {
+              const r = results[meal.id];
+              const isExpanded = expandedId === meal.id;
+
+              return (
+                <div
+                  key={meal.id}
+                  className="border border-gray-200 rounded-lg bg-white overflow-hidden"
+                >
+                  <div
+                    className="flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-50"
+                    onClick={() => setExpandedId(isExpanded ? null : meal.id)}
+                  >
+                    <span
+                      className={`w-16 shrink-0 text-xs font-medium px-2 py-0.5 rounded ${
+                        r === undefined
+                          ? "bg-gray-200 text-gray-600"
+                          : r.passed
+                          ? "bg-green-100 text-green-800"
+                          : "bg-red-100 text-red-800"
+                      }`}
+                    >
+                      {r === undefined ? "—" : r.passed ? "PASS" : "FAIL"}
+                    </span>
+                    <span className="flex-1 truncate text-sm" title={meal.text}>
+                      {meal.text || "(empty)"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRunOne(meal);
+                      }}
+                      disabled={running}
+                      className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+                    >
+                      Run
+                    </button>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="border-t border-gray-200 p-4 bg-gray-50 text-sm space-y-3">
+                      {meal.note && (
+                        <p className="text-gray-600 italic">Note: {meal.note}</p>
+                      )}
+                      {r?.failures?.length > 0 && (
+                        <div>
+                          <div className="font-medium text-red-700 mb-1">
+                            Failures
+                          </div>
+                          <ul className="list-disc list-inside text-red-700 space-y-0.5">
+                            {r.failures.map((f, i) => (
+                              <li key={i}>{f}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {r?.ingredients?.length > 0 && (
+                        <div>
+                          <div className="font-medium text-gray-700 mb-1">
+                            Parsed ingredients
+                          </div>
+                          <ul className="space-y-2 text-gray-600">
+                            {r.ingredients.map((ing, i) => {
+                              const nutrients = getNutrients(ing);
+                              const parts = [];
+                              if (nutrients.calories != null) parts.push(`Cal: ${Math.round(nutrients.calories)}`);
+                              if (nutrients.protein != null) parts.push(`P: ${nutrients.protein}g`);
+                              if (nutrients.carbs != null) parts.push(`C: ${nutrients.carbs}g`);
+                              if (nutrients.fat != null) parts.push(`F: ${nutrients.fat}g`);
+                              if (nutrients.fiber_g != null) parts.push(`Fiber: ${nutrients.fiber_g}g`);
+                              if (nutrients.sugar_g != null) parts.push(`Sugar: ${nutrients.sugar_g}g`);
+                              if (nutrients.sodium_mg != null) parts.push(`Na: ${nutrients.sodium_mg}mg`);
+                              if (nutrients.caffeine_mg != null) parts.push(`Caff: ${nutrients.caffeine_mg}mg`);
+                              return (
+                                <li key={i} className="border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                                  <span>
+                                    {ing.name} — {ing.quantity} {ing.unit} (source: {ing.source || "?"})
+                                    {ing.usda_matched_name && (
+                                      <span className="text-gray-500 text-xs ml-1">
+                                        USDA: {ing.usda_matched_name}
+                                      </span>
+                                    )}
+                                  </span>
+                                  {parts.length > 0 && (
+                                    <span className="text-gray-500 text-xs block mt-0.5">
+                                      {parts.join(" · ")}
+                                    </span>
+                                  )}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      )}
+                      {r?.checkDetails?.length > 0 && (
+                        <div>
+                          <div className="font-medium text-gray-700 mb-1">
+                            Check results
+                          </div>
+                          <ul className="space-y-1">
+                            {r.checkDetails.map((c, i) => (
+                              <li
+                                key={i}
+                                className={`text-xs px-2 py-1 rounded inline-block mr-1 mb-1 ${
+                                  c.passed ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+                                }`}
+                              >
+                                {c.checkType}: {typeof c.expected === "object" && c.expected != null
+                                  ? JSON.stringify(c.expected)
+                                  : String(c.expected)}{" "}
+                                → {typeof c.actual === "object" && c.actual != null
+                                  ? JSON.stringify(c.actual)
+                                  : String(c.actual)}{" "}
+                                {c.passed ? "✓" : "✗"}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
         </>
       )}
     </div>

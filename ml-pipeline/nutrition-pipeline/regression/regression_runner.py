@@ -608,8 +608,8 @@ def _get_macros(ing: dict) -> dict:
 
 def _get_nutrients(ing: dict) -> dict:
     """
-    Return {calories, protein, carbs, fat, fiber_g, sugar_g, sodium_mg} from ingredient nutrition array.
-    Returns None for any nutrient not present. Matches parse_api naming (Fiber total dietary, Total Sugars, Sodium Na).
+    Return {calories, protein, carbs, fat, fiber_g, sugar_g, sodium_mg, caffeine_mg} from ingredient nutrition array.
+    Returns None for any nutrient not present. Matches parse_api naming (Fiber total dietary, Total Sugars, Sodium Na, Caffeine).
     """
     out = {
         "calories": None,
@@ -619,6 +619,7 @@ def _get_nutrients(ing: dict) -> dict:
         "fiber_g": None,
         "sugar_g": None,
         "sodium_mg": None,
+        "caffeine_mg": None,
     }
     for n in ing.get("nutrition") or []:
         if not isinstance(n, dict):
@@ -641,6 +642,8 @@ def _get_nutrients(ing: dict) -> dict:
             out["sugar_g"] = val
         elif "sodium" in nn_lower and "na" in nn_lower and un == "MG":
             out["sodium_mg"] = val
+        elif nn_lower == "caffeine" and un == "MG":
+            out["caffeine_mg"] = val
     return out
 
 
@@ -729,9 +732,10 @@ _NUTRIENT_MIN_ABS_TOLERANCE = {
     "fiber_g": 0.5,
     "sugar_g": 0.5,
     "sodium_mg": 5.0,
+    "caffeine_mg": 1.0,
 }
 
-_NUTRIENT_KEYS = ("calories", "protein", "carbs", "fat", "fiber_g", "sugar_g", "sodium_mg")
+_NUTRIENT_KEYS = ("calories", "protein", "carbs", "fat", "fiber_g", "sugar_g", "sodium_mg", "caffeine_mg")
 
 
 def compare_golden_actual_to_expected(
