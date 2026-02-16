@@ -830,7 +830,6 @@ const GOLDEN_TAG_OPTIONS = [
 ];
 
 function AddToGoldenSetModal({ meal, ingredients, onClose, onAdded }) {
-  const [category, setCategory] = useState("normal");
   const [tags, setTags] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -842,9 +841,13 @@ function AddToGoldenSetModal({ meal, ingredients, onClose, onAdded }) {
 
   const handleAdd = async () => {
     setError(null);
+    if (tags.length === 0) {
+      setError("Select at least one tag.");
+      return;
+    }
     setSubmitting(true);
     try {
-      await addToGoldenSet(meal?.text ?? "", ingredients ?? [], category, meal?.id ?? null, tags.length ? tags : null);
+      await addToGoldenSet(meal?.text ?? "", ingredients ?? [], null, meal?.id ?? null, tags);
       setSuccess(true);
       onAdded?.();
       setTimeout(() => onClose(), 1500);
@@ -863,25 +866,10 @@ function AddToGoldenSetModal({ meal, ingredients, onClose, onAdded }) {
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
         </div>
         <p className="text-xs text-gray-500 mb-3">
-          Use this meal&apos;s current parse as the correct outcome for regression.
+          Use this meal&apos;s current parse as the correct outcome for regression. Select at least one tag.
         </p>
         <div className="space-y-2 mb-3">
-          <label className="block text-sm font-medium text-gray-700">Category</label>
-          <div className="flex gap-2">
-            {["easy", "normal", "evil"].map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setCategory(c)}
-                className={`px-3 py-1.5 rounded text-sm capitalize ${category === c ? "bg-amber-500 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="space-y-2 mb-3">
-          <label className="block text-sm font-medium text-gray-700">Tags (optional)</label>
+          <label className="block text-sm font-medium text-gray-700">Tags</label>
           <div className="flex flex-wrap gap-2">
             {GOLDEN_TAG_OPTIONS.map((opt) => (
               <label key={opt.value} className="flex items-center gap-1 text-sm cursor-pointer">
@@ -902,7 +890,7 @@ function AddToGoldenSetModal({ meal, ingredients, onClose, onAdded }) {
           <button
             type="button"
             onClick={handleAdd}
-            disabled={submitting}
+            disabled={submitting || tags.length === 0}
             className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50 text-sm"
           >
             {submitting ? "Adding…" : "Add"}
@@ -1618,7 +1606,7 @@ function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTota
         </div>
       )}
 
-      {/* Golden set button — bottom left of card */}
+      {/* Golden set — actual buttons, bottom left of card */}
       <div className="mt-3 flex items-center justify-start gap-2">
         {inGoldenSet ? (
           <button
@@ -1636,7 +1624,7 @@ function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTota
               }
             }}
             disabled={removingFromGoldenSet}
-            className="text-xs text-amber-600 hover:text-amber-800 hover:underline disabled:opacity-50"
+            className="px-3 py-1.5 text-xs font-medium text-amber-800 bg-amber-100 rounded-lg hover:bg-amber-200 disabled:opacity-50"
           >
             {removingFromGoldenSet ? "Removing…" : "Remove from golden set"}
           </button>
@@ -1644,7 +1632,7 @@ function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTota
           <button
             type="button"
             onClick={() => setShowAddToGoldenSet(true)}
-            className="text-xs text-amber-600 hover:text-amber-800 hover:underline shrink-0"
+            className="px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-100 rounded-lg hover:bg-amber-200 shrink-0"
           >
             Add to golden set
           </button>

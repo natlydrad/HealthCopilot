@@ -2977,12 +2977,14 @@ def regression_golden_add():
         meal_id = None
     text = (data.get("text") or "").strip()
     ingredients = data.get("ingredients") or []
-    category = data.get("category") or "normal"
+    category = data.get("category") or None
     tags = data.get("tags")
     try:
         record_id, updated = create_or_update_golden_entry(meal_id, text, ingredients, category, tags=tags)
         if meal_id:
             set_meal_in_golden_set(meal_id, True)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     return jsonify({"id": record_id, "added": True, "updated": updated})
@@ -3004,7 +3006,9 @@ def regression_golden_add_bulk():
             meal_id = None
         text = (e.get("text") or "").strip()
         ingredients = e.get("ingredients") or []
-        category = (e.get("category") or "normal").strip().lower()
+        category = (e.get("category") or "").strip().lower() or None
+        if category and category not in ("easy", "normal", "evil"):
+            category = None
         tags = e.get("tags")
         try:
             _, was_updated = create_or_update_golden_entry(meal_id, text, ingredients, category, tags=tags)
@@ -3014,6 +3018,8 @@ def regression_golden_add_bulk():
                 added += 1
             if meal_id:
                 set_meal_in_golden_set(meal_id, True)
+        except ValueError:
+            pass
         except Exception:
             pass
     return jsonify({"added": added, "updated": updated})
@@ -3072,14 +3078,14 @@ def regression_golden_import():
         ingredients = expected.get("ingredients") if isinstance(expected, dict) else []
         if not isinstance(ingredients, list):
             ingredients = []
-        category = (entry.get("category") or "normal").strip().lower()
+        category = (entry.get("category") or "").strip().lower()
         if category not in ("easy", "normal", "evil"):
-            category = "normal"
+            category = None
         tags = entry.get("tags")
         try:
             create_or_update_golden_entry(meal_id=None, text=text, ingredients=ingredients, category=category, tags=tags)
             imported += 1
-        except Exception:
+        except (ValueError, Exception):
             pass
     return jsonify({"imported": imported})
 

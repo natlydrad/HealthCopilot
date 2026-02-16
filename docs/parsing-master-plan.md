@@ -21,10 +21,10 @@ Each golden entry has an optional **tags** array (in addition to **category** fo
 - **Common sense (1–3):** Aim for ~80% pass rate on entries tagged with any of these (combined or per-tag).
 - **Personalization (4–5):** No 80% target; measure and track separately.
 
-## Option C: category + tags
+## Category and tags
 
-- **category** (existing): `easy`, `normal`, or `evil` – difficulty.
-- **tags** (optional array): one or more of `text_only`, `image_only`, `image_and_text`, `memory_pantry`, `unique_inputs` – subsection for filtering and reporting.
+- **tags** (required): at least one of `text_only`, `image_only`, `image_and_text`, `memory_pantry`, `unique_inputs` – subsection for filtering and reporting.
+- **category** (optional): `easy`, `normal`, or `evil` – difficulty; can be omitted.
 
 Filter and report by **both** category and tags (e.g. by_category and by_tag in run-golden output and `golden_results.jsonl`).
 

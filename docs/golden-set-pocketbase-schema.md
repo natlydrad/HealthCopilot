@@ -11,9 +11,9 @@ Create a new collection with **API name** `golden_entries`.
 | mealId     | Text   | No       | PocketBase meal record id; unique per meal for dedupe. |
 | text       | Text   | Yes      | Meal input text at time of add. |
 | expected   | JSON   | Yes      | `{ "ingredients": [ ... ], "acceptableRanges": optional }`. Each ingredient can include `nutrition` (array of `{ nutrientName, unitName, value }`). |
-| category   | Text   | No       | `easy`, `normal`, or `evil`. Default `normal`. |
+| category   | Text   | No       | Optional: `easy`, `normal`, or `evil`. Omit or leave empty for no difficulty tier. |
 | addedAt    | Date   | No       | When the entry was added (ISO datetime). |
-| tags       | JSON   | No       | Array of strings: `text_only`, `image_only`, `image_and_text`, `memory_pantry`, `unique_inputs`. For filtering and by-tag reporting. |
+| tags       | JSON   | Yes      | Array of strings (at least one): `text_only`, `image_only`, `image_and_text`, `memory_pantry`, `unique_inputs`. Required for filtering and by-tag reporting. |
 
 - **Nutrient comparison:** `expected.ingredients[].nutrition` is the reference for calories, protein, carbs, fat, fiber, sugar, sodium, caffeine (Caffeine, MG). When running golden regression, actual parsed output is compared to these values; pass = actual within tolerance of golden for each stored nutrient.
 - **Tolerance:** `expected.acceptableRanges` may include `nutrientTolerancePercent` (default 20) for all nutrients, and optional `caloriesTolerancePercent` to override for calories only. Actual must be within ±that % of expected (with a minimum absolute tolerance for small values).

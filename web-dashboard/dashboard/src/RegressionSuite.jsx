@@ -231,12 +231,12 @@ export default function RegressionSuite() {
 
   const handleAddSelectedToGolden = async () => {
     const entries = builderMeals
-      .filter((m) => builderSelected.has(m.id) && !m.inGoldenSet)
+      .filter((m) => builderSelected.has(m.id) && !m.inGoldenSet && (builderTags[m.id] || []).length > 0)
       .map((m) => ({
         mealId: m.id,
         text: m.text || "",
         ingredients: m.ingredients || [],
-        category: builderCategory[m.id] || "normal",
+        category: builderCategory[m.id] || undefined,
         tags: builderTags[m.id] || [],
       }));
     if (!entries.length) return;
@@ -318,7 +318,14 @@ export default function RegressionSuite() {
             <button
               type="button"
               onClick={handleAddSelectedToGolden}
-              disabled={builderAdding || builderSelected.size === 0}
+              disabled={
+                builderAdding ||
+                builderSelected.size === 0 ||
+                Array.from(builderSelected).some((id) => {
+                  const m = builderMeals.find((x) => x.id === id);
+                  return m && !m.inGoldenSet && (builderTags[m.id] || []).length === 0;
+                })
+              }
               className="px-3 py-1.5 text-sm font-medium text-amber-700 bg-amber-100 rounded-lg hover:bg-amber-200 disabled:opacity-50"
             >
               {builderAdding ? "Adding…" : `Add selected (${builderSelected.size}) to golden set`}
@@ -342,7 +349,7 @@ export default function RegressionSuite() {
                       <th className="text-left p-2">Text</th>
                       <th className="text-left p-2 w-24">Date</th>
                       <th className="text-left p-2 w-20">Ingredients</th>
-                      <th className="text-left p-2 w-24">Category</th>
+                      <th className="text-left p-2 w-20">Difficulty</th>
                       <th className="text-left p-2 w-40">Tags</th>
                       <th className="text-left p-2 w-16">Edit</th>
                     </tr>
@@ -370,10 +377,11 @@ export default function RegressionSuite() {
                         <td className="p-2">
                           {!m.inGoldenSet && (
                             <select
-                              value={builderCategory[m.id] || "normal"}
-                              onChange={(e) => setBuilderCategory((prev) => ({ ...prev, [m.id]: e.target.value }))}
+                              value={builderCategory[m.id] ?? ""}
+                              onChange={(e) => setBuilderCategory((prev) => ({ ...prev, [m.id]: e.target.value || undefined }))}
                               className="text-xs border border-gray-300 rounded px-1 py-0.5"
                             >
+                              <option value="">—</option>
                               <option value="easy">easy</option>
                               <option value="normal">normal</option>
                               <option value="evil">evil</option>

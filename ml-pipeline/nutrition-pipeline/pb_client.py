@@ -518,11 +518,13 @@ def _normalize_golden_tags(tags):
 def create_or_update_golden_entry(meal_id, text: str, ingredients: list, category: str = "normal", tags=None):
     """
     If meal_id is set and a golden entry exists with that mealId, update it. Otherwise create.
-    Sanitizes ingredients. tags: optional list of str (text_only, image_only, image_and_text, memory_pantry, unique_inputs).
-    Returns (record_id, updated: bool).
+    Sanitizes ingredients. tags: required list of str (at least one of text_only, image_only, image_and_text, memory_pantry, unique_inputs).
+    category: optional "easy"|"normal"|"evil"; omitted or invalid -> not set (PB may store empty).
+    Returns (record_id, updated: bool). Raises ValueError if tags is empty or invalid.
     """
-    if category not in ("easy", "normal", "evil"):
-        category = "normal"
+    normalized_tags = _normalize_golden_tags(tags)
+    if not normalized_tags:
+        raise ValueError("At least one tag is required (text_only, image_only, image_and_text, memory_pantry, unique_inputs)")
     sanitized = [_sanitize_ingredient_for_golden(ing) for ing in ingredients]
     expected = {"ingredients": sanitized}
     from datetime import datetime, timezone
@@ -531,11 +533,11 @@ def create_or_update_golden_entry(meal_id, text: str, ingredients: list, categor
     payload = {
         "text": (text or "").strip(),
         "expected": expected,
-        "category": category,
+        "tags": normalized_tags,
         "addedAt": added_at,
     }
-    normalized_tags = _normalize_golden_tags(tags)
-    payload["tags"] = normalized_tags
+    if category and str(category).strip().lower() in ("easy", "normal", "evil"):
+        payload["category"] = (category or "").strip().lower()
     if meal_id and (meal_id or "").strip():
         payload["mealId"] = meal_id.strip()
     existing = find_golden_entry_by_meal_id(meal_id) if meal_id else None

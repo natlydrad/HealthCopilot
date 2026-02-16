@@ -53,3 +53,9 @@ Carry context across sessions. At the end of a logical unit of work (or when you
 1. Implemented parsing master plan and golden tags: (1) Schema + migration: `tags` (JSON array) on `golden_entries`, doc in golden-set-pocketbase-schema.md, migration script `scripts/add_golden_tags_field.py`, setup script creates collection with tags for new installs. (2) pb_client: `GOLDEN_TAG_VALUES`, `_normalize_golden_tags()`, `create_or_update_golden_entry(..., tags=)`. parse_api: golden-set/golden-add/golden-add-bulk/golden-import accept and return tags; run-golden supports ?tags= filter and returns by_category + by_tag. (3) run_golden.py: `GOLDEN_TAGS` env and `--tags` CLI filter, by_tag aggregation and log. (4) Dashboard: RegressionSuite builder Tags column (multi-select for text_only, image_only, image_and_text, memory_pantry, unique_inputs); DayDetail AddToGoldenSetModal tags checkboxes; api.js addToGoldenSet(..., tags). (5) docs/parsing-master-plan.md with goal, tag subsections, infra, ordered plan, doc map, what to run when. Updated golden-set-pocketbase-schema.md and regression README with tags section.
 2. None.
 3. N/A
+
+**2026-02-16 — Golden set: tags required, category optional, button styling**
+
+1. Tags required: schema and pb_client require at least one tag on create/update (ValueError); golden-add returns 400 if missing; modal and RegressionSuite require at least one tag (Add disabled otherwise). Category optional: schema and backend only send category when valid (easy/normal/evil); modal category removed; RegressionSuite Difficulty column has “—” option. Add/Remove from golden set in DayDetail are solid buttons (amber-100, rounded-lg) instead of link-style text.
+2. None.
+3. N/A
