@@ -1684,7 +1684,9 @@ def parse_meal(meal_id):
                     "trace": trace,
                 }), 200
         
-        parse_flow = (os.getenv("PARSE_FLOW") or "name_first").strip().lower()
+        # Allow request body to override PARSE_FLOW (e.g. dashboard toggle)
+        flow_override = (body.get("flow") or "").strip().lower()
+        parse_flow = flow_override if flow_override in ("name_first", "gpt_first") else (os.getenv("PARSE_FLOW") or "name_first").strip().lower()
         if parse_flow not in ("name_first", "gpt_first"):
             parse_flow = "name_first"
         # Parse with GPT

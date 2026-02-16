@@ -83,3 +83,9 @@ Carry context across sessions. At the end of a logical unit of work (or when you
 1. Implemented optional GPT-first parse flow per plan: (1) `PARSE_FLOW` env = `name_first` (default) | `gpt_first`. (2) `parser_gpt.parse_ingredients_with_nutrition` already present; used for text path when gpt_first. (3) `lookup_usda.usda_closest_match_to_estimate(name, qty, unit, gpt_cal, gpt_protein, gpt_carbs, gpt_fat)` returns (usda_dict|None, scaled_nutrition, source); scores USDA candidates by weighted relative error to GPT estimate, threshold via `GPT_FIRST_USDA_FIT_THRESHOLD` (default 0.45). (4) parse_api: read PARSE_FLOW, branch parsing to use consolidated parser when gpt_first; per-ingredient (when no label/pantry) use closest_match for text-derived items with GPT nutrition, else name_first path; trace includes flow. (5) regression_runner: `parse_meal_text_to_ingredients(text, tier, flow)`; gpt_first path uses parse_ingredients_with_nutrition + usda_closest_match_to_estimate; tier=full still applies deterministic rules and common_sense. (6) run_golden.py and POST `/regression/run-golden`: support PARSE_FLOW/flow, log `flow` in golden_results.jsonl. (7) Docs: parse-flow-breakdown.md (PARSE_FLOW variants), how-to-improve-parse-accuracy.md (run golden with gpt_first).
 2. None.
 3. N/A
+
+**2026-02-16 — Parse path toggle on day view**
+
+1. Dashboard: toggle at top of day view to switch parse path (Name first | GPT first); choice persisted in localStorage and sent with every parse request. parse_api accepts optional `flow` in POST body to override PARSE_FLOW for that request. api.js: parseAndSaveMeal(meal, options) supports options.flow.
+2. None.
+3. N/A

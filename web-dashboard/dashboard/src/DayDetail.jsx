@@ -210,6 +210,20 @@ export default function DayDetail() {
   const [dayRegressionResults, setDayRegressionResults] = useState(null);
   const [dayRegressionExpandedId, setDayRegressionExpandedId] = useState(null);
   const [goldenTagsByMealId, setGoldenTagsByMealId] = useState({});
+  const [parseFlow, setParseFlow] = useState(() => {
+    try {
+      const s = localStorage.getItem("parseFlow");
+      return s === "gpt_first" ? "gpt_first" : "name_first";
+    } catch {
+      return "name_first";
+    }
+  });
+  const setParseFlowAndPersist = (flow) => {
+    setParseFlow(flow);
+    try {
+      localStorage.setItem("parseFlow", flow);
+    } catch {}
+  };
 
   const refreshTotals = () => setTotalsRefreshTrigger((t) => t + 1);
 
@@ -401,7 +415,7 @@ export default function DayDetail() {
         // #region agent log
         fetch('http://127.0.0.1:7242/ingest/b81179ea-362a-4b1e-9962-8572fc6e73fd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DayDetail.jsx:handleParseEverything',message:'Before parse meal',data:{mealId:meal.id,index:completed},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
         // #endregion
-        const result = await parseAndSaveMeal(meal);
+        const result = await parseAndSaveMeal(meal, { flow: parseFlow });
         completed += 1;
         setParseAllProgress({ current: completed, total: toParse.length });
         // #region agent log
@@ -488,6 +502,24 @@ export default function DayDetail() {
       
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <h1 className="text-2xl font-bold">{date}</h1>
+        <div className="flex items-center gap-1 rounded-lg border border-slate-300 bg-slate-100 p-0.5" role="group" aria-label="Parse path">
+          <button
+            type="button"
+            onClick={() => setParseFlowAndPersist("name_first")}
+            className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${parseFlow === "name_first" ? "bg-white text-slate-800 shadow" : "text-slate-600 hover:text-slate-800"}`}
+            title="Parse names first, then USDA lookup per ingredient"
+          >
+            Name first
+          </button>
+          <button
+            type="button"
+            onClick={() => setParseFlowAndPersist("gpt_first")}
+            className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${parseFlow === "gpt_first" ? "bg-white text-slate-800 shadow" : "text-slate-600 hover:text-slate-800"}`}
+            title="One GPT call for parse + nutrition, then USDA closest-match"
+          >
+            GPT first
+          </button>
+        </div>
         <button
           type="button"
           onClick={handleParseEverything}
@@ -707,6 +739,7 @@ export default function DayDetail() {
           refreshIngredientsTrigger={refreshIngredientsTrigger}
           meal={meal}
           goldenTags={goldenTagsByMealId[meal.id] || []}
+          parseFlow={parseFlow}
           onMealUpdated={(mid, updates) => {
             setMeals((prev) => prev.map((m) => (m.id === mid ? { ...m, ...updates } : m)));
             if (updates.goldenTags !== undefined) {
@@ -935,7 +968,7 @@ const GOLDEN_TAG_LABELS = {
   unique_inputs: "Unique inputs",
 };
 
-function MealCard({ date, refreshIngredientsTrigger, meal, goldenTags = [], onMealUpdated, onTotalsRefresh, frameworkAttribution }) {
+function MealCard({ date, refreshIngredientsTrigger, meal, goldenTags = [], parseFlow = "name_first", onMealUpdated, onTotalsRefresh, frameworkAttribution }) {
   const [ingredients, setIngredients] = useState([]);
   const [correcting, setCorrecting] = useState(null);
   const [parsing, setParsing] = useState(false);
@@ -1079,7 +1112,7 @@ function MealCard({ date, refreshIngredientsTrigger, meal, goldenTags = [], onMe
     setEmptyParseReason(null);
     setParseSuccessMessage(null);
     try {
-      const result = await parseAndSaveMeal(meal);
+      const result = await parseAndSaveMeal(meal, { flow: parseFlow });
       const data = result?.ingredients !== undefined ? result : { ingredients: result, classificationResult: null };
       const ingredientsList = Array.isArray(data.ingredients) ? data.ingredients : [];
       setIngredients(ingredientsList);
@@ -1491,15 +1524,17 @@ function MealCard({ date, refreshIngredientsTrigger, meal, goldenTags = [], onMe
             const plausibilityRowClass = plausibilityStatus === "likely_wrong"
               ? "bg-red-50 border-l-4 border-red-400"
               : plausibilityStatus === "suspicious"
-                ? "bg-amber-50 border-l-4 border-amber-400"
+                ? "bg-orange-50 border-l-4 border-orange-400"
                 : lowConf
                   ? "bg-amber-50 border-l-4 border-amber-400"
                   : "";
             const plausibilityHoverClass = plausibilityStatus === "likely_wrong"
               ? "hover:bg-red-100"
-              : plausibilityStatus === "suspicious" || lowConf
-                ? "hover:bg-amber-100"
-                : "hover:bg-gray-50";
+              : plausibilityStatus === "suspicious"
+                ? "hover:bg-orange-100"
+                : lowConf
+                  ? "hover:bg-amber-100"
+                  : "hover:bg-gray-50";
 
             return (
               <li 
@@ -1510,10 +1545,10 @@ function MealCard({ date, refreshIngredientsTrigger, meal, goldenTags = [], onMe
                   onClick={() => setCorrecting(ing)}
                   className={`flex items-center gap-2 p-2 cursor-pointer flex-wrap ${plausibilityHoverClass}`}
                 >
-                  {/* Plausibility: Verify badge with tooltip */}
+                  {/* Plausibility: Verify badge + visible reasoning */}
                   {(plausibilityStatus === "suspicious" || plausibilityStatus === "likely_wrong") && (
                     <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${plausibilityStatus === "likely_wrong" ? "bg-red-200 text-red-800" : "bg-amber-200 text-amber-800"}`}
+                      className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${plausibilityStatus === "likely_wrong" ? "bg-red-200 text-red-800" : "bg-orange-200 text-orange-800"}`}
                       title={plausibilityTooltip || "Macros may be wrong — tap to verify"}
                     >
                       Verify
@@ -1640,6 +1675,34 @@ function MealCard({ date, refreshIngredientsTrigger, meal, goldenTags = [], onMe
                     {deletingId === ing.id ? "…" : "🗑"}
                   </button>
                 </div>
+                {/* Plausibility: GPT ran checks; show results so user sees what was checked */}
+                {(plausibilityStatus === "suspicious" || plausibilityStatus === "likely_wrong") && plausibilityResult && (
+                  <div
+                    className={`px-2 pb-1.5 pt-0.5 border-t text-[11px] ${plausibilityStatus === "likely_wrong" ? "border-red-200/60 bg-red-50/50" : "border-orange-200/60 bg-orange-50/50"}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {(plausibilityResult.checks || []).length > 0 && (
+                      <p className="text-gray-600 mb-1">
+                        <span className="font-medium">GPT checked: </span>
+                        {(plausibilityResult.checks || []).map((c) => {
+                          const ok = c.result === "ok" || c.result === "na";
+                          return ok ? `${c.name} ✓` : `${c.name}: ${c.result} — ${(c.reason || "").trim()}`;
+                        }).join(" · ")}
+                      </p>
+                    )}
+                    <p className="text-gray-600 mb-0.5">
+                      {plausibilityStatus === "likely_wrong" ? "Red = macros likely wrong." : "Orange = something may be off."} {plausibilityResult.why}
+                    </p>
+                    {(plausibilityResult.whatToVerify || []).length > 0 && (
+                      <p className="text-gray-500 mb-0.5">
+                        Check: {(plausibilityResult.whatToVerify || []).join("; ")}
+                      </p>
+                    )}
+                    {plausibilityResult.suggestedCorrection && (
+                      <p className="text-gray-600 italic">{plausibilityResult.suggestedCorrection}</p>
+                    )}
+                  </div>
+                )}
                 {/* Bulk-review: category + reasoning + simple correct (inline) */}
                 {date && (
                   <div

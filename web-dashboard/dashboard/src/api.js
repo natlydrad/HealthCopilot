@@ -393,22 +393,27 @@ export async function createIngredient(ingredient) {
 }
 
 // Parse and save ingredients for a meal (parse-on-view)
-export async function parseAndSaveMeal(meal) {
+// options: { flow?: "name_first" | "gpt_first" } — overrides parse path when provided
+export async function parseAndSaveMeal(meal, options = {}) {
   const hasText = meal.text?.trim();
   const hasImage = meal.image;
   if (!hasText && !hasImage) return { ingredients: [], classificationResult: null };
 
-  flowLog.add({ type: "action", message: "Parse requested", detail: { mealId: meal.id, hasImage: !!meal.image } });
+  flowLog.add({ type: "action", message: "Parse requested", detail: { mealId: meal.id, hasImage: !!meal.image, flow: options.flow } });
 
   // Try Parse API first (supports images + GPT)
   try {
     const useProxy = import.meta.env.DEV && !import.meta.env.VITE_PARSE_API_URL;
     const url = useProxy ? `/parse-api/parse/${meal.id}` : `${PARSE_API_URL}/parse/${meal.id}`;
     const timezone = typeof Intl !== "undefined" && Intl.DateTimeFormat ? Intl.DateTimeFormat().resolvedOptions().timeZone : "";
+    const body = { ...(timezone ? { timezone } : {}) };
+    if (options.flow && (options.flow === "name_first" || options.flow === "gpt_first")) {
+      body.flow = options.flow;
+    }
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
-      body: JSON.stringify(timezone ? { timezone } : {}),
+      body: JSON.stringify(body),
     });
     if (res.ok) {
       const data = await res.json();
@@ -754,6 +759,14 @@ export async function goldenClear(clearMealFlags = true) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Clear failed");
+  return data;
+}
+
+/** Fetch golden set (for tags by mealId). Returns { entries: [ { id, mealId, tags, ... }, ... ] }. */
+export async function fetchGoldenSet() {
+  const res = await _parseApiFetch("/regression/golden-set");
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Failed to fetch golden set");
   return data;
 }
 
