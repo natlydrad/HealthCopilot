@@ -1319,7 +1319,7 @@ def resolve_usda_for_ingredient(
 
 
 # Default max weighted relative error for accepting a USDA match in gpt_first flow (lower = stricter)
-GPT_FIRST_USDA_FIT_THRESHOLD_DEFAULT = 0.45
+GPT_FIRST_USDA_FIT_THRESHOLD_DEFAULT = 0.65
 
 
 def _scaled_macros_from_nutrition(scaled_nutrition: list) -> dict:

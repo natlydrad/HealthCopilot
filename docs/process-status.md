@@ -89,3 +89,9 @@ Carry context across sessions. At the end of a logical unit of work (or when you
 1. Dashboard: toggle at top of day view to switch parse path (Name first | GPT first); choice persisted in localStorage and sent with every parse request. parse_api accepts optional `flow` in POST body to override PARSE_FLOW for that request. api.js: parseAndSaveMeal(meal, options) supports options.flow.
 2. None.
 3. N/A
+
+**2026-02-16 — GPT-first: widen USDA acceptability threshold**
+
+1. Increased `GPT_FIRST_USDA_FIT_THRESHOLD_DEFAULT` from 0.45 to 0.65 so more USDA matches are accepted instead of defaulting to GPT. Previously almost every item was marked as GPT due to overly strict fit scoring.
+2. None.
+3. N/A
