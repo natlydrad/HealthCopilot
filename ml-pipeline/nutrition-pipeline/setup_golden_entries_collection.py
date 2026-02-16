@@ -59,6 +59,7 @@ def main():
             {"name": "expected", "type": "json", "required": True},
             {"name": "category", "type": "text", "required": False},
             {"name": "addedAt", "type": "date", "required": False},
+            {"name": "tags", "type": "json", "required": False},
         ],
         "listRule": "@request.auth.id != ''",
         "viewRule": "@request.auth.id != ''",

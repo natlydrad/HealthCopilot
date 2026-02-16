@@ -452,6 +452,9 @@ def delete_all_ingredients():
 
 GOLDEN_ENTRIES_COLLECTION = "golden_entries"
 
+# Allowed values for golden_entries.tags (for filtering and by-tag reporting)
+GOLDEN_TAG_VALUES = frozenset({"text_only", "image_only", "image_and_text", "memory_pantry", "unique_inputs"})
+
 
 def _sanitize_ingredient_for_golden(ing):
     """Keep only fields needed for golden comparison; drop DB-only fields."""
@@ -500,10 +503,23 @@ def find_golden_entry_by_meal_id(meal_id: str):
     return items[0] if items else None
 
 
-def create_or_update_golden_entry(meal_id, text: str, ingredients: list, category: str = "normal"):
+def _normalize_golden_tags(tags):
+    """Return a list of allowed tag strings; invalid entries are dropped. None/empty -> []."""
+    if not tags:
+        return []
+    out = []
+    for t in tags if isinstance(tags, (list, tuple)) else []:
+        s = (t or "").strip().lower()
+        if s in GOLDEN_TAG_VALUES:
+            out.append(s)
+    return out
+
+
+def create_or_update_golden_entry(meal_id, text: str, ingredients: list, category: str = "normal", tags=None):
     """
     If meal_id is set and a golden entry exists with that mealId, update it. Otherwise create.
-    Sanitizes ingredients. Returns (record_id, updated: bool).
+    Sanitizes ingredients. tags: optional list of str (text_only, image_only, image_and_text, memory_pantry, unique_inputs).
+    Returns (record_id, updated: bool).
     """
     if category not in ("easy", "normal", "evil"):
         category = "normal"
@@ -518,6 +534,8 @@ def create_or_update_golden_entry(meal_id, text: str, ingredients: list, categor
         "category": category,
         "addedAt": added_at,
     }
+    normalized_tags = _normalize_golden_tags(tags)
+    payload["tags"] = normalized_tags
     if meal_id and (meal_id or "").strip():
         payload["mealId"] = meal_id.strip()
     existing = find_golden_entry_by_meal_id(meal_id) if meal_id else None

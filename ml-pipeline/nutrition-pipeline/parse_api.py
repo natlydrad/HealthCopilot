@@ -35,6 +35,7 @@ from pb_client import (
     remove_learned_patterns_for_names,
     fetch_golden_entries,
     create_or_update_golden_entry,
+    GOLDEN_TAG_VALUES,
     delete_all_golden_entries,
     delete_golden_entry_by_meal_id,
     set_meal_in_golden_set,
@@ -2955,6 +2956,7 @@ def regression_golden_set():
             "expected": {"ingredients": expected.get("ingredients") or []},
             "category": (rec.get("category") or "normal").strip().lower(),
             "addedAt": rec.get("addedAt") or None,
+            "tags": rec.get("tags") or [],
         })
     return jsonify({
         "version": 1,
@@ -2976,8 +2978,9 @@ def regression_golden_add():
     text = (data.get("text") or "").strip()
     ingredients = data.get("ingredients") or []
     category = data.get("category") or "normal"
+    tags = data.get("tags")
     try:
-        record_id, updated = create_or_update_golden_entry(meal_id, text, ingredients, category)
+        record_id, updated = create_or_update_golden_entry(meal_id, text, ingredients, category, tags=tags)
         if meal_id:
             set_meal_in_golden_set(meal_id, True)
     except Exception as e:
@@ -3002,8 +3005,9 @@ def regression_golden_add_bulk():
         text = (e.get("text") or "").strip()
         ingredients = e.get("ingredients") or []
         category = (e.get("category") or "normal").strip().lower()
+        tags = e.get("tags")
         try:
-            _, was_updated = create_or_update_golden_entry(meal_id, text, ingredients, category)
+            _, was_updated = create_or_update_golden_entry(meal_id, text, ingredients, category, tags=tags)
             if was_updated:
                 updated += 1
             else:
@@ -3071,8 +3075,9 @@ def regression_golden_import():
         category = (entry.get("category") or "normal").strip().lower()
         if category not in ("easy", "normal", "evil"):
             category = "normal"
+        tags = entry.get("tags")
         try:
-            create_or_update_golden_entry(meal_id=None, text=text, ingredients=ingredients, category=category)
+            create_or_update_golden_entry(meal_id=None, text=text, ingredients=ingredients, category=category, tags=tags)
             imported += 1
         except Exception:
             pass
@@ -3102,6 +3107,13 @@ def regression_run_golden():
     tier = (data.get("tier") or os.getenv("PARSE_FLOW_TIER") or "full").strip().lower()
     if tier not in ("mvp", "full"):
         tier = "full"
+    # Optional filter: only run entries that have at least one of these tags (query ?tags= or body tags)
+    filter_tags = None
+    tags_param = request.args.get("tags") or (data.get("tags") if isinstance(data.get("tags"), str) else None)
+    if tags_param:
+        filter_tags = [t.strip().lower() for t in tags_param.split(",") if t.strip()]
+    if not filter_tags and isinstance(data.get("tags"), list):
+        filter_tags = [t.strip().lower() for t in data["tags"] if (t or "").strip()]
 
     try:
         raw = fetch_golden_entries()
@@ -3115,12 +3127,18 @@ def regression_run_golden():
                 expected = json.loads(expected)
             except (TypeError, ValueError):
                 expected = {}
+        entry_tags = rec.get("tags") or []
+        if not isinstance(entry_tags, list):
+            entry_tags = []
         entries.append({
             "id": rec.get("id", ""),
             "input": {"text": (rec.get("text") or "").strip()},
             "expected": {"ingredients": expected.get("ingredients") or []},
             "category": (rec.get("category") or "normal").strip().lower(),
+            "tags": entry_tags,
         })
+    if filter_tags:
+        entries = [e for e in entries if any(t in (e.get("tags") or []) for t in filter_tags)]
     results = []
     for entry in entries:
         entry_id = entry.get("id") or ""
@@ -3131,6 +3149,7 @@ def regression_run_golden():
         category = (entry.get("category") or "normal").strip().lower()
         if category not in ("easy", "normal", "evil"):
             category = "normal"
+        entry_tags = entry.get("tags") or []
         try:
             actual = parse_meal_text_to_ingredients(text, tier=tier)
             # Normalize nutrition (parse JSON string) like validate-ingredients
@@ -3162,6 +3181,7 @@ def regression_run_golden():
                 "expectedIngredients": expected_ingredients,
                 "nutrientDetails": nutrient_details,
                 "category": category,
+                "tags": entry_tags,
             })
         except Exception as e:
             results.append({
@@ -3173,7 +3193,26 @@ def regression_run_golden():
                 "expectedIngredients": expected_ingredients,
                 "nutrientDetails": [],
                 "category": category,
+                "tags": entry_tags,
             })
+
+    # by_category and by_tag aggregates
+    by_category = {}
+    by_tag = {t: {"pass": 0, "fail": 0} for t in GOLDEN_TAG_VALUES}
+    for r in results:
+        c = r.get("category") or "normal"
+        if c not in by_category:
+            by_category[c] = {"pass": 0, "fail": 0}
+        if r["passed"]:
+            by_category[c]["pass"] += 1
+        else:
+            by_category[c]["fail"] += 1
+        for tag in r.get("tags") or []:
+            if tag in by_tag:
+                if r["passed"]:
+                    by_tag[tag]["pass"] += 1
+                else:
+                    by_tag[tag]["fail"] += 1
 
     # Optional: append score to golden_results.jsonl (query log=1 or header X-Log-Results: true)
     log_requested = request.args.get("log") == "1" or (request.headers.get("X-Log-Results") or "").strip().lower() == "true"
@@ -3181,15 +3220,6 @@ def regression_run_golden():
         pass_count = sum(1 for r in results if r["passed"])
         total = len(results)
         pass_rate = round(pass_count / total * 100, 2) if total else 0
-        by_category = {}
-        for r in results:
-            c = r.get("category") or "normal"
-            if c not in by_category:
-                by_category[c] = {"pass": 0, "fail": 0}
-            if r["passed"]:
-                by_category[c]["pass"] += 1
-            else:
-                by_category[c]["fail"] += 1
         log_row = {
             "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "version": os.getenv("PARSE_PROMPT_VERSION", "unknown").strip(),
@@ -3199,6 +3229,7 @@ def regression_run_golden():
             "total": total,
             "pass_rate": pass_rate,
             "by_category": by_category,
+            "by_tag": by_tag,
         }
         log_path = _golden_results_log_path()
         try:
@@ -3207,7 +3238,7 @@ def regression_run_golden():
         except Exception:
             pass
 
-    return jsonify({"results": results})
+    return jsonify({"results": results, "by_category": by_category, "by_tag": by_tag})
 
 
 @app.route("/regression/validate-ingredients", methods=["POST"])

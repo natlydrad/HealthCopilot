@@ -97,7 +97,9 @@ The golden set is stored in **PocketBase** (collection `golden_entries`). Used b
 - **Clear:** `POST /regression/golden-clear` (optionally clears `inGoldenSet` on meals).
 - **One-time import from file:** `POST /regression/golden-import` with body `{ "entries": [ { "input": { "text": "..." }, "expected": { "ingredients": [...] }, "category": "normal" }, ... ] }` (same shape as legacy `golden_set.json`).
 
-**Run golden (CLI):** `python regression/run_golden.py` — loads golden set from Parse API when `PARSE_API_URL` (or `PARSE_API_BASE`) is set, else from `regression/golden_set.json` if present. Runs the set, prints summary, appends one row to `golden_results.jsonl` (timestamp, version from `PARSE_PROMPT_VERSION`, tier, pass_count, pass_rate, by_category).
+**Run golden (CLI):** `python regression/run_golden.py` — loads golden set from Parse API when `PARSE_API_URL` (or `PARSE_API_BASE`) is set, else from `regression/golden_set.json` if present. Runs the set, prints summary, appends one row to `golden_results.jsonl` (timestamp, version, tier, pass_count, pass_rate, by_category, by_tag). Optional filter: `GOLDEN_TAGS=text_only,image_only` or `--tags text_only,image_only` to run only entries that have at least one of those tags.
+
+**Golden set tags:** Entries may include a `tags` array with one or more of: `text_only`, `image_only`, `image_and_text`, `memory_pantry`, `unique_inputs`. Used for filtering and by-tag pass/fail reporting (see [docs/parsing-master-plan.md](../../../docs/parsing-master-plan.md)).
 
 **Stability judge:** `python regression/run_stability.py [--n 5] [--tier mvp|full]` — same source (API or file). Runs each golden entry N times and reports exact-structure match rate, field stability %, and calorie std variance. Use to detect prompt ambiguity at temp=0.
 

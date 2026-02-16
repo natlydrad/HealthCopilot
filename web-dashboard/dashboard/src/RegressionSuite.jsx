@@ -11,6 +11,15 @@ import {
 
 const REGRESSION_CONCURRENCY = 3;
 
+/** Golden set tag values for filtering and by-tag reporting (see docs/parsing-master-plan.md). */
+const GOLDEN_TAG_OPTIONS = [
+  { value: "text_only", label: "Text only" },
+  { value: "image_only", label: "Image only" },
+  { value: "image_and_text", label: "Image+text" },
+  { value: "memory_pantry", label: "Memory/pantry" },
+  { value: "unique_inputs", label: "Unique inputs" },
+];
+
 /** Extract calories from ingredient nutrition array. */
 function getCalories(ing) {
   const nut = ing?.nutrition;
@@ -92,6 +101,7 @@ export default function RegressionSuite() {
   const [builderLoading, setBuilderLoading] = useState(false);
   const [builderSelected, setBuilderSelected] = useState(new Set());
   const [builderCategory, setBuilderCategory] = useState({});
+  const [builderTags, setBuilderTags] = useState({}); // { [mealId]: string[] }
   const [builderAdding, setBuilderAdding] = useState(false);
   const [builderClearing, setBuilderClearing] = useState(false);
   const [builderEditId, setBuilderEditId] = useState(null);
@@ -202,6 +212,7 @@ export default function RegressionSuite() {
       setBuilderMeals(data.meals || []);
       setBuilderSelected(new Set());
       setBuilderCategory({});
+      setBuilderTags({});
     } catch (err) {
       setBuilderMeals([]);
     } finally {
@@ -226,6 +237,7 @@ export default function RegressionSuite() {
         text: m.text || "",
         ingredients: m.ingredients || [],
         category: builderCategory[m.id] || "normal",
+        tags: builderTags[m.id] || [],
       }));
     if (!entries.length) return;
     setBuilderAdding(true);
@@ -331,6 +343,7 @@ export default function RegressionSuite() {
                       <th className="text-left p-2 w-24">Date</th>
                       <th className="text-left p-2 w-20">Ingredients</th>
                       <th className="text-left p-2 w-24">Category</th>
+                      <th className="text-left p-2 w-40">Tags</th>
                       <th className="text-left p-2 w-16">Edit</th>
                     </tr>
                   </thead>
@@ -366,6 +379,33 @@ export default function RegressionSuite() {
                               <option value="evil">evil</option>
                             </select>
                           )}
+                        </td>
+                        <td className="p-2">
+                          {!m.inGoldenSet && (
+                            <div className="flex flex-wrap gap-1">
+                              {GOLDEN_TAG_OPTIONS.map((opt) => {
+                                const selected = (builderTags[m.id] || []).includes(opt.value);
+                                return (
+                                  <label key={opt.value} className="flex items-center gap-0.5 text-xs cursor-pointer whitespace-nowrap">
+                                    <input
+                                      type="checkbox"
+                                      checked={selected}
+                                      onChange={() => {
+                                        setBuilderTags((prev) => {
+                                          const arr = prev[m.id] || [];
+                                          const next = arr.includes(opt.value) ? arr.filter((t) => t !== opt.value) : [...arr, opt.value];
+                                          return { ...prev, [m.id]: next };
+                                        });
+                                      }}
+                                      className="rounded"
+                                    />
+                                    <span>{opt.label}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+                          {m.inGoldenSet && <span className="text-xs text-gray-400">—</span>}
                         </td>
                         <td className="p-2">
                           {!m.inGoldenSet && (

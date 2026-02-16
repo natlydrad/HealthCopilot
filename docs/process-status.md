@@ -41,3 +41,15 @@ Carry context across sessions. At the end of a logical unit of work (or when you
 1. Completed Golden set in PocketBase: (1) Schema doc `docs/golden-set-pocketbase-schema.md`; pb_client CRUD for `golden_entries` + `set_meal_in_golden_set`. (2) Parse API: GET/POST golden-set and golden-add from PocketBase; golden-add-bulk, golden-clear, run-golden from PB; GET recent-meals. (3) Dashboard: Golden set builder (load recent meals, select, bulk add, clear), EditGoldenIngredientsModal; DayDetail sends mealId to golden-add. (4) CLI: run_golden.py and run_stability.py load from PARSE_API_URL when set, else golden_set.json. (5) POST /regression/golden-import for one-time file import; docs updated (how-to-improve-parse-accuracy, regression README).
 2. EditGoldenIngredientsModal was missing—added inline in RegressionSuite.jsx with JSON textarea and Save/Cancel.
 3. N/A
+
+**2026-02-15 — Golden set in day view**
+
+1. Day view: when `inGoldenSet === true`, meal card shows golden styling (ring + left border). "Add to golden set" becomes "Remove from golden set" when in set; button moved to bottom left of card (footer row). Backend: `delete_golden_entry_by_meal_id` in pb_client, POST `/regression/golden-remove-one`; frontend `removeFromGoldenSet(mealId)`. AddToGoldenSetModal onAdded calls `onMealUpdated(meal.id, { inGoldenSet: true })` so card turns golden without refetch.
+2. None.
+3. N/A
+
+**2026-02-16 — Parsing master plan and golden set tags**
+
+1. Implemented parsing master plan and golden tags: (1) Schema + migration: `tags` (JSON array) on `golden_entries`, doc in golden-set-pocketbase-schema.md, migration script `scripts/add_golden_tags_field.py`, setup script creates collection with tags for new installs. (2) pb_client: `GOLDEN_TAG_VALUES`, `_normalize_golden_tags()`, `create_or_update_golden_entry(..., tags=)`. parse_api: golden-set/golden-add/golden-add-bulk/golden-import accept and return tags; run-golden supports ?tags= filter and returns by_category + by_tag. (3) run_golden.py: `GOLDEN_TAGS` env and `--tags` CLI filter, by_tag aggregation and log. (4) Dashboard: RegressionSuite builder Tags column (multi-select for text_only, image_only, image_and_text, memory_pantry, unique_inputs); DayDetail AddToGoldenSetModal tags checkboxes; api.js addToGoldenSet(..., tags). (5) docs/parsing-master-plan.md with goal, tag subsections, infra, ordered plan, doc map, what to run when. Updated golden-set-pocketbase-schema.md and regression README with tags section.
+2. None.
+3. N/A

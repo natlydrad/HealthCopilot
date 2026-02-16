@@ -821,17 +821,30 @@ function AddToRegressionModal({ meal, onClose }) {
   );
 }
 
+const GOLDEN_TAG_OPTIONS = [
+  { value: "text_only", label: "Text only" },
+  { value: "image_only", label: "Image only" },
+  { value: "image_and_text", label: "Image+text" },
+  { value: "memory_pantry", label: "Memory/pantry" },
+  { value: "unique_inputs", label: "Unique inputs" },
+];
+
 function AddToGoldenSetModal({ meal, ingredients, onClose, onAdded }) {
   const [category, setCategory] = useState("normal");
+  const [tags, setTags] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+
+  const toggleTag = (value) => {
+    setTags((prev) => (prev.includes(value) ? prev.filter((t) => t !== value) : [...prev, value]));
+  };
 
   const handleAdd = async () => {
     setError(null);
     setSubmitting(true);
     try {
-      await addToGoldenSet(meal?.text ?? "", ingredients ?? [], category, meal?.id ?? null);
+      await addToGoldenSet(meal?.text ?? "", ingredients ?? [], category, meal?.id ?? null, tags.length ? tags : null);
       setSuccess(true);
       onAdded?.();
       setTimeout(() => onClose(), 1500);
@@ -864,6 +877,22 @@ function AddToGoldenSetModal({ meal, ingredients, onClose, onAdded }) {
               >
                 {c}
               </button>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-2 mb-3">
+          <label className="block text-sm font-medium text-gray-700">Tags (optional)</label>
+          <div className="flex flex-wrap gap-2">
+            {GOLDEN_TAG_OPTIONS.map((opt) => (
+              <label key={opt.value} className="flex items-center gap-1 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={tags.includes(opt.value)}
+                  onChange={() => toggleTag(opt.value)}
+                  className="rounded"
+                />
+                <span>{opt.label}</span>
+              </label>
             ))}
           </div>
         </div>

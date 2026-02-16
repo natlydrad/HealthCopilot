@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
 """
 Run golden set: parse each entry, compare to expected, run production checks and invariants.
-Appends one JSONL row to golden_results.jsonl with timestamp, version, tier, pass_count, fail_count, total, pass_rate, optional by_category.
+Appends one JSONL row to golden_results.jsonl with timestamp, version, tier, pass_count, fail_count, total, pass_rate, by_category, by_tag.
 
 Usage:
   cd ml-pipeline/nutrition-pipeline
   USE_PARSING_CACHE=false REGRESSION_MODE=true python regression/run_golden.py
   PARSE_FLOW_TIER=mvp PARSE_PROMPT_VERSION=v0-mvp python regression/run_golden.py
+  GOLDEN_TAGS=text_only,image_only python regression/run_golden.py   # only entries with these tags
+  python regression/run_golden.py --tags text_only,image_and_text
 """
 
+import argparse
 import json
 import os
 import sys
 from datetime import timezone
 from pathlib import Path
+
+GOLDEN_TAG_VALUES = frozenset({"text_only", "image_only", "image_and_text", "memory_pantry", "unique_inputs"})
 
 os.environ.setdefault("USE_PARSING_CACHE", "false")
 os.environ.setdefault("REGRESSION_MODE", "true")
@@ -50,6 +55,10 @@ def _load_golden_entries():
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Run golden set regression")
+    parser.add_argument("--tags", type=str, default=None, help="Comma-separated tags to run only entries with at least one (e.g. text_only,image_only)")
+    args = parser.parse_args()
+
     entries = _load_golden_entries()
     if entries is None:
         print("ERROR: Set PARSE_API_URL to fetch golden set from API, or provide regression/golden_set.json")
@@ -57,16 +66,33 @@ def main():
     if not entries:
         print("No golden entries (empty set or API returned none). Exiting.")
         sys.exit(0)
+
+    filter_tags = None
+    tags_env = (os.getenv("GOLDEN_TAGS") or "").strip()
+    tags_arg = (args.tags or "").strip()
+    if tags_arg:
+        filter_tags = [t.strip().lower() for t in tags_arg.split(",") if t.strip()]
+    elif tags_env:
+        filter_tags = [t.strip().lower() for t in tags_env.split(",") if t.strip()]
+    if filter_tags:
+        entries = [e for e in entries if any(t in (e.get("tags") or []) for t in filter_tags)]
+        if not entries:
+            print("No entries match the given tags filter. Exiting.")
+            sys.exit(0)
+
     tier = (os.getenv("PARSE_FLOW_TIER") or "full").strip().lower()
     if tier not in ("mvp", "full"):
         tier = "full"
     version = (os.getenv("PARSE_PROMPT_VERSION") or "unknown").strip()
 
     print(f"Running golden set: {len(entries)} entries (tier={tier}, version={version})")
+    if filter_tags:
+        print(f"Filter: tags in {filter_tags}")
     print()
 
     results = []
     by_category = {}
+    by_tag = {t: {"pass": 0, "fail": 0} for t in GOLDEN_TAG_VALUES}
     for entry in entries:
         entry_id = entry.get("id") or ""
         text = (entry.get("input") or {}).get("text") or ""
@@ -76,6 +102,7 @@ def main():
         category = (entry.get("category") or "normal").strip().lower()
         if category not in ("easy", "normal", "evil"):
             category = "normal"
+        entry_tags = entry.get("tags") or []
 
         try:
             actual = parse_meal_text_to_ingredients(text, tier=tier)
@@ -102,7 +129,7 @@ def main():
             passed = False
             failures = [str(e)]
 
-        results.append({"id": entry_id, "passed": passed, "category": category})
+        results.append({"id": entry_id, "passed": passed, "category": category, "tags": entry_tags})
         if category not in by_category:
             by_category[category] = {"pass": 0, "fail": 0}
         if passed:
@@ -112,6 +139,12 @@ def main():
             print(f"FAIL {entry_id} ({category}): {text[:60]}...")
             for f in failures[:3]:
                 print(f"     - {f}")
+        for tag in entry_tags:
+            if tag in by_tag:
+                if passed:
+                    by_tag[tag]["pass"] += 1
+                else:
+                    by_tag[tag]["fail"] += 1
 
     pass_count = sum(1 for r in results if r["passed"])
     fail_count = len(results) - pass_count
@@ -127,6 +160,7 @@ def main():
         "total": total,
         "pass_rate": round(pass_rate, 2),
         "by_category": by_category,
+        "by_tag": by_tag,
     }
     log_path = Path(__file__).parent / "golden_results.jsonl"
     with open(log_path, "a") as f:
@@ -135,6 +169,7 @@ def main():
     print()
     print(f"Summary: {pass_count} passed, {fail_count} failed, {total} total ({pass_rate:.1f}%)")
     print(f"By category: {by_category}")
+    print(f"By tag: {by_tag}")
     print(f"Logged to {log_path}")
     sys.exit(1 if fail_count > 0 else 0)
 

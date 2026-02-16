@@ -697,10 +697,11 @@ export async function validateRegressionIngredients(mealsWithIngredients) {
   return data;
 }
 
-/** Add current parse result to golden set. mealId optional for dedupe. category: "easy" | "normal" | "evil". Returns { id, added, updated }. */
-export async function addToGoldenSet(text, ingredients, category, mealId = null) {
+/** Add current parse result to golden set. mealId optional for dedupe. category: "easy" | "normal" | "evil". tags: optional string[]. Returns { id, added, updated }. */
+export async function addToGoldenSet(text, ingredients, category, mealId = null, tags = null) {
   const body = { text, ingredients, category: category || "normal" };
   if (mealId) body.mealId = mealId;
+  if (tags && Array.isArray(tags) && tags.length > 0) body.tags = tags;
   const res = await _parseApiFetch("/regression/golden-add", {
     method: "POST",
     body: JSON.stringify(body),
