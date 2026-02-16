@@ -59,3 +59,9 @@ Carry context across sessions. At the end of a logical unit of work (or when you
 1. Tags required: schema and pb_client require at least one tag on create/update (ValueError); golden-add returns 400 if missing; modal and RegressionSuite require at least one tag (Add disabled otherwise). Category optional: schema and backend only send category when valid (easy/normal/evil); modal category removed; RegressionSuite Difficulty column has “—” option. Add/Remove from golden set in DayDetail are solid buttons (amber-100, rounded-lg) instead of link-style text.
 2. None.
 3. N/A
+
+**2026-02-16 — Simple correct in export-for-review bar (like add ingredient)**
+
+1. In the bulk-review row under each ingredient: “Correct to…” input + Apply. Apply now saves immediately (send correction message → save correction → refresh ingredients), no preview popup. Same flow as add ingredient: type and Apply; only alert on failure or when API can’t interpret.
+2. User reported a popup and nothing worked with the previous two-step (preview + Confirm).
+3. Removed pending/Confirm/Cancel; single Apply that calls sendCorrectionMessage then saveCorrection and refreshes.

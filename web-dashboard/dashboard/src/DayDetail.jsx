@@ -934,6 +934,9 @@ function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTota
   // Bulk-review annotations: { ingredientId: { category, reasoning } }, synced to localStorage
   const [annotations, setAnnotations] = useState({});
   const bulkReviewSaveRef = useRef(null);
+  // Simple correct (like add ingredient): one text field + Apply, saves immediately
+  const [simpleCorrectText, setSimpleCorrectText] = useState({});
+  const [simpleCorrectLoading, setSimpleCorrectLoading] = useState({});
   const ingredientIdsKey = useMemo(() => ingredients.map((i) => i.id).join(","), [ingredients]);
 
   useEffect(() => {
@@ -974,6 +977,38 @@ function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTota
       }, BULK_REVIEW_DEBOUNCE_MS);
       return next;
     });
+  };
+
+  const handleSimpleCorrectApply = async (ing) => {
+    const text = (simpleCorrectText[ing.id] || "").trim();
+    if (!text) return;
+    setSimpleCorrectLoading((prev) => ({ ...prev, [ing.id]: true }));
+    try {
+      const result = await sendCorrectionMessage(ing.id, text, []);
+      if (result.complete && result.correction) {
+        const conversation = [{ role: "user", content: text }, { role: "assistant", content: result.reply }];
+        const saveResult = await saveCorrection(
+          ing.id,
+          result.correction,
+          result.learned,
+          result.correctionReason,
+          result.shouldLearn ?? false,
+          conversation,
+          false
+        );
+        const saved = saveResult.ingredient || saveResult;
+        setIngredients((prev) => prev.map((i) => (i.id === ing.id ? { ...i, ...saved } : i)));
+        setSimpleCorrectText((prev) => ({ ...prev, [ing.id]: "" }));
+        onTotalsRefresh?.();
+      } else {
+        alert(result.reply || "Couldn't interpret that. Try e.g. \"green tea 1 cup\" or tap the ingredient to use the chat.");
+      }
+    } catch (err) {
+      console.error("Simple correct failed:", err);
+      alert(err.message || "Correction failed. Try again or tap the ingredient for the chat.");
+    } finally {
+      setSimpleCorrectLoading((prev) => ({ ...prev, [ing.id]: false }));
+    }
   };
 
   useEffect(() => {
@@ -1550,29 +1585,50 @@ function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTota
                     {deletingId === ing.id ? "…" : "🗑"}
                   </button>
                 </div>
-                {/* Bulk-review: category + reasoning (inline, de-emphasized) */}
+                {/* Bulk-review: category + reasoning + simple correct (inline) */}
                 {date && (
                   <div
-                    className="px-2 pb-1.5 pt-0.5 flex flex-wrap items-center gap-2 text-xs text-gray-500 border-t border-gray-100"
+                    className="px-2 pb-1.5 pt-0.5 border-t border-gray-100 space-y-1.5"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <select
-                      value={annotations[ing.id]?.category ?? ""}
-                      onChange={(e) => setBulkReviewAnnotation(ing.id, "category", e.target.value)}
-                      className="text-[11px] border border-gray-200 rounded py-0.5 px-1.5 bg-gray-50 text-gray-600"
-                    >
-                      <option value="">—</option>
-                      <option value="common_sense">Common sense</option>
-                      <option value="learned">Learned</option>
-                      <option value="pantry">Pantry</option>
-                    </select>
-                    <input
-                      type="text"
-                      value={annotations[ing.id]?.reasoning ?? ""}
-                      onChange={(e) => setBulkReviewAnnotation(ing.id, "reasoning", e.target.value)}
-                      placeholder="e.g. green tea should have caffeine"
-                      className="flex-1 min-w-[120px] text-[11px] border border-gray-200 rounded py-0.5 px-1.5 bg-gray-50 text-gray-600 placeholder-gray-400"
-                    />
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                      <select
+                        value={annotations[ing.id]?.category ?? ""}
+                        onChange={(e) => setBulkReviewAnnotation(ing.id, "category", e.target.value)}
+                        className="text-[11px] border border-gray-200 rounded py-0.5 px-1.5 bg-gray-50 text-gray-600"
+                      >
+                        <option value="">—</option>
+                        <option value="common_sense">Common sense</option>
+                        <option value="learned">Learned</option>
+                        <option value="pantry">Pantry</option>
+                      </select>
+                      <input
+                        type="text"
+                        value={annotations[ing.id]?.reasoning ?? ""}
+                        onChange={(e) => setBulkReviewAnnotation(ing.id, "reasoning", e.target.value)}
+                        placeholder="e.g. green tea should have caffeine"
+                        className="flex-1 min-w-[120px] text-[11px] border border-gray-200 rounded py-0.5 px-1.5 bg-gray-50 text-gray-600 placeholder-gray-400"
+                      />
+                    </div>
+                    {/* Simple correct: one field + Apply (saves immediately, like add ingredient) */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <input
+                        type="text"
+                        value={simpleCorrectText[ing.id] ?? ""}
+                        onChange={(e) => setSimpleCorrectText((prev) => ({ ...prev, [ing.id]: e.target.value }))}
+                        onKeyDown={(e) => e.key === "Enter" && handleSimpleCorrectApply(ing)}
+                        placeholder="Correct to… (e.g. green tea 1 cup)"
+                        className="flex-1 min-w-[140px] text-[11px] border border-gray-200 rounded py-0.5 px-1.5 bg-white text-gray-700 placeholder-gray-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSimpleCorrectApply(ing)}
+                        disabled={simpleCorrectLoading[ing.id] || !(simpleCorrectText[ing.id] || "").trim()}
+                        className="text-[11px] px-2 py-0.5 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {simpleCorrectLoading[ing.id] ? "…" : "Apply"}
+                      </button>
+                    </div>
                   </div>
                 )}
                 {/* Expanded: full macro/micro list */}
