@@ -8,9 +8,8 @@ This doc tells you exactly what to do, what to press, and how to know it’s wor
 
 ## What you need before you start
 
-1. **A frozen golden set**  
-   The golden set lives in **PocketBase** (collection `golden_entries`). You can build it in the dashboard (**Regression** → **Golden set builder**: load recent meals, edit ingredients, add selected, or add single meals from a day with “Add to golden set”). You can clear it via **Clear golden set** in the builder or via `POST /regression/golden-clear`. For a one-time import from the old file, use `POST /regression/golden-import` with a body like `{ "entries": [ { "input": { "text": "..." }, "expected": { "ingredients": [...] }, "category": "normal" }, ... ] }` (same shape as `golden_set.json`).  
-   Once you start measuring accuracy, **stop editing or adding entries** for a while. You’re trying to improve the *same* test set.
+1. **A golden set**  
+   The golden set lives in **PocketBase**. See **Part 0: Setting up the golden set** below for how to create the collection, then build or import entries. Once you start measuring accuracy, **freeze** the set: stop adding or editing entries so you’re always comparing against the same test set.
 
 2. **API keys**  
    In `ml-pipeline/nutrition-pipeline/.env` you need:
@@ -19,10 +18,96 @@ This doc tells you exactly what to do, what to press, and how to know it’s wor
    If either is missing, runs will fail or return empty.
 
 3. **Terminal**  
-   You’ll run commands from the repo. All commands below assume you’re in:
+   Commands below assume you’re in:
    ```text
    ml-pipeline/nutrition-pipeline
    ```
+
+---
+
+## Part 0: Setting up the golden set
+
+Do this once so the app and CLI can read/write the golden set.
+
+### Step 0.1: Create the PocketBase collection
+
+**Option 1 (script):** From repo root, with `PB_URL`, `PB_EMAIL`, `PB_PASSWORD` in `ml-pipeline/nutrition-pipeline/.env` (admin credentials), run:
+
+```bash
+cd ml-pipeline/nutrition-pipeline && python setup_golden_entries_collection.py
+```
+
+**Option 2 (manual):** In PocketBase admin (e.g. your hosted PB URL):
+
+1. Create a new collection with **API name** `golden_entries`.
+2. Add these fields:
+
+   | Field name | Type | Required | Notes |
+   |------------|------|----------|--------|
+   | mealId     | Text | No       | Meal record id (for dedupe: one golden entry per meal). |
+   | text       | Text | Yes      | Meal input text when the entry was added. |
+   | expected   | JSON | Yes      | `{ "ingredients": [ ... ] }` (ingredient objects). |
+   | category   | Text | No       | `easy`, `normal`, or `evil`. |
+   | addedAt    | Date | No       | When the entry was added (ISO datetime). |
+
+3. **(Optional)** On your existing **meals** collection, add a field so the UI can show “In golden set”:
+   - **inGoldenSet** (Bool, not required), or
+   - **markedCorrectAt** (Date, not required).
+
+Full schema reference: [docs/golden-set-pocketbase-schema.md](golden-set-pocketbase-schema.md).
+
+### Step 0.2: Build the golden set (choose one or combine)
+
+**Option A: From the dashboard (recommended)**
+
+1. Open the app and go to **Regression** (Regression Suite page).
+2. Find the **Golden set builder** section.
+3. Click **Load recent meals**. The table fills with recent meals (text, date, ingredient count). Meals already in the golden set show an “In golden set” badge.
+4. For each meal you want as ground truth:
+   - Check the row (or leave unchecked to skip).
+   - Use the **category** dropdown (Easy / Normal / Evil) if you care about per-category stats.
+   - If the saved ingredients are wrong, click **Edit**, fix the JSON in the modal, then **Save**.
+5. Click **Add selected to golden set**. Those meals are added (or updated if they were already in the set). The list refreshes so “In golden set” appears for them.
+6. To wipe the set and start over: click **Clear golden set** (confirm when asked). This removes all golden entries and optionally clears the “in golden set” flag on meals.
+
+**Option B: Add a single meal from a day**
+
+1. Open a **day** (e.g. Day view for a date).
+2. For a meal that has ingredients and you consider “correct”:
+   - Click **Add to golden set**.
+   - Choose category (Easy / Normal / Evil) and confirm.
+3. That meal is added to the golden set (and won’t be added again if you use “Add to golden set” again — it’s one entry per meal).
+
+**Option C: One-time import from a JSON file**
+
+If you have an existing `golden_set.json` (or a file in that shape):
+
+1. Ensure the Parse API is running and can talk to PocketBase.
+2. Send the file contents to the import endpoint:
+
+   ```bash
+   curl -X POST http://localhost:5001/regression/golden-import \
+     -H "Content-Type: application/json" \
+     -d @ml-pipeline/nutrition-pipeline/regression/golden_set.json
+   ```
+
+   (Replace the URL with your Parse API base URL and the path with your file path.)
+
+   The body must be: `{ "entries": [ { "input": { "text": "..." }, "expected": { "ingredients": [ ... ] }, "category": "normal" }, ... ] }` (same shape as the old `golden_set.json`). All imported entries have no `mealId` (manual/legacy entries).
+
+### Step 0.3: Use the golden set from the CLI
+
+When the golden set is in PocketBase, the CLI scripts need to fetch it from the Parse API:
+
+- Set **PARSE_API_URL** (or **PARSE_API_BASE**) to your Parse API base URL, e.g.  
+  `export PARSE_API_URL=http://localhost:5001`  
+  (or add it to `ml-pipeline/nutrition-pipeline/.env`).
+- Then run:
+  ```bash
+  cd ml-pipeline/nutrition-pipeline
+  USE_PARSING_CACHE=false REGRESSION_MODE=true python regression/run_golden.py
+  ```
+  The script will GET the golden set from the API. If you don’t set `PARSE_API_URL`, the script falls back to reading `regression/golden_set.json` from disk (if that file exists).
 
 ---
 
