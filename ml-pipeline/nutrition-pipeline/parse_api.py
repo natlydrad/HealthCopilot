@@ -2800,7 +2800,7 @@ def regression_run_one():
     try:
         from regression.regression_runner import (
             parse_meal_text_to_ingredients,
-            evaluate_expectations,
+            evaluate_expectations_with_details,
             evaluate_production_checks,
         )
     except ImportError as e:
@@ -2815,7 +2815,7 @@ def regression_run_one():
 
     try:
         ingredients = parse_meal_text_to_ingredients(text)
-        passed, failures = evaluate_expectations(ingredients, expectations)
+        passed, failures, check_details = evaluate_expectations_with_details(ingredients, expectations)
         prod_ok, prod_failures = evaluate_production_checks(ingredients)
         if not prod_ok:
             failures = list(failures) + prod_failures
@@ -2824,6 +2824,7 @@ def regression_run_one():
             "ingredients": ingredients,
             "passed": passed,
             "failures": failures,
+            "checkDetails": check_details,
         })
     except Exception as e:
         return jsonify({"error": str(e), "ingredients": [], "passed": False, "failures": [str(e)]}), 500
@@ -3129,7 +3130,7 @@ def regression_run_golden():
                 normalized.append(ing_copy)
             actual = normalized
 
-            compare_ok, compare_failures = compare_golden_actual_to_expected(
+            compare_ok, compare_failures, nutrient_details = compare_golden_actual_to_expected(
                 actual, expected_ingredients, expected_options
             )
             prod_ok, prod_failures = evaluate_production_checks(actual)
@@ -3142,6 +3143,8 @@ def regression_run_golden():
                 "passed": passed,
                 "failures": failures,
                 "actualIngredients": actual,
+                "expectedIngredients": expected_ingredients,
+                "nutrientDetails": nutrient_details,
                 "category": category,
             })
         except Exception as e:
@@ -3151,6 +3154,8 @@ def regression_run_golden():
                 "passed": False,
                 "failures": [str(e)],
                 "actualIngredients": [],
+                "expectedIngredients": expected_ingredients,
+                "nutrientDetails": [],
                 "category": category,
             })
 

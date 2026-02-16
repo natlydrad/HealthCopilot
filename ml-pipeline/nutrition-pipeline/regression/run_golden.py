@@ -91,7 +91,7 @@ def main():
                 normalized.append(ing_copy)
             actual = normalized
 
-            compare_ok, compare_failures = compare_golden_actual_to_expected(
+            compare_ok, compare_failures, _nutrient_details = compare_golden_actual_to_expected(
                 actual, expected_ingredients, expected_options
             )
             prod_ok, prod_failures = evaluate_production_checks(actual)

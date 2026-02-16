@@ -421,6 +421,172 @@ def evaluate_expectations(actual: list[dict], expected: dict) -> tuple[bool, lis
     return len(failures) == 0, failures
 
 
+def evaluate_expectations_with_details(actual: list[dict], expected: dict) -> tuple[bool, list[str], list[dict]]:
+    """
+    Same as evaluate_expectations but also returns check_details for UI color-coding.
+    check_details: list of { ingredientName?, checkType, expected, actual, passed }.
+    """
+    failures = []
+    check_details = []
+
+    if expected.get("noOolong"):
+        failed = False
+        for ing in actual:
+            if "oolong" in (ing.get("name") or "").lower():
+                failures.append(f"Expected no Oolong, but got: {ing.get('name')}")
+                failed = True
+                break
+            usda_name = ing.get("usda_matched_name") or ""
+            if usda_name and "oolong" in usda_name.lower():
+                failures.append(f"Expected no Oolong USDA match, but got: {usda_name}")
+                failed = True
+                break
+        check_details.append({"checkType": "noOolong", "expected": "no oolong", "actual": "ok" if not failed else "fail", "passed": not failed})
+
+    if expected.get("hasCaffeine"):
+        found = False
+        for ing in actual:
+            caf = _get_caffeine(ing)
+            if caf is not None and caf > 0:
+                found = True
+                break
+        if not found:
+            failures.append("Expected at least one ingredient with caffeine > 0")
+        check_details.append({"checkType": "hasCaffeine", "expected": ">0", "actual": "found" if found else "0", "passed": found})
+
+    if "ingredientCount" in expected:
+        want = expected["ingredientCount"]
+        got = len(actual)
+        passed = got == want
+        if not passed:
+            failures.append(f"Expected {want} ingredients, got {got}")
+        check_details.append({"checkType": "ingredientCount", "expected": want, "actual": got, "passed": passed})
+
+    if expected.get("noDuplicates"):
+        names = [(ing.get("name") or "").strip().lower() for ing in actual]
+        dupes = [n for n in names if names.count(n) > 1]
+        passed = len(dupes) == 0
+        if not passed:
+            failures.append(f"Duplicate ingredients: {set(dupes)}")
+        check_details.append({"checkType": "noDuplicates", "expected": "no duplicates", "actual": list(set(dupes)) if dupes else "none", "passed": passed})
+
+    if "quantityMatches" in expected:
+        for substr, want in expected["quantityMatches"].items():
+            ing = _find_ingredient(actual, substr)
+            if not ing:
+                failures.append(f"Expected ingredient matching '{substr}', not found")
+                check_details.append({"ingredientName": substr, "checkType": "quantityMatches", "expected": want, "actual": None, "passed": False})
+            else:
+                q = float(ing.get("quantity", 1) or 1)
+                u = (ing.get("unit") or "serving").strip().lower()
+                want_q = want.get("quantity")
+                want_u = (want.get("unit") or "").strip().lower()
+                q_ok = want_q is None or abs(q - want_q) <= 0.01
+                u_ok = not want_u or u == want_u
+                passed = q_ok and u_ok
+                if not q_ok:
+                    failures.append(f"'{ing.get('name')}': expected quantity {want_q}, got {q}")
+                if not u_ok:
+                    failures.append(f"'{ing.get('name')}': expected unit '{want_u}', got '{u}'")
+                check_details.append({
+                    "ingredientName": ing.get("name"),
+                    "checkType": "quantityMatches",
+                    "expected": {"quantity": want_q, "unit": want_u},
+                    "actual": {"quantity": q, "unit": u},
+                    "passed": passed,
+                })
+
+    if "sourceIsUsda" in expected:
+        for substr in expected["sourceIsUsda"]:
+            ing = _find_ingredient(actual, substr)
+            if not ing:
+                failures.append(f"Expected ingredient matching '{substr}', not found")
+                check_details.append({"ingredientName": substr, "checkType": "sourceIsUsda", "expected": "usda", "actual": None, "passed": False})
+            else:
+                src = (ing.get("source") or "").strip().lower()
+                passed = src == "usda"
+                if not passed:
+                    failures.append(f"'{ing.get('name')}' expected source=usda, got {ing.get('source')}")
+                check_details.append({"ingredientName": ing.get("name"), "checkType": "sourceIsUsda", "expected": "usda", "actual": src or "?", "passed": passed})
+
+    if "noGptFor" in expected:
+        for substr in expected["noGptFor"]:
+            ing = _find_ingredient(actual, substr)
+            if ing:
+                src = (ing.get("source") or "").strip().lower()
+                passed = src != "gpt"
+                if not passed:
+                    failures.append(f"'{ing.get('name')}' should not be GPT source (common whole food)")
+                check_details.append({"ingredientName": ing.get("name"), "checkType": "noGptFor", "expected": "not gpt", "actual": src or "?", "passed": passed})
+
+    if "usdaMatchNameExcludes" in expected:
+        entries = expected["usdaMatchNameExcludes"]
+        if isinstance(entries, dict):
+            entries = [entries]
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            substr = entry.get("substr", "")
+            exclude = entry.get("exclude", "")
+            ing = _find_ingredient(actual, substr)
+            if not ing:
+                failures.append(f"Expected ingredient matching '{substr}', not found")
+                check_details.append({"ingredientName": substr, "checkType": "usdaMatchNameExcludes", "expected": f"exclude '{exclude}'", "actual": None, "passed": False})
+            else:
+                usda_name = (ing.get("usda_matched_name") or "").lower()
+                passed = not usda_name or exclude.lower() not in usda_name
+                if not passed:
+                    failures.append(f"'{ing.get('name')}': USDA match '{ing.get('usda_matched_name')}' contains '{exclude}'")
+                check_details.append({
+                    "ingredientName": ing.get("name"),
+                    "checkType": "usdaMatchNameExcludes",
+                    "expected": f"exclude '{exclude}'",
+                    "actual": ing.get("usda_matched_name") or "",
+                    "passed": passed,
+                })
+
+    if "caloriesInRange" in expected:
+        entries = expected["caloriesInRange"]
+        if isinstance(entries, dict):
+            entries = [entries]
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            substr = entry.get("substr", "")
+            min_cal = entry.get("min", 0)
+            max_cal = entry.get("max", 9999)
+            ing = _find_ingredient(actual, substr)
+            if not ing:
+                failures.append(f"Expected ingredient matching '{substr}', not found")
+                check_details.append({
+                    "ingredientName": substr,
+                    "checkType": "caloriesInRange",
+                    "expected": f"{min_cal}-{max_cal}",
+                    "actual": None,
+                    "passed": False,
+                })
+            else:
+                cal_val = 0
+                for n in (ing.get("nutrition") or []):
+                    if isinstance(n, dict):
+                        nn = (n.get("nutrientName") or "").lower()
+                        if "energy" in nn and "kj" not in nn:
+                            cal_val = float(n.get("value", 0) or 0)
+                            break
+                passed = min_cal <= cal_val <= max_cal
+                if not passed:
+                    failures.append(f"'{ing.get('name')}': expected {min_cal}-{max_cal} cal, got {cal_val}")
+                check_details.append({
+                    "ingredientName": ing.get("name"),
+                    "checkType": "caloriesInRange",
+                    "expected": f"{min_cal}-{max_cal}",
+                    "actual": round(cal_val, 1),
+                    "passed": passed,
+                })
+
+    return len(failures) == 0, failures, check_details
+
+
 def _get_macros(ing: dict) -> dict:
     """Return {calories, protein, carbs, fat} from ingredient nutrition array."""
     out = {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0}
@@ -437,6 +603,44 @@ def _get_macros(ing: dict) -> dict:
             out["carbs"] = val
         elif "lipid" in nn or nn == "fat":
             out["fat"] = val
+    return out
+
+
+def _get_nutrients(ing: dict) -> dict:
+    """
+    Return {calories, protein, carbs, fat, fiber_g, sugar_g, sodium_mg} from ingredient nutrition array.
+    Returns None for any nutrient not present. Matches parse_api naming (Fiber total dietary, Total Sugars, Sodium Na).
+    """
+    out = {
+        "calories": None,
+        "protein": None,
+        "carbs": None,
+        "fat": None,
+        "fiber_g": None,
+        "sugar_g": None,
+        "sodium_mg": None,
+    }
+    for n in ing.get("nutrition") or []:
+        if not isinstance(n, dict):
+            continue
+        nn = (n.get("nutrientName") or "").strip()
+        nn_lower = nn.lower()
+        un = (n.get("unitName") or "").strip().upper()
+        val = float(n.get("value", 0) or 0)
+        if "energy" in nn_lower and "kj" not in nn_lower:
+            out["calories"] = val
+        elif nn_lower == "protein":
+            out["protein"] = val
+        elif "carbohydrate" in nn_lower:
+            out["carbs"] = val
+        elif "lipid" in nn_lower or nn_lower == "fat":
+            out["fat"] = val
+        elif "fiber" in nn_lower and "dietary" in nn_lower and un == "G":
+            out["fiber_g"] = val
+        elif ("sugars" in nn_lower or "sugar" in nn_lower) and un == "G":
+            out["sugar_g"] = val
+        elif "sodium" in nn_lower and "na" in nn_lower and un == "MG":
+            out["sodium_mg"] = val
     return out
 
 
@@ -516,19 +720,37 @@ def evaluate_invariants(ingredients: list[dict]) -> tuple[bool, list[str]]:
     return len(failures) == 0, failures
 
 
+# Min absolute tolerances for nutrient comparison (so small values are not over-strict)
+_NUTRIENT_MIN_ABS_TOLERANCE = {
+    "calories": 1.0,
+    "protein": 0.5,
+    "carbs": 0.5,
+    "fat": 0.5,
+    "fiber_g": 0.5,
+    "sugar_g": 0.5,
+    "sodium_mg": 5.0,
+}
+
+_NUTRIENT_KEYS = ("calories", "protein", "carbs", "fat", "fiber_g", "sugar_g", "sodium_mg")
+
+
 def compare_golden_actual_to_expected(
     actual_ingredients: list[dict],
     expected_ingredients: list[dict],
     expected_options: dict | None = None,
-) -> tuple[bool, list[str]]:
+) -> tuple[bool, list[str], list[dict]]:
     """
-    Compare parsed actual output to golden expected. Returns (passed, failures).
+    Compare parsed actual output to golden expected. Returns (passed, failures, nutrient_details).
 
     (1) len(actual) == len(expected); (2) set of canonical names matches.
-    (3) Optional (from expected_options): quantity/unit per ingredient, acceptableRanges (calories),
-        sourceExpectations (e.g. {"eggs": "usda"} by name substring).
+    (3) Optional (from expected_options): quantity/unit per ingredient, acceptableRanges
+        (nutrientTolerancePercent default 20, caloriesTolerancePercent override), sourceExpectations.
+    (4) For each nutrient present in expected (calories, protein, carbs, fat, fiber_g, sugar_g, sodium_mg),
+        actual must be within tolerance of expected; nutrient_details is for UI (expected, actual, passed per nutrient).
     """
     failures = []
+    nutrient_details = []
+
     if len(actual_ingredients) != len(expected_ingredients):
         failures.append(
             f"Ingredient count mismatch: actual={len(actual_ingredients)}, expected={len(expected_ingredients)}"
@@ -544,11 +766,17 @@ def compare_golden_actual_to_expected(
             failures.append(f"Only in expected: {only_expected}")
 
     opts = expected_options or {}
-    acceptable_ranges = opts.get("acceptableRanges")
-    if isinstance(acceptable_ranges, dict):
-        calories_tolerance_pct = acceptable_ranges.get("caloriesTolerancePercent")
+    acceptable_ranges = opts.get("acceptableRanges") or {}
+    if not isinstance(acceptable_ranges, dict):
+        acceptable_ranges = {}
+    nutrient_tolerance_pct = acceptable_ranges.get("nutrientTolerancePercent")
+    if nutrient_tolerance_pct is None:
+        nutrient_tolerance_pct = 20
     else:
-        calories_tolerance_pct = None
+        nutrient_tolerance_pct = float(nutrient_tolerance_pct)
+    calories_tolerance_pct = acceptable_ranges.get("caloriesTolerancePercent")
+    if calories_tolerance_pct is not None:
+        calories_tolerance_pct = float(calories_tolerance_pct)
     source_expectations = opts.get("sourceExpectations") or {}
 
     # Build expected by canonical name for matching
@@ -563,6 +791,8 @@ def compare_golden_actual_to_expected(
         exp = expected_by_canonical.get(can) if can else None
         if not exp:
             continue
+
+        ing_nutrients = []
 
         # Quantity/unit: if expected has quantity/unit, require actual within tolerance
         if exp.get("quantity") is not None:
@@ -580,27 +810,56 @@ def compare_golden_actual_to_expected(
                     f"'{act.get('name')}': expected unit '{exp.get('unit')}', got '{act.get('unit')}'"
                 )
 
-        # Calories: optional tolerance from acceptableRanges or per-ingredient caloriesMin/Max
-        act_cal = _get_macros(act)["calories"]
-        exp_cal = None
-        for n in exp.get("nutrition") or []:
-            if isinstance(n, dict) and "energy" in (n.get("nutrientName") or "").lower() and "kj" not in (n.get("nutrientName") or "").lower():
-                exp_cal = float(n.get("value", 0) or 0)
-                break
-        if exp_cal is not None and act_cal is not None:
-            if isinstance(calories_tolerance_pct, (int, float)) and calories_tolerance_pct >= 0:
-                tol = (calories_tolerance_pct / 100.0) * exp_cal
-                if abs(act_cal - exp_cal) > max(tol, 1.0):
+        # Nutrients: compare all 7 when present in expected (from expected.nutrition via _get_nutrients)
+        exp_nut = _get_nutrients(exp)
+        act_nut = _get_nutrients(act)
+        for key in _NUTRIENT_KEYS:
+            exp_val = exp_nut.get(key)
+            if exp_val is None:
+                continue
+            act_val = act_nut.get(key)
+            min_abs = _NUTRIENT_MIN_ABS_TOLERANCE.get(key, 1.0)
+            pct = calories_tolerance_pct if key == "calories" and calories_tolerance_pct is not None else nutrient_tolerance_pct
+            tol = max((pct / 100.0) * abs(exp_val), min_abs)
+            passed = act_val is not None and abs((act_val or 0) - exp_val) <= tol
+            ing_nutrients.append({
+                "key": key,
+                "expected": round(exp_val, 2),
+                "actual": round(act_val, 2) if act_val is not None else None,
+                "passed": passed,
+            })
+            if not passed:
+                if act_val is None:
                     failures.append(
-                        f"'{act.get('name')}': expected calories ~{exp_cal:.0f} (±{calories_tolerance_pct}%), got {act_cal:.0f}"
+                        f"'{act.get('name')}': expected {key} ~{exp_val}, missing in actual"
                     )
-            elif exp.get("caloriesMin") is not None or exp.get("caloriesMax") is not None:
-                lo = float(exp["caloriesMin"]) if exp.get("caloriesMin") is not None else 0
-                hi = float(exp["caloriesMax"]) if exp.get("caloriesMax") is not None else 9999
-                if not (lo <= act_cal <= hi):
+                else:
                     failures.append(
-                        f"'{act.get('name')}': expected calories in [{lo}, {hi}], got {act_cal:.0f}"
+                        f"'{act.get('name')}': expected {key} ~{exp_val} (±{pct}%), got {act_val}"
                     )
+
+        # Legacy: per-ingredient caloriesMin/caloriesMax still supported if no nutrition-based calories check
+        if "calories" not in [n["key"] for n in ing_nutrients] and (exp.get("caloriesMin") is not None or exp.get("caloriesMax") is not None):
+            act_cal = _get_macros(act)["calories"]
+            lo = float(exp["caloriesMin"]) if exp.get("caloriesMin") is not None else 0
+            hi = float(exp["caloriesMax"]) if exp.get("caloriesMax") is not None else 9999
+            passed = act_cal is not None and lo <= act_cal <= hi
+            ing_nutrients.append({
+                "key": "calories",
+                "expected": f"[{lo}, {hi}]",
+                "actual": round(act_cal, 2) if act_cal is not None else None,
+                "passed": passed,
+            })
+            if not passed and act_cal is not None:
+                failures.append(
+                    f"'{act.get('name')}': expected calories in [{lo}, {hi}], got {act_cal:.0f}"
+                )
+
+        if ing_nutrients:
+            nutrient_details.append({
+                "ingredientName": act.get("name") or "",
+                "nutrients": ing_nutrients,
+            })
 
         # Source: if sourceExpectations has a key matching this ingredient (substring), assert source
         act_name_lower = (act.get("name") or "").lower()
@@ -614,7 +873,7 @@ def compare_golden_actual_to_expected(
                     )
                 break
 
-    return len(failures) == 0, failures
+    return len(failures) == 0, failures, nutrient_details
 
 
 def evaluate_production_checks(ingredients: list[dict]) -> tuple[bool, list[str]]:

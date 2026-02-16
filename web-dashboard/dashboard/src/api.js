@@ -657,8 +657,16 @@ export function getParseApiUrl() {
 export async function fetchRegressionSuite() {
   const res = await _parseApiFetch("/regression/suite");
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `Regression suite fetch failed (${res.status})`);
+    const text = await res.text();
+    let errMsg = `Regression suite fetch failed (${res.status})`;
+    try {
+      const err = text ? JSON.parse(text) : {};
+      if (typeof err?.error === "string" && err.error) errMsg = err.error;
+    } catch (_) {}
+    if ((res.status === 500 || res.status === 502) && !text?.trim().startsWith("{")) {
+      errMsg += " — Ensure Parse API is running and regression_meals.json exists.";
+    }
+    throw new Error(errMsg);
   }
   return res.json();
 }

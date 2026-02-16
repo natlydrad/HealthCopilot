@@ -11,6 +11,19 @@ import {
 
 const REGRESSION_CONCURRENCY = 3;
 
+/** Extract calories from ingredient nutrition array. */
+function getCalories(ing) {
+  const nut = ing?.nutrition;
+  if (!Array.isArray(nut)) return null;
+  const n = nut.find(
+    (x) =>
+      x?.nutrientName &&
+      x.nutrientName.toLowerCase().includes("energy") &&
+      !x.nutrientName.toLowerCase().includes("kj")
+  );
+  return n != null ? Number(n.value) : null;
+}
+
 async function runWithConcurrency(tasks, maxConcurrent, onProgress) {
   const results = [];
   let completed = 0;
@@ -100,12 +113,14 @@ export default function RegressionSuite() {
           passed: r.value.passed,
           failures: r.value.failures || [],
           ingredients: r.value.ingredients || [],
+          checkDetails: r.value.checkDetails || [],
         };
       } else {
         next[meal.id] = {
           passed: false,
           failures: [r?.reason?.message || "Request failed"],
           ingredients: [],
+          checkDetails: [],
         };
       }
     });
@@ -124,6 +139,7 @@ export default function RegressionSuite() {
           passed: data.passed,
           failures: data.failures || [],
           ingredients: data.ingredients || [],
+          checkDetails: data.checkDetails || [],
         },
       }));
       setExpandedId(meal.id);
@@ -134,6 +150,7 @@ export default function RegressionSuite() {
           passed: false,
           failures: [err.message || "Request failed"],
           ingredients: [],
+          checkDetails: [],
         },
       }));
       setExpandedId(meal.id);
@@ -345,11 +362,50 @@ export default function RegressionSuite() {
                           <div className="font-medium text-gray-700 mb-1">
                             Parsed ingredients
                           </div>
-                          <ul className="space-y-0.5 text-gray-600">
-                            {r.ingredients.map((ing, i) => (
-                              <li key={i}>
-                                {ing.name} — {ing.quantity} {ing.unit} (source:{" "}
-                                {ing.source || "?"})
+                          <ul className="space-y-2 text-gray-600">
+                            {r.ingredients.map((ing, i) => {
+                              const cal = getCalories(ing);
+                              return (
+                                <li key={i} className="border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                                  <span>
+                                    {ing.name} — {ing.quantity} {ing.unit} (source: {ing.source || "?"})
+                                    {ing.usda_matched_name && (
+                                      <span className="text-gray-500 text-xs ml-1">
+                                        USDA: {ing.usda_matched_name}
+                                      </span>
+                                    )}
+                                  </span>
+                                  {cal != null && (
+                                    <span className="text-gray-500 text-xs block mt-0.5">
+                                      Calories: {Math.round(cal)}
+                                    </span>
+                                  )}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      )}
+                      {r?.checkDetails?.length > 0 && (
+                        <div>
+                          <div className="font-medium text-gray-700 mb-1">
+                            Check results
+                          </div>
+                          <ul className="space-y-1">
+                            {r.checkDetails.map((c, i) => (
+                              <li
+                                key={i}
+                                className={`text-xs px-2 py-1 rounded inline-block mr-1 mb-1 ${
+                                  c.passed ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+                                }`}
+                              >
+                                {c.checkType}: {typeof c.expected === "object" && c.expected != null
+                                  ? JSON.stringify(c.expected)
+                                  : String(c.expected)}{" "}
+                                → {typeof c.actual === "object" && c.actual != null
+                                  ? JSON.stringify(c.actual)
+                                  : String(c.actual)}{" "}
+                                {c.passed ? "✓" : "✗"}
                               </li>
                             ))}
                           </ul>
@@ -525,14 +581,58 @@ export default function RegressionSuite() {
                       {r.actualIngredients?.length > 0 && (
                         <div>
                           <div className="font-medium text-gray-700 mb-1">Actual ingredients</div>
-                          <ul className="space-y-0.5 text-gray-600">
-                            {r.actualIngredients.map((ing, i) => (
-                              <li key={i}>
-                                {ing.name} — {ing.quantity} {ing.unit} (source: {ing.source || "?"})
-                              </li>
-                            ))}
+                          <ul className="space-y-2 text-gray-600">
+                            {r.actualIngredients.map((ing, i) => {
+                              const cal = getCalories(ing);
+                              return (
+                                <li key={i} className="border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                                  {ing.name} — {ing.quantity} {ing.unit} (source: {ing.source || "?"})
+                                  {ing.usda_matched_name && (
+                                    <span className="text-gray-500 text-xs block">USDA: {ing.usda_matched_name}</span>
+                                  )}
+                                  {cal != null && (
+                                    <span className="text-gray-500 text-xs block">Calories: {Math.round(cal)}</span>
+                                  )}
+                                </li>
+                              );
+                            })}
                           </ul>
                         </div>
+                      )}
+                      {r.nutrientDetails?.length > 0 && (
+                        <div>
+                          <div className="font-medium text-gray-700 mb-1">Nutrient comparison (expected vs actual)</div>
+                          <div className="space-y-3">
+                            {r.nutrientDetails.map((nd, idx) => (
+                              <div key={idx} className="border border-gray-200 rounded p-2 bg-white">
+                                <div className="font-medium text-gray-800 text-xs mb-1">{nd.ingredientName}</div>
+                                <div className="flex flex-wrap gap-2">
+                                  {nd.nutrients?.map((n, j) => (
+                                    <span
+                                      key={j}
+                                      className={`text-xs px-2 py-0.5 rounded ${
+                                        n.passed ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+                                      }`}
+                                      title={n.passed ? "pass" : "fail"}
+                                    >
+                                      {n.key}: {n.expected} → {n.actual != null ? n.actual : "—"} {n.passed ? "✓" : "✗"}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {r.expectedIngredients?.length > 0 && (
+                        <details className="text-xs text-gray-500">
+                          <summary className="cursor-pointer font-medium text-gray-600">Expected ingredients (reference)</summary>
+                          <ul className="mt-1 space-y-0.5 list-disc list-inside">
+                            {r.expectedIngredients.map((ing, i) => (
+                              <li key={i}>{ing.name} — {ing.quantity} {ing.unit}</li>
+                            ))}
+                          </ul>
+                        </details>
                       )}
                     </div>
                   )}

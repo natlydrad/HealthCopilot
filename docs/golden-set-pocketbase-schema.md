@@ -10,10 +10,12 @@ Create a new collection with **API name** `golden_entries`.
 |------------|--------|----------|--------|
 | mealId     | Text   | No       | PocketBase meal record id; unique per meal for dedupe. |
 | text       | Text   | Yes      | Meal input text at time of add. |
-| expected   | JSON   | Yes      | `{ "ingredients": [ ... ] }` (sanitized ingredient objects). |
+| expected   | JSON   | Yes      | `{ "ingredients": [ ... ], "acceptableRanges": optional }`. Each ingredient can include `nutrition` (array of `{ nutrientName, unitName, value }`). |
 | category   | Text   | No       | `easy`, `normal`, or `evil`. Default `normal`. |
 | addedAt    | Date   | No       | When the entry was added (ISO datetime). |
 
+- **Nutrient comparison:** `expected.ingredients[].nutrition` is the reference for calories, protein, carbs, fat, fiber, sugar, sodium. When running golden regression, actual parsed output is compared to these values; pass = actual within tolerance of golden for each stored nutrient.
+- **Tolerance:** `expected.acceptableRanges` may include `nutrientTolerancePercent` (default 20) for all nutrients, and optional `caloriesTolerancePercent` to override for calories only. Actual must be within ±that % of expected (with a minimum absolute tolerance for small values).
 - Record **id** is auto-generated; it is used as the stable `id` in run-golden results.
 - In PocketBase you may need to allow empty string or null for optional text fields; for `expected` use JSON type.
 
