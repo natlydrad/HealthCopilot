@@ -29,16 +29,34 @@ from regression.regression_runner import (
 )
 
 
-def main():
+def _load_golden_entries():
+    """Load golden set from PARSE_API_URL/regression/golden-set or from golden_set.json file."""
+    api_url = (os.getenv("PARSE_API_URL") or os.getenv("PARSE_API_BASE") or "").strip().rstrip("/")
+    if api_url:
+        try:
+            import urllib.request
+            req = urllib.request.Request(f"{api_url}/regression/golden-set")
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                golden = json.loads(resp.read().decode())
+            return golden.get("entries") or []
+        except Exception as e:
+            print(f"WARNING: Could not fetch golden set from API: {e}")
     golden_path = Path(__file__).parent / "golden_set.json"
-    if not golden_path.exists():
-        print(f"ERROR: {golden_path} not found")
+    if golden_path.exists():
+        with open(golden_path) as f:
+            golden = json.load(f)
+        return golden.get("entries") or []
+    return None
+
+
+def main():
+    entries = _load_golden_entries()
+    if entries is None:
+        print("ERROR: Set PARSE_API_URL to fetch golden set from API, or provide regression/golden_set.json")
         sys.exit(1)
-
-    with open(golden_path) as f:
-        golden = json.load(f)
-
-    entries = golden.get("entries") or []
+    if not entries:
+        print("No golden entries (empty set or API returned none). Exiting.")
+        sys.exit(0)
     tier = (os.getenv("PARSE_FLOW_TIER") or "full").strip().lower()
     if tier not in ("mvp", "full"):
         tier = "full"

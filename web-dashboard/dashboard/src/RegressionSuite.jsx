@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchRegressionSuite, runRegressionMeal, runGoldenSet } from "./api";
+import {
+  fetchRegressionSuite,
+  runRegressionMeal,
+  runGoldenSet,
+  fetchRecentMealsForGolden,
+  goldenAddBulk,
+  goldenClear,
+} from "./api";
 
 const REGRESSION_CONCURRENCY = 3;
 
@@ -45,6 +52,13 @@ export default function RegressionSuite() {
   const [goldenResults, setGoldenResults] = useState([]); // [ { id, text, passed, failures, actualIngredients }, ... ]
   const [goldenRunning, setGoldenRunning] = useState(false);
   const [goldenExpandedId, setGoldenExpandedId] = useState(null);
+  const [builderMeals, setBuilderMeals] = useState([]);
+  const [builderLoading, setBuilderLoading] = useState(false);
+  const [builderSelected, setBuilderSelected] = useState(new Set());
+  const [builderCategory, setBuilderCategory] = useState({});
+  const [builderAdding, setBuilderAdding] = useState(false);
+  const [builderClearing, setBuilderClearing] = useState(false);
+  const [builderEditId, setBuilderEditId] = useState(null);
 
   useEffect(() => {
     async function load() {
@@ -139,6 +153,68 @@ export default function RegressionSuite() {
     } finally {
       setGoldenRunning(false);
     }
+  };
+
+  const handleLoadRecentMeals = async () => {
+    setBuilderLoading(true);
+    try {
+      const data = await fetchRecentMealsForGolden(200);
+      setBuilderMeals(data.meals || []);
+      setBuilderSelected(new Set());
+      setBuilderCategory({});
+    } catch (err) {
+      setBuilderMeals([]);
+    } finally {
+      setBuilderLoading(false);
+    }
+  };
+
+  const toggleBuilderSelected = (id) => {
+    setBuilderSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleAddSelectedToGolden = async () => {
+    const entries = builderMeals
+      .filter((m) => builderSelected.has(m.id) && !m.inGoldenSet)
+      .map((m) => ({
+        mealId: m.id,
+        text: m.text || "",
+        ingredients: m.ingredients || [],
+        category: builderCategory[m.id] || "normal",
+      }));
+    if (!entries.length) return;
+    setBuilderAdding(true);
+    try {
+      await goldenAddBulk(entries);
+      await handleLoadRecentMeals();
+      setBuilderSelected(new Set());
+    } finally {
+      setBuilderAdding(false);
+    }
+  };
+
+  const handleClearGoldenSet = async () => {
+    if (!window.confirm("Clear the entire golden set? This cannot be undone.")) return;
+    setBuilderClearing(true);
+    try {
+      await goldenClear(true);
+      await handleLoadRecentMeals();
+      setGoldenResults([]);
+    } finally {
+      setBuilderClearing(false);
+    }
+  };
+
+  const setBuilderMealIngredients = (mealId, ingredients) => {
+    setBuilderMeals((prev) =>
+      prev.map((m) => (m.id === mealId ? { ...m, ingredients: ingredients || [] } : m))
+    );
+    setBuilderEditId(null);
   };
 
   const meals = suite?.meals || [];
@@ -287,7 +363,111 @@ export default function RegressionSuite() {
           </div>
 
           <hr className="my-8 border-gray-200" />
-          <h2 className="text-xl font-semibold mb-2">Golden set</h2>
+          <h2 className="text-xl font-semibold mb-2">Golden set builder</h2>
+          <p className="text-sm text-gray-600 mb-3">
+            Load recent meals, then add selected ones to the golden set (or clear and start over). Use mealId so the same meal is not added twice.
+          </p>
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <button
+              type="button"
+              onClick={handleLoadRecentMeals}
+              disabled={builderLoading}
+              className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+            >
+              {builderLoading ? "Loading…" : "Load recent meals"}
+            </button>
+            <button
+              type="button"
+              onClick={handleAddSelectedToGolden}
+              disabled={builderAdding || builderSelected.size === 0}
+              className="px-3 py-1.5 text-sm font-medium text-amber-700 bg-amber-100 rounded-lg hover:bg-amber-200 disabled:opacity-50"
+            >
+              {builderAdding ? "Adding…" : `Add selected (${builderSelected.size}) to golden set`}
+            </button>
+            <button
+              type="button"
+              onClick={handleClearGoldenSet}
+              disabled={builderClearing}
+              className="px-3 py-1.5 text-sm font-medium text-red-700 bg-red-100 rounded-lg hover:bg-red-200 disabled:opacity-50"
+            >
+              {builderClearing ? "Clearing…" : "Clear golden set"}
+            </button>
+          </div>
+          {builderMeals.length > 0 && (
+            <div className="border border-gray-200 rounded-lg bg-white overflow-hidden mb-6">
+              <div className="max-h-96 overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-100 sticky top-0">
+                    <tr>
+                      <th className="text-left p-2 w-8">Add</th>
+                      <th className="text-left p-2">Text</th>
+                      <th className="text-left p-2 w-24">Date</th>
+                      <th className="text-left p-2 w-20">Ingredients</th>
+                      <th className="text-left p-2 w-24">Category</th>
+                      <th className="text-left p-2 w-16">Edit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {builderMeals.map((m) => (
+                      <tr key={m.id} className="border-t border-gray-100 hover:bg-gray-50">
+                        <td className="p-2">
+                          {!m.inGoldenSet && (
+                            <input
+                              type="checkbox"
+                              checked={builderSelected.has(m.id)}
+                              onChange={() => toggleBuilderSelected(m.id)}
+                            />
+                          )}
+                          {m.inGoldenSet && <span className="text-xs text-green-600">In set</span>}
+                        </td>
+                        <td className="p-2 truncate max-w-xs" title={m.text}>
+                          {m.text || "(empty)"}
+                        </td>
+                        <td className="p-2 text-gray-500">
+                          {m.timestamp ? new Date(m.timestamp).toLocaleDateString() : "—"}
+                        </td>
+                        <td className="p-2">{Array.isArray(m.ingredients) ? m.ingredients.length : 0}</td>
+                        <td className="p-2">
+                          {!m.inGoldenSet && (
+                            <select
+                              value={builderCategory[m.id] || "normal"}
+                              onChange={(e) => setBuilderCategory((prev) => ({ ...prev, [m.id]: e.target.value }))}
+                              className="text-xs border border-gray-300 rounded px-1 py-0.5"
+                            >
+                              <option value="easy">easy</option>
+                              <option value="normal">normal</option>
+                              <option value="evil">evil</option>
+                            </select>
+                          )}
+                        </td>
+                        <td className="p-2">
+                          {!m.inGoldenSet && (
+                            <button
+                              type="button"
+                              onClick={() => setBuilderEditId(m.id)}
+                              className="text-xs text-blue-600 hover:underline"
+                            >
+                              Edit
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {builderEditId && (
+            <EditGoldenIngredientsModal
+              meal={builderMeals.find((m) => m.id === builderEditId)}
+              onSave={(ingredients) => setBuilderMealIngredients(builderEditId, ingredients)}
+              onClose={() => setBuilderEditId(null)}
+            />
+          )}
+
+          <hr className="my-8 border-gray-200" />
+          <h2 className="text-xl font-semibold mb-2">Golden set (run)</h2>
           <p className="text-sm text-gray-600 mb-3">
             Run regression against the golden set (meals marked as correct outcome). Pass = same ingredient count/names and production checks.
           </p>
@@ -362,6 +542,63 @@ export default function RegressionSuite() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function EditGoldenIngredientsModal({ meal, onSave, onClose }) {
+  const [raw, setRaw] = useState(
+    () => (meal?.ingredients ? JSON.stringify(meal.ingredients, null, 2) : "[]")
+  );
+  const [error, setError] = useState(null);
+
+  const handleSave = () => {
+    setError(null);
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) throw new Error("Must be a JSON array");
+      onSave(parsed);
+    } catch (e) {
+      setError(e.message || "Invalid JSON");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col p-4">
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="text-lg font-semibold">Edit ingredients (JSON)</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            ✕
+          </button>
+        </div>
+        <p className="text-xs text-gray-500 mb-2 truncate" title={meal?.text}>
+          {meal?.text || ""}
+        </p>
+        <textarea
+          value={raw}
+          onChange={(e) => setRaw(e.target.value)}
+          className="flex-1 min-h-[200px] font-mono text-sm border border-gray-300 rounded p-2"
+          spellCheck={false}
+        />
+        {error && <p className="text-sm text-red-600 mt-1">{error}</p>}
+        <div className="flex gap-2 mt-3">
+          <button
+            type="button"
+            onClick={handleSave}
+            className="px-3 py-1.5 text-sm font-medium text-white bg-amber-500 rounded-lg hover:bg-amber-600"
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

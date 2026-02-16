@@ -2,6 +2,8 @@
 
 Regression tests for the nutrition parsing pipeline. Uses meal texts and expectations derived from bulk-review failures to catch regressions.
 
+**Step-by-step guide (how to use this to improve accuracy):** [docs/how-to-improve-parse-accuracy.md](../../../docs/how-to-improve-parse-accuracy.md) — what to run, what to compare, and how to know it’s working.
+
 ## Baseline (2026-02-14)
 
 All 10 meals pass with `USE_PARSING_CACHE=false REGRESSION_MODE=true`.
@@ -87,13 +89,17 @@ Every run (CLI suite, run-one, run-day) evaluates:
 
 Declarative expectations in `regression_meals.json` are evaluated first; then `evaluate_production_checks()` and `evaluate_invariants()` run (servings, nutrient sanity, calories ≈ 4P+4C+9F, non-negative values, portionGrams 0–2000). Any failure is reported in `failures`.
 
-## Golden set (golden_set.json)
+## Golden set (PocketBase)
 
-Used by POST `/regression/run-golden` and CLI `run_golden.py`. Each entry has `input.text` and `expected.ingredients` (ground truth). Comparison checks count + canonical names; optionally (per entry) quantity/unit, calories (via `acceptableRanges.caloriesTolerancePercent` or per-ingredient `caloriesMin`/`caloriesMax`), and `sourceExpectations` (e.g. `{"eggs": "usda"}` by name substring). Entries may include `category` (easy/normal/evil) for per-category scoring.
+The golden set is stored in **PocketBase** (collection `golden_entries`). Used by POST `/regression/run-golden` and CLI `run_golden.py` / `run_stability.py`. Each entry has `input.text` and `expected.ingredients` (ground truth). Comparison checks count + canonical names; optionally (per entry) quantity/unit, calories (via `acceptableRanges.caloriesTolerancePercent` or per-ingredient `caloriesMin`/`caloriesMax`), and `sourceExpectations` (e.g. `{"eggs": "usda"}` by name substring). Entries may include `category` (easy/normal/evil) for per-category scoring.
 
-**Run golden (CLI):** `python regression/run_golden.py` — runs golden set, prints summary, appends one row to `golden_results.jsonl` (timestamp, version from `PARSE_PROMPT_VERSION`, tier, pass_count, pass_rate, by_category).
+- **Dashboard:** Golden set builder (Regression Suite): load recent meals, edit ingredients, bulk add, clear. Single-meal “Add to golden set” from a day view sends `mealId` for dedupe.
+- **Clear:** `POST /regression/golden-clear` (optionally clears `inGoldenSet` on meals).
+- **One-time import from file:** `POST /regression/golden-import` with body `{ "entries": [ { "input": { "text": "..." }, "expected": { "ingredients": [...] }, "category": "normal" }, ... ] }` (same shape as legacy `golden_set.json`).
 
-**Stability judge:** `python regression/run_stability.py [--n 5] [--tier mvp|full]` — runs each golden entry N times and reports exact-structure match rate, field stability %, and calorie std variance. Use to detect prompt ambiguity at temp=0.
+**Run golden (CLI):** `python regression/run_golden.py` — loads golden set from Parse API when `PARSE_API_URL` (or `PARSE_API_BASE`) is set, else from `regression/golden_set.json` if present. Runs the set, prints summary, appends one row to `golden_results.jsonl` (timestamp, version from `PARSE_PROMPT_VERSION`, tier, pass_count, pass_rate, by_category).
+
+**Stability judge:** `python regression/run_stability.py [--n 5] [--tier mvp|full]` — same source (API or file). Runs each golden entry N times and reports exact-structure match rate, field stability %, and calorie std variance. Use to detect prompt ambiguity at temp=0.
 
 ## When Bulk-Review Fails but Regression Passes
 

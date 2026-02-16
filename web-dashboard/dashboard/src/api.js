@@ -689,16 +689,48 @@ export async function validateRegressionIngredients(mealsWithIngredients) {
   return data;
 }
 
-/** Add current parse result to golden set. category: "easy" | "normal" | "evil" (default "normal"). Returns { id, added }. */
-export async function addToGoldenSet(text, ingredients, category) {
+/** Add current parse result to golden set. mealId optional for dedupe. category: "easy" | "normal" | "evil". Returns { id, added, updated }. */
+export async function addToGoldenSet(text, ingredients, category, mealId = null) {
+  const body = { text, ingredients, category: category || "normal" };
+  if (mealId) body.mealId = mealId;
   const res = await _parseApiFetch("/regression/golden-add", {
     method: "POST",
-    body: JSON.stringify({ text, ingredients, category: category || "normal" }),
+    body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(data.error || `Add to golden set failed (${res.status})`);
   }
+  return data;
+}
+
+/** Fetch recent meals with ingredients for golden set builder. Returns { meals: [ { id, text, timestamp, ingredients, inGoldenSet }, ... ] }. */
+export async function fetchRecentMealsForGolden(limit = 200) {
+  const res = await _parseApiFetch(`/regression/recent-meals?limit=${limit}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Failed to fetch recent meals");
+  return data;
+}
+
+/** Bulk add entries to golden set. entries: [ { mealId, text, ingredients, category }, ... ]. Returns { added, updated }. */
+export async function goldenAddBulk(entries) {
+  const res = await _parseApiFetch("/regression/golden-add-bulk", {
+    method: "POST",
+    body: JSON.stringify({ entries }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Bulk add failed");
+  return data;
+}
+
+/** Clear all golden set entries. clearMealFlags: bool. Returns { cleared, count }. */
+export async function goldenClear(clearMealFlags = true) {
+  const res = await _parseApiFetch("/regression/golden-clear", {
+    method: "POST",
+    body: JSON.stringify({ clearMealFlags }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Clear failed");
   return data;
 }
 

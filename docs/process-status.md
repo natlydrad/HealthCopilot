@@ -35,3 +35,9 @@ Carry context across sessions. At the end of a logical unit of work (or when you
 1. Implemented full parse-flow-gaps plan: (1) Pipeline parity and MVP vs full tier: `parse_meal_text_to_ingredients(text, tier)` with `PARSE_FLOW_TIER=mvp|full`; tier=full runs deterministic rules + `common_sense_check` in regression; tier=mvp skips both. Extended `_apply_corrections` for common_sense (quantity/unit/serving_size_g re-resolve USDA, added_sugar_g/sodium_mg). (2) Invariants: `evaluate_invariants()` (calories ≈ 4P+4C+9F, non-negative, portionGrams 0–2000); wired into run_regression and run-golden. (3) Extended golden comparison: `compare_golden_actual_to_expected(..., expected_options)` for quantity/unit, acceptableRanges, sourceExpectations. (4) Versioning and score log: `run_golden.py` and run-golden API (optional ?log=1) append to `golden_results.jsonl`. (5) Stability judge: `run_stability_check()` and `run_stability.py` CLI.
 2. None.
 3. N/A
+
+**2026-02-14 — Golden set in PocketBase (full plan)**
+
+1. Completed Golden set in PocketBase: (1) Schema doc `docs/golden-set-pocketbase-schema.md`; pb_client CRUD for `golden_entries` + `set_meal_in_golden_set`. (2) Parse API: GET/POST golden-set and golden-add from PocketBase; golden-add-bulk, golden-clear, run-golden from PB; GET recent-meals. (3) Dashboard: Golden set builder (load recent meals, select, bulk add, clear), EditGoldenIngredientsModal; DayDetail sends mealId to golden-add. (4) CLI: run_golden.py and run_stability.py load from PARSE_API_URL when set, else golden_set.json. (5) POST /regression/golden-import for one-time file import; docs updated (how-to-improve-parse-accuracy, regression README).
+2. EditGoldenIngredientsModal was missing—added inline in RegressionSuite.jsx with JSON textarea and Save/Cancel.
+3. N/A

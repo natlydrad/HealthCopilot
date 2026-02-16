@@ -12,7 +12,32 @@ import json
 import re
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from pb_client import get_token, insert_ingredient, delete_ingredient, delete_non_food_logs_for_meal, build_user_context_prompt, add_learned_confusion, add_common_food, add_portion_preference, add_to_pantry, is_branded_or_specific, lookup_pantry_match, fetch_meals_for_user_on_date, fetch_meals_for_user_on_local_date, fetch_ingredients_by_meal_id, fetch_meal_by_id, get_learned_patterns_for_user, remove_learned_pattern, check_learned_correction, delete_corrections_for_user_with_corrected_names, remove_learned_patterns_for_names
+from pb_client import (
+    get_token,
+    insert_ingredient,
+    delete_ingredient,
+    delete_non_food_logs_for_meal,
+    build_user_context_prompt,
+    add_learned_confusion,
+    add_common_food,
+    add_portion_preference,
+    add_to_pantry,
+    is_branded_or_specific,
+    lookup_pantry_match,
+    fetch_meals_for_user_on_date,
+    fetch_meals_for_user_on_local_date,
+    fetch_ingredients_by_meal_id,
+    fetch_meal_by_id,
+    get_learned_patterns_for_user,
+    remove_learned_pattern,
+    check_learned_correction,
+    delete_corrections_for_user_with_corrected_names,
+    remove_learned_patterns_for_names,
+    fetch_golden_entries,
+    create_or_update_golden_entry,
+    delete_all_golden_entries,
+    set_meal_in_golden_set,
+)
 from parser_gpt import parse_ingredients, parse_ingredients_from_image, correction_chat, get_image_base64, gpt_estimate_nutrition, expand_recipe
 from lookup_usda import usda_lookup, usda_lookup_by_fdc_id, usda_lookup_valid_for_portion, usda_search_options, scale_nutrition, get_piece_grams, get_grams_for_scaling, use_piece_grams_for_portion, validate_scaled_calories, validate_scaled_protein, UNIT_TO_GRAMS, PIECE_GRAMS_BY_FOOD, zero_calorie_nutrition_array
 from log_classifier import classify_log, classify_log_with_image
@@ -2861,89 +2886,180 @@ def regression_run_day():
     return jsonify({"results": results})
 
 
-def _golden_set_path():
-    return Path(__file__).resolve().parent / "regression" / "golden_set.json"
+def _golden_results_log_path():
+    """Path for appending run results (golden_results.jsonl)."""
+    return Path(__file__).resolve().parent / "regression" / "golden_results.jsonl"
 
 
-def _sanitize_ingredient_for_golden(ing):
-    """Keep only fields needed for comparison; drop DB-only fields."""
-    if not isinstance(ing, dict):
-        return {}
-    keep = ("name", "quantity", "unit", "nutrition", "parsingMetadata", "source", "usda_matched_name")
-    return {k: ing[k] for k in keep if k in ing}
-
-
-def _slug_for_golden_id(text, existing_ids):
-    """Generate a unique id slug from meal text."""
-    slug = re.sub(r"[^a-z0-9]+", "-", (text or "").lower().strip())[:40].strip("-") or "meal"
-    base = slug
-    i = 1
-    while slug in existing_ids:
-        slug = f"{base}-{i}"
-        i += 1
-    return slug
+@app.route("/regression/recent-meals", methods=["GET"])
+def regression_recent_meals():
+    """
+    GET recent meals with ingredients for golden set builder. Query: limit (default 200).
+    Returns: { "meals": [ { "id", "text", "timestamp", "ingredients": [...], "inGoldenSet": bool }, ... ] }.
+    """
+    limit = min(int(request.args.get("limit", 200)), 500)
+    try:
+        headers = {"Authorization": f"Bearer {get_token()}"}
+        import urllib.parse
+        url = f"{PB_URL}/api/collections/meals/records?perPage={limit}&sort=-created&fields=id,text,timestamp,inGoldenSet"
+        r = requests.get(url, headers=headers)
+        if r.status_code != 200:
+            return jsonify({"meals": []}), 200
+        meals_raw = r.json().get("items", [])
+        golden_by_meal = set()
+        try:
+            for rec in fetch_golden_entries():
+                mid = rec.get("mealId")
+                if mid:
+                    golden_by_meal.add(mid)
+        except Exception:
+            pass
+        meals = []
+        for m in meals_raw:
+            mid = m.get("id")
+            ingredients = fetch_ingredients_by_meal_id(mid) if mid else []
+            in_golden = m.get("inGoldenSet") is True or mid in golden_by_meal
+            meals.append({
+                "id": mid,
+                "text": (m.get("text") or "").strip(),
+                "timestamp": m.get("timestamp"),
+                "ingredients": ingredients,
+                "inGoldenSet": in_golden,
+            })
+        return jsonify({"meals": meals})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/regression/golden-set", methods=["GET"])
 def regression_golden_set():
-    """Return golden_set.json for the UI and for running golden regression."""
-    path = _golden_set_path()
-    if not path.exists():
-        return jsonify({"error": "golden_set.json not found"}), 404
+    """Return golden set from PocketBase for the UI and for running golden regression."""
     try:
-        with open(path) as f:
-            data = json.load(f)
-        return jsonify(data)
+        raw = fetch_golden_entries()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    entries = []
+    for rec in raw:
+        expected = rec.get("expected") or {}
+        if isinstance(expected, str):
+            try:
+                expected = json.loads(expected)
+            except (TypeError, ValueError):
+                expected = {}
+        entries.append({
+            "id": rec.get("id", ""),
+            "mealId": rec.get("mealId") or None,
+            "input": {"text": (rec.get("text") or "").strip()},
+            "expected": {"ingredients": expected.get("ingredients") or []},
+            "category": (rec.get("category") or "normal").strip().lower(),
+            "addedAt": rec.get("addedAt") or None,
+        })
+    return jsonify({
+        "version": 1,
+        "description": "Golden set – ground truth for regression",
+        "entries": entries,
+    })
 
 
 @app.route("/regression/golden-add", methods=["POST"])
 def regression_golden_add():
     """
-    Add one entry to the golden set. Body: { "text": str, "ingredients": [ ... ], "category": "easy"|"normal"|"evil" (optional) }.
-    Returns: { "id": str, "added": true }.
+    Add one entry to the golden set (PocketBase). Body: { "mealId": optional, "text": str, "ingredients": [...], "category": optional }.
+    If mealId present, upsert by mealId (no duplicate). Returns { "id": str, "added": true, "updated": optional bool }.
     """
     data = request.get_json() or {}
+    meal_id = data.get("mealId") or None
+    if meal_id is not None and isinstance(meal_id, str) and not meal_id.strip():
+        meal_id = None
     text = (data.get("text") or "").strip()
     ingredients = data.get("ingredients") or []
     category = data.get("category") or "normal"
-    if category not in ("easy", "normal", "evil"):
-        category = "normal"
-
-    path = _golden_set_path()
-    if path.exists():
-        try:
-            with open(path) as f:
-                golden = json.load(f)
-        except Exception as e:
-            return jsonify({"error": f"Failed to read golden set: {e}"}), 500
-    else:
-        golden = {"version": 1, "description": "Golden set – ground truth for regression", "entries": []}
-
-    entries = golden.get("entries") or []
-    existing_ids = {e.get("id") for e in entries if e.get("id")}
-    entry_id = _slug_for_golden_id(text, existing_ids)
-
-    sanitized = [_sanitize_ingredient_for_golden(ing) for ing in ingredients]
-    entry = {
-        "id": entry_id,
-        "input": {"text": text},
-        "expected": {"ingredients": sanitized},
-        "category": category,
-        "addedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    }
-    entries.append(entry)
-    golden["entries"] = entries
-
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as f:
-            json.dump(golden, f, indent=2)
+        record_id, updated = create_or_update_golden_entry(meal_id, text, ingredients, category)
+        if meal_id:
+            set_meal_in_golden_set(meal_id, True)
     except Exception as e:
-        return jsonify({"error": f"Failed to write golden set: {e}"}), 500
+        return jsonify({"error": str(e)}), 500
+    return jsonify({"id": record_id, "added": True, "updated": updated})
 
-    return jsonify({"id": entry_id, "added": True})
+
+@app.route("/regression/golden-add-bulk", methods=["POST"])
+def regression_golden_add_bulk():
+    """
+    Add multiple entries. Body: { "entries": [ { "mealId", "text", "ingredients", "category" }, ... ] }.
+    Returns { "added": N, "updated": M }.
+    """
+    data = request.get_json() or {}
+    entries = data.get("entries") or []
+    added = 0
+    updated = 0
+    for e in entries:
+        meal_id = e.get("mealId") or None
+        if meal_id is not None and isinstance(meal_id, str) and not meal_id.strip():
+            meal_id = None
+        text = (e.get("text") or "").strip()
+        ingredients = e.get("ingredients") or []
+        category = (e.get("category") or "normal").strip().lower()
+        try:
+            _, was_updated = create_or_update_golden_entry(meal_id, text, ingredients, category)
+            if was_updated:
+                updated += 1
+            else:
+                added += 1
+            if meal_id:
+                set_meal_in_golden_set(meal_id, True)
+        except Exception:
+            pass
+    return jsonify({"added": added, "updated": updated})
+
+
+@app.route("/regression/golden-clear", methods=["POST"])
+def regression_golden_clear():
+    """Delete all golden entries from PocketBase. Optionally clear inGoldenSet on meals. Returns { "cleared": true, "count": N }."""
+    data = request.get_json() or {}
+    clear_meal_flags = data.get("clearMealFlags", True)
+    try:
+        golden_meal_ids = []
+        if clear_meal_flags:
+            try:
+                raw = fetch_golden_entries()
+                golden_meal_ids = [r.get("mealId") for r in raw if r.get("mealId")]
+            except Exception:
+                pass
+        count = delete_all_golden_entries()
+        for mid in golden_meal_ids:
+            if mid:
+                set_meal_in_golden_set(mid, False)
+        return jsonify({"cleared": True, "count": count})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/regression/golden-import", methods=["POST"])
+def regression_golden_import():
+    """
+    One-time import from golden_set.json shape. Body: { "entries": [ { "input": { "text" }, "expected": { "ingredients" }, "category"?: "easy"|"normal"|"evil" }, ... ] }.
+    Creates golden_entries with mealId=null. Returns { "imported": N }.
+    """
+    data = request.get_json() or {}
+    entries = data.get("entries") or []
+    imported = 0
+    for entry in entries:
+        inp = entry.get("input") or {}
+        text = (inp.get("text") or "").strip()
+        expected = entry.get("expected") or {}
+        ingredients = expected.get("ingredients") if isinstance(expected, dict) else []
+        if not isinstance(ingredients, list):
+            ingredients = []
+        category = (entry.get("category") or "normal").strip().lower()
+        if category not in ("easy", "normal", "evil"):
+            category = "normal"
+        try:
+            create_or_update_golden_entry(meal_id=None, text=text, ingredients=ingredients, category=category)
+            imported += 1
+        except Exception:
+            pass
+    return jsonify({"imported": imported})
 
 
 @app.route("/regression/run-golden", methods=["POST"])
@@ -2970,16 +3086,24 @@ def regression_run_golden():
     if tier not in ("mvp", "full"):
         tier = "full"
 
-    path = _golden_set_path()
-    if not path.exists():
-        return jsonify({"results": []}), 200
     try:
-        with open(path) as f:
-            golden = json.load(f)
+        raw = fetch_golden_entries()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-    entries = golden.get("entries") or []
+    entries = []
+    for rec in raw:
+        expected = rec.get("expected") or {}
+        if isinstance(expected, str):
+            try:
+                expected = json.loads(expected)
+            except (TypeError, ValueError):
+                expected = {}
+        entries.append({
+            "id": rec.get("id", ""),
+            "input": {"text": (rec.get("text") or "").strip()},
+            "expected": {"ingredients": expected.get("ingredients") or []},
+            "category": (rec.get("category") or "normal").strip().lower(),
+        })
     results = []
     for entry in entries:
         entry_id = entry.get("id") or ""
@@ -3055,7 +3179,7 @@ def regression_run_golden():
             "pass_rate": pass_rate,
             "by_category": by_category,
         }
-        log_path = _golden_set_path().parent / "golden_results.jsonl"
+        log_path = _golden_results_log_path()
         try:
             with open(log_path, "a") as f:
                 f.write(json.dumps(log_row) + "\n")

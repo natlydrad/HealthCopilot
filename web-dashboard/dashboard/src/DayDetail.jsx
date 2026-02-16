@@ -831,7 +831,7 @@ function AddToGoldenSetModal({ meal, ingredients, onClose, onAdded }) {
     setError(null);
     setSubmitting(true);
     try {
-      await addToGoldenSet(meal?.text ?? "", ingredients ?? [], category);
+      await addToGoldenSet(meal?.text ?? "", ingredients ?? [], category, meal?.id ?? null);
       setSuccess(true);
       onAdded?.();
       setTimeout(() => onClose(), 1500);

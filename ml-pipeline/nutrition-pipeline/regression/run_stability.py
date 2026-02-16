@@ -24,6 +24,26 @@ sys.path.insert(0, str(REPO_ROOT))
 from regression.regression_runner import run_stability_check
 
 
+def _load_golden_entries():
+    """Load golden set from PARSE_API_URL/regression/golden-set or from golden_set.json file."""
+    api_url = (os.getenv("PARSE_API_URL") or os.getenv("PARSE_API_BASE") or "").strip().rstrip("/")
+    if api_url:
+        try:
+            import urllib.request
+            req = urllib.request.Request(f"{api_url}/regression/golden-set")
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                golden = json.loads(resp.read().decode())
+            return golden.get("entries") or []
+        except Exception as e:
+            print(f"WARNING: Could not fetch golden set from API: {e}")
+    golden_path = Path(__file__).parent / "golden_set.json"
+    if golden_path.exists():
+        with open(golden_path) as f:
+            golden = json.load(f)
+        return golden.get("entries") or []
+    return None
+
+
 def main():
     p = argparse.ArgumentParser(description="Run golden set N times per entry and report stability")
     p.add_argument("--n", type=int, default=5, help="Runs per entry (default 5)")
@@ -34,16 +54,15 @@ def main():
     if args.tier:
         os.environ["PARSE_FLOW_TIER"] = args.tier
 
-    golden_path = Path(__file__).parent / "golden_set.json"
-    if not golden_path.exists():
-        print(f"ERROR: {golden_path} not found")
+    entries = _load_golden_entries()
+    if entries is None:
+        print("ERROR: Set PARSE_API_URL to fetch golden set from API, or provide regression/golden_set.json")
         sys.exit(1)
-
-    with open(golden_path) as f:
-        golden = json.load(f)
-    entries = golden.get("entries") or []
     if args.limit:
         entries = entries[: args.limit]
+    if not entries:
+        print("No entries in golden set")
+        sys.exit(0)
     if not entries:
         print("No entries in golden set")
         sys.exit(0)

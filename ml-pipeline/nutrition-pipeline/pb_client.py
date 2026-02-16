@@ -447,6 +447,122 @@ def delete_all_ingredients():
 
 
 # ============================================================
+# Golden set (golden_entries collection)
+# ============================================================
+
+GOLDEN_ENTRIES_COLLECTION = "golden_entries"
+
+
+def _sanitize_ingredient_for_golden(ing):
+    """Keep only fields needed for golden comparison; drop DB-only fields."""
+    if not isinstance(ing, dict):
+        return {}
+    keep = ("name", "quantity", "unit", "nutrition", "parsingMetadata", "source", "usda_matched_name")
+    return {k: ing[k] for k in keep if k in ing}
+
+
+def fetch_golden_entries():
+    """Fetch all records from golden_entries. Returns list of dicts (id, mealId, text, expected, category, addedAt)."""
+    headers = {"Authorization": f"Bearer {get_token()}"}
+    all_items = []
+    page = 1
+    per_page = 200
+    while True:
+        url = f"{PB_URL}/api/collections/{GOLDEN_ENTRIES_COLLECTION}/records?page={page}&perPage={per_page}&sort=-addedAt"
+        try:
+            r = requests.get(url, headers=headers)
+        except Exception:
+            return []
+        if r.status_code != 200:
+            return []
+        data = r.json()
+        items = data.get("items", [])
+        all_items.extend(items)
+        if len(items) < per_page:
+            break
+        page += 1
+    return all_items
+
+
+def find_golden_entry_by_meal_id(meal_id: str):
+    """Return the golden_entries record with mealId=meal_id, or None."""
+    if not meal_id or not (meal_id or "").strip():
+        return None
+    import urllib.parse
+    filter_str = f"mealId='{meal_id.strip()}'"
+    encoded = urllib.parse.quote(filter_str)
+    headers = {"Authorization": f"Bearer {get_token()}"}
+    url = f"{PB_URL}/api/collections/{GOLDEN_ENTRIES_COLLECTION}/records?filter={encoded}&perPage=1"
+    r = requests.get(url, headers=headers)
+    if r.status_code != 200:
+        return None
+    items = r.json().get("items", [])
+    return items[0] if items else None
+
+
+def create_or_update_golden_entry(meal_id, text: str, ingredients: list, category: str = "normal"):
+    """
+    If meal_id is set and a golden entry exists with that mealId, update it. Otherwise create.
+    Sanitizes ingredients. Returns (record_id, updated: bool).
+    """
+    if category not in ("easy", "normal", "evil"):
+        category = "normal"
+    sanitized = [_sanitize_ingredient_for_golden(ing) for ing in ingredients]
+    expected = {"ingredients": sanitized}
+    from datetime import datetime, timezone
+    added_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    headers = {"Authorization": f"Bearer {get_token()}"}
+    payload = {
+        "text": (text or "").strip(),
+        "expected": expected,
+        "category": category,
+        "addedAt": added_at,
+    }
+    if meal_id and (meal_id or "").strip():
+        payload["mealId"] = meal_id.strip()
+    existing = find_golden_entry_by_meal_id(meal_id) if meal_id else None
+    if existing:
+        url = f"{PB_URL}/api/collections/{GOLDEN_ENTRIES_COLLECTION}/records/{existing['id']}"
+        r = requests.patch(url, headers=headers, json=payload)
+        r.raise_for_status()
+        return r.json().get("id", existing["id"]), True
+    url = f"{PB_URL}/api/collections/{GOLDEN_ENTRIES_COLLECTION}/records"
+    r = requests.post(url, headers=headers, json=payload)
+    r.raise_for_status()
+    return r.json().get("id"), False
+
+
+def delete_all_golden_entries():
+    """Delete every record in golden_entries. Returns count deleted."""
+    headers = {"Authorization": f"Bearer {get_token()}"}
+    items = fetch_golden_entries()
+    deleted = 0
+    for rec in items:
+        rid = rec.get("id")
+        if not rid:
+            continue
+        r = requests.delete(f"{PB_URL}/api/collections/{GOLDEN_ENTRIES_COLLECTION}/records/{rid}", headers=headers)
+        if r.status_code == 204:
+            deleted += 1
+    return deleted
+
+
+def set_meal_in_golden_set(meal_id: str, in_golden: bool = True):
+    """PATCH meal to set inGoldenSet (or markedCorrectAt). No-op if meal_id empty or request fails."""
+    if not meal_id or not (meal_id or "").strip():
+        return
+    headers = {"Authorization": f"Bearer {get_token()}"}
+    url = f"{PB_URL}/api/collections/meals/records/{meal_id.strip()}"
+    payload = {"inGoldenSet": in_golden}
+    try:
+        r = requests.patch(url, headers=headers, json=payload)
+        if r.status_code != 200:
+            pass  # field may not exist yet
+    except Exception:
+        pass
+
+
+# ============================================================
 # TIER 4: Hybrid Parsing Helper Functions
 # ============================================================
 
