@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { fetchMealsForDateRange, fetchIngredients, fetchHasNonFoodLogs, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getLearningStats, removeLearnedPattern, parseAndSaveMeal, clearMealIngredients, clearNonFoodClassification, sendCorrectionMessage, previewCorrection, saveCorrection, reparseIngredientFromText, getParseApiUrl, deleteIngredient, addIngredients, updateIngredientPortion, runRegressionForDay, addToGoldenSet } from "./api";
+import { fetchMealsForDateRange, fetchIngredients, fetchHasNonFoodLogs, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getLearningStats, removeLearnedPattern, parseAndSaveMeal, clearMealIngredients, clearNonFoodClassification, sendCorrectionMessage, previewCorrection, saveCorrection, reparseIngredientFromText, getParseApiUrl, deleteIngredient, addIngredients, updateIngredientPortion, runRegressionForDay, addToGoldenSet, removeFromGoldenSet } from "./api";
 import { computeServingsByFramework, MYPLATE_TARGETS, DAILY_DOZEN_TARGETS, LONGEVITY_TARGETS, MATCHED_TO_EMOJI } from "./utils/foodFrameworks";
 import * as flowLog from "./utils/flowLog";
 
@@ -912,6 +912,7 @@ function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTota
   const [hasNonFoodLogs, setHasNonFoodLogs] = useState(false);
   const [showAddToRegression, setShowAddToRegression] = useState(false);
   const [showAddToGoldenSet, setShowAddToGoldenSet] = useState(false);
+  const [removingFromGoldenSet, setRemovingFromGoldenSet] = useState(false);
 
   // Bulk-review annotations: { ingredientId: { category, reasoning } }, synced to localStorage
   const [annotations, setAnnotations] = useState({});
@@ -1153,8 +1154,10 @@ function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTota
   const [showZoom, setShowZoom] = useState(false);
   const [rotation, setRotation] = useState(0);
 
+  const inGoldenSet = meal.inGoldenSet === true;
+
   return (
-    <div className="bg-white p-4 rounded-xl shadow mb-4">
+    <div className={`bg-white p-4 rounded-xl shadow mb-4 ${inGoldenSet ? "ring-2 ring-amber-400/60 border-l-4 border-amber-500" : ""}`}>
       <div className="flex gap-4">
         {/* Image thumbnail if exists — click to zoom */}
         {imageUrl && (
@@ -1225,15 +1228,6 @@ function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTota
                 Add to regression
               </button>
             )}
-            {ingredients.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowAddToGoldenSet(true)}
-                className="text-xs text-amber-600 hover:text-amber-800 hover:underline shrink-0"
-              >
-                Add to golden set
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -1251,7 +1245,7 @@ function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTota
           onClose={() => setShowAddToGoldenSet(false)}
           onAdded={() => {
             setShowAddToGoldenSet(false);
-            // Optional: show brief success (e.g. toast); for now just close
+            onMealUpdated?.(meal.id, { inGoldenSet: true });
           }}
         />
       )}
@@ -1594,6 +1588,39 @@ function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTota
           </ul>
         </div>
       )}
+
+      {/* Golden set button — bottom left of card */}
+      <div className="mt-3 flex items-center justify-start gap-2">
+        {inGoldenSet ? (
+          <button
+            type="button"
+            onClick={async () => {
+              setRemovingFromGoldenSet(true);
+              try {
+                await removeFromGoldenSet(meal.id);
+                onMealUpdated?.(meal.id, { inGoldenSet: false });
+              } catch (e) {
+                console.error("Remove from golden set failed:", e);
+                alert(e.message || "Remove failed");
+              } finally {
+                setRemovingFromGoldenSet(false);
+              }
+            }}
+            disabled={removingFromGoldenSet}
+            className="text-xs text-amber-600 hover:text-amber-800 hover:underline disabled:opacity-50"
+          >
+            {removingFromGoldenSet ? "Removing…" : "Remove from golden set"}
+          </button>
+        ) : ingredients.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => setShowAddToGoldenSet(true)}
+            className="text-xs text-amber-600 hover:text-amber-800 hover:underline shrink-0"
+          >
+            Add to golden set
+          </button>
+        ) : null}
+      </div>
 
       {/* Correction Chat Modal */}
       {correcting && (

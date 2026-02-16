@@ -547,6 +547,19 @@ def delete_all_golden_entries():
     return deleted
 
 
+def delete_golden_entry_by_meal_id(meal_id: str):
+    """Delete the golden_entries record for this meal_id, if any. Returns True if deleted."""
+    existing = find_golden_entry_by_meal_id(meal_id)
+    if not existing or not existing.get("id"):
+        return False
+    headers = {"Authorization": f"Bearer {get_token()}"}
+    r = requests.delete(
+        f"{PB_URL}/api/collections/{GOLDEN_ENTRIES_COLLECTION}/records/{existing['id']}",
+        headers=headers,
+    )
+    return r.status_code == 204
+
+
 def set_meal_in_golden_set(meal_id: str, in_golden: bool = True):
     """PATCH meal to set inGoldenSet (or markedCorrectAt). No-op if meal_id empty or request fails."""
     if not meal_id or not (meal_id or "").strip():

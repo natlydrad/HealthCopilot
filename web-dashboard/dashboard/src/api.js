@@ -712,6 +712,19 @@ export async function addToGoldenSet(text, ingredients, category, mealId = null)
   return data;
 }
 
+/** Remove one meal from the golden set. */
+export async function removeFromGoldenSet(mealId) {
+  const res = await _parseApiFetch("/regression/golden-remove-one", {
+    method: "POST",
+    body: JSON.stringify({ mealId }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || `Remove from golden set failed (${res.status})`);
+  }
+  return data;
+}
+
 /** Fetch recent meals with ingredients for golden set builder. Returns { meals: [ { id, text, timestamp, ingredients, inGoldenSet }, ... ] }. */
 export async function fetchRecentMealsForGolden(limit = 200) {
   const res = await _parseApiFetch(`/regression/recent-meals?limit=${limit}`);

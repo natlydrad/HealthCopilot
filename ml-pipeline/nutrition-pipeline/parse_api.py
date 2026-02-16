@@ -36,6 +36,7 @@ from pb_client import (
     fetch_golden_entries,
     create_or_update_golden_entry,
     delete_all_golden_entries,
+    delete_golden_entry_by_meal_id,
     set_meal_in_golden_set,
 )
 from parser_gpt import parse_ingredients, parse_ingredients_from_image, correction_chat, get_image_base64, gpt_estimate_nutrition, expand_recipe
@@ -3032,6 +3033,21 @@ def regression_golden_clear():
             if mid:
                 set_meal_in_golden_set(mid, False)
         return jsonify({"cleared": True, "count": count})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/regression/golden-remove-one", methods=["POST"])
+def regression_golden_remove_one():
+    """Remove one meal from the golden set. Body: { "mealId": "..." }. Returns { "removed": true }."""
+    data = request.get_json() or {}
+    meal_id = (data.get("mealId") or "").strip()
+    if not meal_id:
+        return jsonify({"error": "mealId required"}), 400
+    try:
+        deleted = delete_golden_entry_by_meal_id(meal_id)
+        set_meal_in_golden_set(meal_id, False)
+        return jsonify({"removed": True, "deleted": deleted})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
