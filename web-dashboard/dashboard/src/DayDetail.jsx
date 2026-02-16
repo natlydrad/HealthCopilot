@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { fetchMealsForDateRange, fetchIngredients, fetchHasNonFoodLogs, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getLearningStats, removeLearnedPattern, parseAndSaveMeal, clearMealIngredients, clearNonFoodClassification, sendCorrectionMessage, previewCorrection, saveCorrection, reparseIngredientFromText, getParseApiUrl, deleteIngredient, addIngredients, updateIngredientPortion, runRegressionForDay, addToGoldenSet, removeFromGoldenSet } from "./api";
+import { fetchMealsForDateRange, fetchIngredients, fetchHasNonFoodLogs, correctIngredient, updateIngredientWithNutrition, getLearnedPatterns, getLearningStats, removeLearnedPattern, parseAndSaveMeal, clearMealIngredients, clearNonFoodClassification, sendCorrectionMessage, previewCorrection, saveCorrection, reparseIngredientFromText, getParseApiUrl, deleteIngredient, addIngredients, updateIngredientPortion, runRegressionForDay, addToGoldenSet, removeFromGoldenSet, fetchGoldenSet } from "./api";
 import { computeServingsByFramework, MYPLATE_TARGETS, DAILY_DOZEN_TARGETS, LONGEVITY_TARGETS, MATCHED_TO_EMOJI } from "./utils/foodFrameworks";
 import * as flowLog from "./utils/flowLog";
 
@@ -209,6 +209,7 @@ export default function DayDetail() {
   const [dayRegressionRunning, setDayRegressionRunning] = useState(false);
   const [dayRegressionResults, setDayRegressionResults] = useState(null);
   const [dayRegressionExpandedId, setDayRegressionExpandedId] = useState(null);
+  const [goldenTagsByMealId, setGoldenTagsByMealId] = useState({});
 
   const refreshTotals = () => setTotalsRefreshTrigger((t) => t + 1);
 
@@ -222,6 +223,20 @@ export default function DayDetail() {
       const sortedMeals = [...dayMeals].sort((a, b) => parseTimestamp(a.timestamp) - parseTimestamp(b.timestamp));
       console.log(`📅 ${date}: ${sortedMeals.length} meals loaded`);
       setMeals(sortedMeals);
+      // Load golden set tags for this day's meals (so we can show tags next to "Remove from golden set")
+      try {
+        const golden = await fetchGoldenSet();
+        const entries = golden.entries || [];
+        const byMeal = {};
+        for (const e of entries) {
+          if (e.mealId && Array.isArray(e.tags) && e.tags.length > 0) {
+            byMeal[e.mealId] = e.tags;
+          }
+        }
+        setGoldenTagsByMealId(byMeal);
+      } catch {
+        setGoldenTagsByMealId({});
+      }
       // #region agent log
       fetch('http://127.0.0.1:7242/ingest/b81179ea-362a-4b1e-9962-8572fc6e73fd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DayDetail.jsx:load_entry',message:'DayDetail load',data:{date,sortedMealsCount:sortedMeals.length,mealIds:sortedMeals.map(m=>m.id)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4'})}).catch(()=>{});
       // #endregion
@@ -691,9 +706,13 @@ export default function DayDetail() {
           date={date}
           refreshIngredientsTrigger={refreshIngredientsTrigger}
           meal={meal}
-          onMealUpdated={(mid, updates) =>
-            setMeals((prev) => prev.map((m) => (m.id === mid ? { ...m, ...updates } : m)))
-          }
+          goldenTags={goldenTagsByMealId[meal.id] || []}
+          onMealUpdated={(mid, updates) => {
+            setMeals((prev) => prev.map((m) => (m.id === mid ? { ...m, ...updates } : m)));
+            if (updates.goldenTags !== undefined) {
+              setGoldenTagsByMealId((prev) => ({ ...prev, [mid]: updates.goldenTags }));
+            }
+          }}
           onTotalsRefresh={refreshTotals}
           frameworkAttribution={totals.frameworks?.byIngredient?.reduce((acc, item) => {
             if (item.id && item.contributed) acc[item.id] = { matched: item.matched, emoji: MATCHED_TO_EMOJI[item.matched] || "•" };
@@ -849,7 +868,7 @@ function AddToGoldenSetModal({ meal, ingredients, onClose, onAdded }) {
     try {
       await addToGoldenSet(meal?.text ?? "", ingredients ?? [], null, meal?.id ?? null, tags);
       setSuccess(true);
-      onAdded?.();
+      onAdded?.(tags);
       setTimeout(() => onClose(), 1500);
     } catch (e) {
       setError(e.message || "Failed to add to golden set");
@@ -908,7 +927,15 @@ function AddToGoldenSetModal({ meal, ingredients, onClose, onAdded }) {
   );
 }
 
-function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTotalsRefresh, frameworkAttribution }) {
+const GOLDEN_TAG_LABELS = {
+  text_only: "Text only",
+  image_only: "Image only",
+  image_and_text: "Image+text",
+  memory_pantry: "Memory/pantry",
+  unique_inputs: "Unique inputs",
+};
+
+function MealCard({ date, refreshIngredientsTrigger, meal, goldenTags = [], onMealUpdated, onTotalsRefresh, frameworkAttribution }) {
   const [ingredients, setIngredients] = useState([]);
   const [correcting, setCorrecting] = useState(null);
   const [parsing, setParsing] = useState(false);
@@ -1001,7 +1028,8 @@ function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTota
         setSimpleCorrectText((prev) => ({ ...prev, [ing.id]: "" }));
         onTotalsRefresh?.();
       } else {
-        alert(result.reply || "Couldn't interpret that. Try e.g. \"green tea 1 cup\" or tap the ingredient to use the chat.");
+        // Don't show the raw bot reply (often a long clarification). Use a short message instead.
+        alert("Couldn't apply in one step. Try rephrasing (e.g. \"cooked ground beef 4 oz\") or tap the ingredient to use the chat for back-and-forth.");
       }
     } catch (err) {
       console.error("Simple correct failed:", err);
@@ -1295,9 +1323,9 @@ function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTota
           meal={meal}
           ingredients={ingredients}
           onClose={() => setShowAddToGoldenSet(false)}
-          onAdded={() => {
+          onAdded={(tags) => {
             setShowAddToGoldenSet(false);
-            onMealUpdated?.(meal.id, { inGoldenSet: true });
+            onMealUpdated?.(meal.id, { inGoldenSet: true, goldenTags: tags || [] });
           }}
         />
       )}
@@ -1435,6 +1463,11 @@ function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTota
             const carbs = nutrients.find((n) => (n.nutrientName || "").toLowerCase().includes("carbohydrate"));
             const fat = nutrients.find((n) => (n.nutrientName || "").toLowerCase().includes("lipid") || (n.nutrientName || "").toLowerCase().includes("fat"));
             const lowConf = isLowConfidence(ing);
+            const plausibilityStatus = ing.plausibilityStatus;
+            const plausibilityResult = ing.plausibilityResult;
+            const plausibilityTooltip = plausibilityResult
+              ? [plausibilityResult.why, (plausibilityResult.whatToVerify || []).length ? `Verify: ${(plausibilityResult.whatToVerify || []).join("; ")}` : null, plausibilityResult.suggestedCorrection].filter(Boolean).join("\n")
+              : "";
             const hasMeaningfulNutrition = nutrients.length > 0 && (
               (parseFloat(energy?.value) || 0) > 0 ||
               (parseFloat(protein?.value) || 0) > 0 ||
@@ -1455,15 +1488,37 @@ function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTota
             const showNutrients = expandedNutrientId === ing.id;
             const fg = ing.parsingMetadata?.foodGroupServings;
 
+            const plausibilityRowClass = plausibilityStatus === "likely_wrong"
+              ? "bg-red-50 border-l-4 border-red-400"
+              : plausibilityStatus === "suspicious"
+                ? "bg-amber-50 border-l-4 border-amber-400"
+                : lowConf
+                  ? "bg-amber-50 border-l-4 border-amber-400"
+                  : "";
+            const plausibilityHoverClass = plausibilityStatus === "likely_wrong"
+              ? "hover:bg-red-100"
+              : plausibilityStatus === "suspicious" || lowConf
+                ? "hover:bg-amber-100"
+                : "hover:bg-gray-50";
+
             return (
               <li 
                 key={ing.id}
-                className={`rounded-lg transition-colors ${lowConf ? 'bg-amber-50 border-l-4 border-amber-400' : ''}`}
+                className={`rounded-lg transition-colors ${plausibilityRowClass}`}
               >
                 <div
                   onClick={() => setCorrecting(ing)}
-                  className={`flex items-center gap-2 p-2 cursor-pointer flex-wrap ${lowConf ? 'hover:bg-amber-100' : 'hover:bg-gray-50'}`}
+                  className={`flex items-center gap-2 p-2 cursor-pointer flex-wrap ${plausibilityHoverClass}`}
                 >
+                  {/* Plausibility: Verify badge with tooltip */}
+                  {(plausibilityStatus === "suspicious" || plausibilityStatus === "likely_wrong") && (
+                    <span
+                      className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${plausibilityStatus === "likely_wrong" ? "bg-red-200 text-red-800" : "bg-amber-200 text-amber-800"}`}
+                      title={plausibilityTooltip || "Macros may be wrong — tap to verify"}
+                    >
+                      Verify
+                    </span>
+                  )}
                   {/* Low confidence indicator */}
                   {lowConf && (
                     <span 
@@ -1662,28 +1717,39 @@ function MealCard({ date, refreshIngredientsTrigger, meal, onMealUpdated, onTota
         </div>
       )}
 
-      {/* Golden set — actual buttons, bottom left of card */}
-      <div className="mt-3 flex items-center justify-start gap-2">
+      {/* Golden set — actual buttons + tags when in set, bottom left of card */}
+      <div className="mt-3 flex items-center justify-start gap-2 flex-wrap">
         {inGoldenSet ? (
-          <button
-            type="button"
-            onClick={async () => {
-              setRemovingFromGoldenSet(true);
-              try {
-                await removeFromGoldenSet(meal.id);
-                onMealUpdated?.(meal.id, { inGoldenSet: false });
-              } catch (e) {
-                console.error("Remove from golden set failed:", e);
-                alert(e.message || "Remove failed");
-              } finally {
-                setRemovingFromGoldenSet(false);
-              }
-            }}
-            disabled={removingFromGoldenSet}
-            className="px-3 py-1.5 text-xs font-medium text-amber-800 bg-amber-100 rounded-lg hover:bg-amber-200 disabled:opacity-50"
-          >
-            {removingFromGoldenSet ? "Removing…" : "Remove from golden set"}
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={async () => {
+                setRemovingFromGoldenSet(true);
+                try {
+                  await removeFromGoldenSet(meal.id);
+                  onMealUpdated?.(meal.id, { inGoldenSet: false, goldenTags: [] });
+                } catch (e) {
+                  console.error("Remove from golden set failed:", e);
+                  alert(e.message || "Remove failed");
+                } finally {
+                  setRemovingFromGoldenSet(false);
+                }
+              }}
+              disabled={removingFromGoldenSet}
+              className="px-3 py-1.5 text-xs font-medium text-amber-800 bg-amber-100 rounded-lg hover:bg-amber-200 disabled:opacity-50"
+            >
+              {removingFromGoldenSet ? "Removing…" : "Remove from golden set"}
+            </button>
+            {goldenTags.length > 0 && (
+              <span className="text-xs text-gray-500 flex items-center gap-1 flex-wrap">
+                {goldenTags.map((t) => (
+                  <span key={t} className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                    {GOLDEN_TAG_LABELS[t] || t}
+                  </span>
+                ))}
+              </span>
+            )}
+          </>
         ) : ingredients.length > 0 ? (
           <button
             type="button"

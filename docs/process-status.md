@@ -65,3 +65,9 @@ Carry context across sessions. At the end of a logical unit of work (or when you
 1. In the bulk-review row under each ingredient: “Correct to…” input + Apply. Apply now saves immediately (send correction message → save correction → refresh ingredients), no preview popup. Same flow as add ingredient: type and Apply; only alert on failure or when API can’t interpret.
 2. User reported a popup and nothing worked with the previous two-step (preview + Confirm).
 3. Removed pending/Confirm/Cancel; single Apply that calls sendCorrectionMessage then saveCorrection and refreshes.
+
+**2026-02-16 — Plausibility checker (parse-time + UI)**
+
+1. Implemented GPT-based per-ingredient plausibility check: new `plausibility.py` with `plausibility_check_one(name, quantity, unit, nutrition)` returning status (ok/suspicious/likely_wrong), why, whatToVerify, confidence, suggestedCorrection. Integrated in parse_api after common_sense, before insert_ingredient; copy flow includes plausibilityStatus/plausibilityResult. PocketBase migration 1759900012 adds plausibilityStatus (text) and plausibilityResult (json) to ingredients. DayDetail: row color by plausibility (red/amber), "Verify" badge with tooltip (why, whatToVerify, suggestedCorrection).
+2. None.
+3. N/A

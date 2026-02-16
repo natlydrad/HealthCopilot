@@ -44,6 +44,7 @@ from parser_gpt import parse_ingredients, parse_ingredients_from_image, correcti
 from lookup_usda import usda_lookup, usda_lookup_by_fdc_id, usda_lookup_valid_for_portion, usda_search_options, scale_nutrition, get_piece_grams, get_grams_for_scaling, use_piece_grams_for_portion, validate_scaled_calories, validate_scaled_protein, UNIT_TO_GRAMS, PIECE_GRAMS_BY_FOOD, zero_calorie_nutrition_array
 from log_classifier import classify_log, classify_log_with_image
 from common_sense import common_sense_check
+from plausibility import plausibility_check_one
 from enrich_common_sense import apply_deterministic_rules
 import requests
 import os
@@ -1637,7 +1638,9 @@ def parse_meal(meal_id):
                             "parsingSource": "copied",
                             "copiedFromMealId": source_meal_id,
                             "parsedVia": "parse_api",
-                        }
+                        },
+                        "plausibilityStatus": ing.get("plausibilityStatus"),
+                        "plausibilityResult": ing.get("plausibilityResult"),
                     }
                     result = insert_ingredient(payload)
                     if result:
@@ -2150,6 +2153,33 @@ def parse_meal(meal_id):
                 )
         except Exception as e:
             print(f"   ⚠️ Common sense step failed, inserting as-is: {e}")
+        
+        # Plausibility check: per-ingredient macro smell test (ok / suspicious / likely_wrong)
+        try:
+            for p in pending:
+                payload = p["payload"]
+                name = payload.get("name", "")
+                quantity = float(payload.get("quantity", 1) or 1)
+                unit = (payload.get("unit") or "serving").strip()
+                nutrition = payload.get("nutrition") or []
+                result_plaus = plausibility_check_one(name, quantity, unit, nutrition)
+                if result_plaus:
+                    payload["plausibilityStatus"] = result_plaus["status"]
+                    payload["plausibilityResult"] = {
+                        "why": result_plaus.get("why", ""),
+                        "whatToVerify": result_plaus.get("whatToVerify") or [],
+                        "confidence": result_plaus.get("confidence"),
+                        "suggestedCorrection": result_plaus.get("suggestedCorrection"),
+                    }
+                    _trace_append(trace, "plausibility", f"Plausibility: {name} -> {result_plaus['status']}", {"status": result_plaus["status"]})
+                else:
+                    payload["plausibilityStatus"] = None
+                    payload["plausibilityResult"] = None
+        except Exception as e:
+            print(f"   ⚠️ Plausibility step failed, inserting as-is: {e}")
+            for p in pending:
+                p["payload"]["plausibilityStatus"] = None
+                p["payload"]["plausibilityResult"] = None
         
         for p in pending:
             result = insert_ingredient(p["payload"])
