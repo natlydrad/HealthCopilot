@@ -218,8 +218,7 @@ def _align_quantity_from_meal_text(meal_text: str, parsed: list) -> None:
 def _merge_pending_by_usda(pending: list) -> list:
     """
     Merge pending items that resolve to the same USDA product (or same normalized name when no USDA).
-    Prevents duplicates when parser returns different names (e.g. "frank's red hot" and "red hot sauce")
-    that both map to the same USDA item.
+    Prevents duplicates when parser returns different names that both map to the same USDA item.
     """
     from collections import defaultdict
     groups = defaultdict(list)
@@ -280,7 +279,7 @@ def _normalize_name_for_merge(s: str) -> str:
 
 
 def _names_similar(a: str, b: str, min_stem_len: int = 6) -> bool:
-    """True if both names likely refer to the same product (e.g. frank's red hot vs frank's red hot sauce)."""
+    """True if both names likely refer to the same product."""
     na, nb = _normalize_name_for_merge(a), _normalize_name_for_merge(b)
     if not na or not nb:
         return False
@@ -288,26 +287,11 @@ def _names_similar(a: str, b: str, min_stem_len: int = 6) -> bool:
         return True
     if na in nb or nb in na:
         return True
-    # Frank's Red Hot variants: "frank's red hot", "franks red hot", "hot sauce", "frank's red hot sauce" -> same product
-    if _is_franks_red_hot_variant(na) and _is_franks_red_hot_variant(nb):
-        return True
-    # Parser may split "tbsp frank's red hot" into "frank's red hot" + "hot sauce" -> merge
-    condiment_terms = ("hot sauce", "hot chili", "cayenne", "red hot sauce")
-    if _is_franks_red_hot_variant(na) and any(t in nb for t in condiment_terms):
-        return True
-    if _is_franks_red_hot_variant(nb) and any(t in na for t in condiment_terms):
-        return True
-    # Same leading stem (e.g. "frank's red hot" vs "frank's redhot sauce")
+    # Same leading stem
     words_a, words_b = set(na.split()), set(nb.split())
     common = words_a & words_b
     stem = "".join(sorted(common))
     return len(stem) >= min_stem_len
-
-
-def _is_franks_red_hot_variant(name: str) -> bool:
-    """True if name refers to Frank's Red Hot (sauce or product)."""
-    n = (name or "").lower()
-    return ("frank" in n and "red" in n and "hot" in n) or (("frank" in n or "franks" in n) and "hot sauce" in n)
 
 
 def _is_sauce_or_condiment(name: str) -> bool:
@@ -336,9 +320,8 @@ def _match_implies_whole_form(p: dict) -> bool:
 
 def _merge_pending_by_similar_name_intent(pending: list) -> list:
     """
-    Merge pendings that represent the same user mention but resolved to different products
-    (e.g. "frank's red hot" -> sauce + dill spears or jumbo franks). When names are similar, keep one:
-    prefer sauce/condiment when present; else keep the first.
+    Merge pendings that represent the same user mention but resolved to different products.
+    When names are similar, keep one: prefer sauce/condiment when present; else keep the first.
     """
     if len(pending) < 2:
         return pending
@@ -2128,12 +2111,12 @@ def parse_meal(meal_id):
                 "unit": unit,
             })
 
-        # Merge duplicates: same USDA product or same normalized name (e.g. "frank's red hot" + "red hot sauce" -> one)
+        # Merge duplicates: same USDA product or same normalized name
         n_before = len(pending)
         pending = _merge_pending_by_usda(pending)
         if len(pending) < n_before:
             print(f"   📋 Merged duplicate ingredients: {n_before} -> {len(pending)}")
-        # Same user mention resolved to sauce vs pickles (e.g. "frank's red hot" -> keep sauce, drop dill spears)
+        # Same user mention resolved to sauce vs pickles: keep sauce/condiment, drop whole-item form
         n_before = len(pending)
         pending = _merge_pending_by_similar_name_intent(pending)
         if len(pending) < n_before:
@@ -2192,9 +2175,23 @@ def parse_meal(meal_id):
             print(f"   ⚠️ Common sense step failed, inserting as-is: {e}")
         
         # Plausibility check: per-ingredient macro smell test (ok / suspicious / likely_wrong)
+        # Fidelity first: if wrong product (mismatch/ambiguous), set parse_mismatch and skip macro check
         try:
             for p in pending:
                 payload = p["payload"]
+                fid_status = payload.get("parseFidelityStatus")
+                if fid_status in ("mismatch", "ambiguous"):
+                    fid_result = payload.get("parseFidelityResult") or {}
+                    payload["plausibilityStatus"] = "parse_mismatch"
+                    payload["plausibilityResult"] = {
+                        "why": fid_result.get("why") or "Parsed name may not match what you wrote.",
+                        "whatToVerify": [],
+                        "confidence": 0.8 if fid_status == "mismatch" else 0.5,
+                        "suggestedCorrection": fid_result.get("suggestedName"),
+                        "checks": [],
+                    }
+                    _trace_append(trace, "plausibility", f"Parse mismatch: {payload.get('name')} -> parse_mismatch", {"status": "parse_mismatch"})
+                    continue
                 name = payload.get("name", "")
                 quantity = float(payload.get("quantity", 1) or 1)
                 unit = (payload.get("unit") or "serving").strip()
@@ -2219,22 +2216,6 @@ def parse_meal(meal_id):
                 p["payload"]["plausibilityStatus"] = None
                 p["payload"]["plausibilityResult"] = None
 
-        # Override plausibility to parse_mismatch when fidelity says wrong product was parsed
-        for p in pending:
-            payload = p["payload"]
-            fid_status = payload.get("parseFidelityStatus")
-            if fid_status in ("mismatch", "ambiguous"):
-                fid_result = payload.get("parseFidelityResult") or {}
-                payload["plausibilityStatus"] = "parse_mismatch"
-                payload["plausibilityResult"] = {
-                    "why": fid_result.get("why") or "Parsed name may not match what you wrote.",
-                    "whatToVerify": [],
-                    "confidence": 0.8 if fid_status == "mismatch" else 0.5,
-                    "suggestedCorrection": fid_result.get("suggestedName"),
-                    "checks": [],
-                }
-                _trace_append(trace, "plausibility", f"Parse mismatch: {payload.get('name')} -> parse_mismatch", {"status": "parse_mismatch"})
-        
         for p in pending:
             result = insert_ingredient(p["payload"])
             if result:

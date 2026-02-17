@@ -12,6 +12,12 @@ Carry context across sessions. At the end of a logical unit of work (or when you
 
 *(Append new entries below with date and a 2–3 line summary.)*
 
+**2026-02-16 — Fidelity before plausibility**
+
+1. Parse API: run wrong-product (fidelity) before plausibility (macro). In the single plausibility loop, if parseFidelityStatus is mismatch or ambiguous we set plausibilityStatus to parse_mismatch from parseFidelityResult and skip plausibility_check_one; otherwise we call plausibility_check_one as before. Removed the separate override loop that set parse_mismatch after plausibility.
+2. None.
+3. N/A
+
 **2026-02-16 — Image-based parse fidelity**
 
 1. Fidelity check now treats image-based parses (source gpt_image or gpt_both) with an image-aware prompt: ingredients are not marked mismatch solely because the caption is generic or empty; only clear hallucinations or wrong-product get mismatch. parse_api.py passes `parsed_from_image=(source in ("gpt_image", "gpt_both"))` into `parse_fidelity_check`; parse_fidelity.py adds `parsed_from_image` param and a second prompt for image mode. docs/parse-flow-breakdown.md step 216 updated.
