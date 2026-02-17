@@ -86,10 +86,21 @@ Meal text (what the user wrote):
 Parsed ingredients (one per line):
 {ingredients_blob}
 
-Rules:
-- "ok": The parsed name is a plausible interpretation of the meal text. Synonyms and normalizations are fine (e.g. "veggie" → "vegetable", "chicken breast" → "chicken").
-- "mismatch": The parser substituted a DIFFERENT product than what the user wrote. Examples: user wrote "chunky salsa dip" but parser returned "salsa con queso" (cheese dip is different); "almond milk" → "whole milk"; "veggie chips" → "potato chips"; a specific brand/variety replaced by a generic or different variety.
-- "ambiguous": You cannot tell from the text whether the parsed name matches (e.g. user said "salsa" and parser said "salsa con queso"—could be same or different).
+Do NOT flag (treat as ok):
+- Cooking state when unspecified: If the user did not write "raw", "uncooked", "cooked", etc., do not infer it. Parsed "cooked" vs "raw" when the text is silent → ok.
+- USDA-style normalization: Standard expansions like "green tea" → "Tea, iced, brewed, green, unsweetened" are fine. Added qualifiers that reflect a reasonable default (brewed, unsweetened) are not a mismatch.
+- Generic → specific (same product): "chicken" → "Chicken, breast, roasted" is fine. Same product, more detail.
+
+DO flag (mismatch or ambiguous):
+- Different product type: almond milk → whole milk; veggie chips → potato chips; salsa dip → salsa con queso.
+- Wrong variety or brand: User wrote a specific brand/variety; parser returned a different one.
+- Opposite or conflicting qualifier when user was explicit: User wrote "raw pork" and parser returned cooked; user wrote "sweetened tea" and parser returned unsweetened.
+
+Example judgments:
+- "3/4 cup pork shoulder" + "Pork, Shoulder breast, boneless, cooked, broiled" → ok (user silent on raw/cooked).
+- "green tea" + "Tea, iced, brewed, green, unsweetened" → ok (reasonable USDA form).
+- "almond milk 1 cup" + "Milk, whole, 3.25%" → mismatch (different product).
+- "raw pork 4 oz" + "Pork, cooked, broiled" → mismatch (user said raw).
 
 When status is "mismatch" or "ambiguous", set "suggestedName" to a name that would be faithful to the meal text (or null if unclear). When "ok", set "suggestedName" to null.
 

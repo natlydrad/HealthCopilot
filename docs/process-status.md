@@ -12,6 +12,12 @@ Carry context across sessions. At the end of a logical unit of work (or when you
 
 *(Append new entries below with date and a 2–3 line summary.)*
 
+**2026-02-16 — Parse fidelity: reduce false positives**
+
+1. Updated text-based fidelity prompt in parse_fidelity.py: added explicit "Do NOT flag" rules (cooking state when unspecified, USDA-style normalization, generic→specific same product) and "DO flag" rules (different product type, wrong variety/brand, opposite qualifier when user was explicit); added four example judgments (pork shoulder ok, green tea ok, almond milk mismatch, raw pork mismatch). Restarted parse API.
+2. None.
+3. N/A
+
 **2026-02-16 — Fidelity before plausibility**
 
 1. Parse API: run wrong-product (fidelity) before plausibility (macro). In the single plausibility loop, if parseFidelityStatus is mismatch or ambiguous we set plausibilityStatus to parse_mismatch from parseFidelityResult and skip plausibility_check_one; otherwise we call plausibility_check_one as before. Removed the separate override loop that set parse_mismatch after plausibility.
