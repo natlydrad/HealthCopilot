@@ -115,6 +115,136 @@ def parse_ingredients(text: str, user_context: str = ""):
         return []
 
 
+# Calibration hints for nutrition estimates (derived from typical cal/100g and piece sizes).
+# Used in parse_ingredients_with_nutrition so estimates stay plausible.
+_CALIBRATION_HINTS = """
+Typical calories per 100g (use for scaling): plant milks 25-55, dairy milk 40-65, juice 40-55; orange/apple 40-60, banana 85-105, strawberries 28-40; oatmeal/cooked oats 65-95, rice 110-140; chicken wing 150-250, chicken breast 100-180; eggs 140-160.
+Per piece/serving: 1 egg ~70 cal; 7 strawberries ~25-40 cal total; 1 apple ~95 cal; 1 cup cabbage ~25 cal. Keep estimates within these ranges unless the user clearly indicates otherwise.
+"""
+
+# Concrete per-food examples (same style as gpt_estimate_nutrition) for parse_ingredients_with_nutrition.
+_NUTRITION_EXAMPLES = """
+Concrete examples (use as numeric targets for the stated portion):
+- 1 egg: ~70 cal, 6g protein, 0.5g carbs, 5g fat
+- 4 oz chicken breast: ~180 cal, 35g protein, 0g carbs, 4g fat
+- 6 small chicken wings baked: ~280 cal, 25g protein, 0g carbs, 18g fat
+- 1 apple: ~95 cal, 0.5g protein, 25g carbs, 0.3g fat
+- 1 orange: ~50 cal, 1g protein, 12g carbs, 0g fat
+- 7 strawberries: ~35 cal, 0.7g protein, 8g carbs, 0.3g fat
+- 8 oz black coffee: ~2 cal, 0g protein, 0g carbs, 0g fat
+- 1 cup cooked rice: ~200 cal, 4g protein, 45g carbs, 0.5g fat
+- 1 cup cabbage: ~25 cal, 1g protein, 5g carbs, 0g fat
+- 1 cup whole milk: ~150 cal, 8g protein, 12g carbs, 8g fat
+"""
+
+
+def parse_ingredients_with_nutrition(text: str, user_context: str = "") -> list[dict]:
+    """
+    Parse ingredients from text and estimate nutrition (calories, protein, carbs, fat) in one GPT call.
+    Used when PARSE_FLOW=gpt_first. Output includes all parse_ingredients fields plus calories, protein, carbs, fat.
+    """
+    context_section = ""
+    if user_context:
+        context_section = f"""
+    USER CONTEXT (use this to personalize your parsing):
+    {user_context}
+
+    """
+
+    prompt = f"""
+    Extract foods, drinks, supplements from: "{text}" and estimate nutrition for each.
+    {context_section}
+    IMPORTANT: When the user states an exact amount (e.g. "1 cup", "2 eggs", "half a cup"), use that exact quantity and unit. Do not substitute a different fraction or amount unless the user clearly described a portion modifier.
+    IMPORTANT: For phrases like "1 cup ground turkey", "a cup of soy milk", output quantity 1 and unit "cup".
+    IMPORTANT: When the meal text contains an explicit amount (e.g. "1 cup cabbage", "3/4 cup cooked steel cut oats"), output that exact quantity and unit.
+    IMPORTANT: When the user states a count (e.g. "7 strawberries", "2 eggs", "3 slices"), use that exact quantity and unit.
+    IMPORTANT: PORTION MODIFIERS apply to ALL foods. "half a steak" → 3oz; "half the rice" → 0.5 cup.
+    IMPORTANT: Decompose complex/composite foods into their base ingredients (burrito → tortilla, rice, beans, etc.).
+    Single food/drink phrases must return one item: "iced matcha" → one drink; "green tea", "matcha latte" → one item each.
+    For "sleepy tea", "bedtime tea", "calm tea", use the full phrase as the name so the system can identify herbal type.
+    One user phrase = one ingredient line. Do not list the same ingredient twice.
+
+    NUTRITION ESTIMATES (required for each item): Be conservative and realistic.
+    {_CALIBRATION_HINTS}
+    {_NUTRITION_EXAMPLES}
+    Common-sense rules (apply in your output directly):
+    - Water, ice, plain tea, herbal/sleepy tea: calories = 0 (or omit carbs/fat).
+    - Black coffee, plain coffee: calories ≈ 0-2; protein/carbs/fat ≈ 0.
+    - Matcha (powder or drink): if quantity is in oz or vague, output quantity 1, unit "serving", serving_size_g 2, and calories ~5-10 for one drink/serving.
+    - Coffee as drink: one serving = one cup/shot (e.g. 8 oz black coffee ≈ 2 cal); do not treat 8 oz as "coffee powder".
+
+    Return ONLY a JSON array (no markdown, no explanation).
+    Each item must have:
+    - name (string), quantity (float), unit (string), category (string), reasoning (string)
+    - foodGroupServings (object, optional): {{ "grains": 0, "protein": 0, "vegetables": 0, "fruits": 0, "dairy": 0, "fats": 0 }}
+    - calories (number), protein (number), carbs (number), fat (number) — for the stated portion
+    - serving_size_g (number, optional) — only when needed e.g. matcha 1 serving = 2g
+    Use the same units as parse_ingredients: eggs→eggs, meats→oz, grains/veg→cup, drinks→oz, sauces→tbsp.
+    Return empty array [] only if the input clearly contains no food/drink/supplement.
+    """
+
+    temperature = 0 if os.getenv("REGRESSION_MODE", "false").lower() == "true" else None
+    kwargs = {"model": "gpt-4o-mini", "messages": [{"role": "user", "content": prompt}]}
+    if temperature is not None:
+        kwargs["temperature"] = temperature
+
+    try:
+        resp = client.chat.completions.create(**kwargs)
+        raw = (resp.choices[0].message.content or "").strip()
+    except Exception as e:
+        print(f"parse_ingredients_with_nutrition error: {e}")
+        return []
+
+    if raw.startswith("```"):
+        raw = raw.strip("`")
+        if raw.lower().startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+
+    try:
+        out = json.loads(raw)
+        if not out:
+            print("parse_ingredients_with_nutrition returned [] for input:", repr((text or "")[:60]))
+            return []
+        # Ensure each item has numeric nutrition; default 0 if missing
+        for item in out:
+            if not isinstance(item, dict):
+                continue
+            for key in ("calories", "protein", "carbs", "fat"):
+                if key not in item or item[key] is None:
+                    item[key] = 0
+                else:
+                    try:
+                        item[key] = float(item[key])
+                    except (TypeError, ValueError):
+                        item[key] = 0
+        return out
+    except Exception as e:
+        try:
+            start = raw.find("[")
+            end = raw.rfind("]")
+            if start != -1 and end != -1 and end > start:
+                arr_raw = raw[start : end + 1]
+                arr_raw = re.sub(r",\s*]", "]", arr_raw)
+                out = json.loads(arr_raw)
+                for item in out:
+                    if not isinstance(item, dict):
+                        continue
+                    for key in ("calories", "protein", "carbs", "fat"):
+                        if key not in item or item[key] is None:
+                            item[key] = 0
+                        else:
+                            try:
+                                item[key] = float(item[key])
+                            except (TypeError, ValueError):
+                                item[key] = 0
+                return out
+        except Exception:
+            pass
+        print("parse_ingredients_with_nutrition parse error:", e, "RAW:", (raw[:200] if raw else ""))
+        return []
+
+
 def expand_recipe(meal_text: str, composite_ingredient: dict) -> dict | None:
     """
     Ask GPT for a typical recipe for one batch/loaf of the given composite dish.

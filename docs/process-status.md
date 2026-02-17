@@ -12,6 +12,12 @@ Carry context across sessions. At the end of a logical unit of work (or when you
 
 *(Append new entries below with date and a 2–3 line summary.)*
 
+**2026-02-16 — Nutrition examples in parse_ingredients_with_nutrition**
+
+1. Added concrete per-food nutrition examples to the gpt_first parse prompt: new `_NUTRITION_EXAMPLES` constant (10 examples: egg, chicken breast, wings, apple, orange, strawberries, black coffee, cooked rice, cabbage, whole milk) in the same style as gpt_estimate_nutrition. Injected after `_CALIBRATION_HINTS` in the parse_ingredients_with_nutrition prompt so the model has clear numeric targets for stated portions.
+2. None.
+3. N/A
+
 **2026-02-14 — Dashboard Regression Suite**
 
 1. Implemented dashboard-integrated regression testing: new RegressionSuite view at `/regression` loads regression_meals.json from Parse API, runs each meal with bounded concurrency, displays pass/fail per meal with expandable failure details and parsed ingredients. Parse API endpoints: GET `/regression/suite`, POST `/regression/run-one`. Extracted shared logic into `regression_runner.py`; `run_regression.py` now imports from it. Added "Add to regression" modal in DayDetail: generates JSON snippet from meal text + expectations for copy-paste into regression_meals.json.
