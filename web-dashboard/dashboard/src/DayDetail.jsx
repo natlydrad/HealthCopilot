@@ -1425,6 +1425,22 @@ function MealCard({ date, refreshIngredientsTrigger, meal, goldenTags = [], onMe
       {/* Ingredients list */}
       {ingredients.length > 0 && (
         <div>
+          {/* Smells funny: % of ingredients that look off (plausibility) */}
+          {(() => {
+            const looksOff = ingredients.filter(
+              (ing) => ["parse_mismatch", "likely_wrong", "suspicious"].includes(ing.plausibilityStatus)
+            ).length;
+            const pct = ingredients.length ? Math.round((looksOff / ingredients.length) * 100) : 0;
+            return (
+              <div className="mb-2 px-2 py-1.5 rounded-lg bg-slate-100 border border-slate-200">
+                <span className="text-sm font-medium text-slate-700">Smells funny: </span>
+                <span className={pct > 0 ? "text-amber-700 font-semibold" : "text-slate-600"}>{pct}%</span>
+                <span className="text-xs text-slate-500 ml-1">
+                  ({looksOff} of {ingredients.length} ingredient{ingredients.length !== 1 ? "s" : ""} look off)
+                </span>
+              </div>
+            );
+          })()}
           <div className="flex justify-between items-center mb-2">
             <span className="text-xs text-gray-400 flex items-center gap-2">
               {ingredients.length} ingredient{ingredients.length !== 1 ? 's' : ''}

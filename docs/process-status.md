@@ -12,6 +12,12 @@ Carry context across sessions. At the end of a logical unit of work (or when you
 
 *(Append new entries below with date and a 2–3 line summary.)*
 
+**2026-02-17 — Smells funny score at top of Day View (plausibility)**
+
+1. DayDetail.jsx: Added "Smells funny: X%" at the top of the ingredients list after parse. Shows percentage of ingredients that look off (plausibilityStatus in parse_mismatch, likely_wrong, suspicious) and raw count (e.g. "2 of 5 ingredients look off"). Styled with slate background; amber when > 0%.
+2. N/A
+3. N/A
+
 **2026-02-17 — Revert to commit before blue (purple only)**
 
 1. User requested revert to state before blue (highly_uncertain/identification uncertainty) was added. Identified commit: 4756f79 ("Repeat intent: copy only matching ingredient..."). Reset ap-stat to 4756f79; blue UI and related pipeline changes removed.
