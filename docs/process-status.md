@@ -12,6 +12,12 @@ Carry context across sessions. At the end of a logical unit of work (or when you
 
 *(Append new entries below with date and a 2–3 line summary.)*
 
+**2026-02-17 — Revert to commit before blue (purple only)**
+
+1. User requested revert to state before blue (highly_uncertain/identification uncertainty) was added. Identified commit: 4756f79 ("Repeat intent: copy only matching ingredient..."). Reset ap-stat to 4756f79; blue UI and related pipeline changes removed.
+2. N/A
+3. N/A
+
 **2026-02-16 — Repeat intent: copy only matching ingredient, mult as quantity**
 
 1. parse_api.py: When food is mentioned (e.g. "2 more cookies"): copy only the matching ingredient(s), not the whole meal; use multiplier as the quantity (2 cookies = qty 2) instead of multiplying original (2×3 = 6). Added copy_mentioned_food through the flow, filter in copy block, use_mult_as_qty logic for quantity/nutrition scaling. Restarted parse API.
