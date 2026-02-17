@@ -101,3 +101,9 @@ Carry context across sessions. At the end of a logical unit of work (or when you
 1. Increased `GPT_FIRST_USDA_FIT_THRESHOLD_DEFAULT` from 0.45 to 0.65 so more USDA matches are accepted instead of defaulting to GPT. Previously almost every item was marked as GPT due to overly strict fit scoring.
 2. None.
 3. N/A
+
+**2026-02-16 — Archive GPT-first, name-first only, disable pantry/learned**
+
+1. Archived GPT-first parse flow: logic moved to `parse_api_archived_gpt_first.py`; parse_api and regression always use name_first. Day view: removed flow toggle and localStorage; always passes flow "name_first". Temporarily disabled pantry, learned corrections, and add-to-pantry in name-first path; gated behind `USE_PANTRY_AND_LEARNED=true` (when unset, parsing is vanilla name-first: USDA + GPT fallback only).
+2. None.
+3. N/A

@@ -40,8 +40,8 @@ from pb_client import (
     delete_golden_entry_by_meal_id,
     set_meal_in_golden_set,
 )
-from parser_gpt import parse_ingredients, parse_ingredients_with_nutrition, parse_ingredients_from_image, correction_chat, get_image_base64, gpt_estimate_nutrition, expand_recipe
-from lookup_usda import usda_lookup, usda_lookup_by_fdc_id, usda_lookup_valid_for_portion, usda_search_options, usda_closest_match_to_estimate, scale_nutrition, get_piece_grams, get_grams_for_scaling, use_piece_grams_for_portion, validate_scaled_calories, validate_scaled_protein, UNIT_TO_GRAMS, PIECE_GRAMS_BY_FOOD, zero_calorie_nutrition_array
+from parser_gpt import parse_ingredients, parse_ingredients_from_image, correction_chat, get_image_base64, gpt_estimate_nutrition, expand_recipe
+from lookup_usda import usda_lookup, usda_lookup_by_fdc_id, usda_lookup_valid_for_portion, usda_search_options, scale_nutrition, get_piece_grams, get_grams_for_scaling, use_piece_grams_for_portion, validate_scaled_calories, validate_scaled_protein, UNIT_TO_GRAMS, PIECE_GRAMS_BY_FOOD, zero_calorie_nutrition_array
 from log_classifier import classify_log, classify_log_with_image
 from common_sense import common_sense_check
 from plausibility import plausibility_check_one
@@ -53,6 +53,9 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Temporarily disabled for vanilla name-first; set USE_PANTRY_AND_LEARNED=true to re-enable.
+USE_PANTRY_AND_LEARNED = os.getenv("USE_PANTRY_AND_LEARNED", "").lower() in ("1", "true", "yes")
 
 app = Flask(__name__)
 CORS(app, allow_headers=["Authorization", "Content-Type", "X-User-Id"])  # Dashboard can send user token + id
@@ -1684,11 +1687,8 @@ def parse_meal(meal_id):
                     "trace": trace,
                 }), 200
         
-        # Allow request body to override PARSE_FLOW (e.g. dashboard toggle)
-        flow_override = (body.get("flow") or "").strip().lower()
-        parse_flow = flow_override if flow_override in ("name_first", "gpt_first") else (os.getenv("PARSE_FLOW") or "name_first").strip().lower()
-        if parse_flow not in ("name_first", "gpt_first"):
-            parse_flow = "name_first"
+        # gpt_first is archived; always use name_first. See parse_api_archived_gpt_first.py to restore.
+        parse_flow = "name_first"
         # Parse with GPT
         parsed = []
         no_parse_reason = None  # for "No ingredients detected" response so dashboard can show why
@@ -1696,10 +1696,9 @@ def parse_meal(meal_id):
 
         # Caption "1 serving" etc. is not a food name — parse image only so we don't get [] from text and waste a call
         generic_caption = (text or "").strip().lower() in ("1 serving", "serving", "one serving", "")
-        _parse_text_fn = parse_ingredients_with_nutrition if parse_flow == "gpt_first" else parse_ingredients
         if text and image_field and not generic_caption:
             print("🧠 GPT: Parsing both text + image...")
-            ingredients_text = _parse_text_fn(text, user_context)
+            ingredients_text = parse_ingredients(text, user_context)
             ingredients_image = parse_ingredients_from_image(meal, PB_URL, token, user_context, image_b64=image_b64, caption=text)
             print(f"   from text: {len(ingredients_text)}, from image: {len(ingredients_image)}")
             parsed = ingredients_text + ingredients_image
@@ -1709,7 +1708,7 @@ def parse_meal(meal_id):
             # Fallback: if both returned 0, retry text-only once (in case image path failed)
             if not parsed and text:
                 print("   gpt_both returned 0, retrying text-only...")
-                parsed = _parse_text_fn(text, user_context)
+                parsed = parse_ingredients(text, user_context)
                 if parsed:
                     source = "gpt_text"
                     no_parse_reason = None
@@ -1724,7 +1723,7 @@ def parse_meal(meal_id):
             source = "gpt_image"
         else:
             print("🧠 GPT: Parsing text...")
-            parsed = _parse_text_fn(text, user_context)
+            parsed = parse_ingredients(text, user_context)
             source = "gpt_text"
             # #region agent log
             try:
@@ -1843,29 +1842,30 @@ def parse_meal(meal_id):
             ing = normalize_quantity(ing)
             quantity = ing.get("quantity", 1)
             unit = ing.get("unit", "serving")
-            # Apply learned correction so pantry/USDA see the corrected name and portion (don't overwrite explicit quantity/unit)
-            learned = check_learned_correction(ing.get("name", ""), user_id) if user_id else {}
-            if learned.get("should_correct"):
-                old_name = ing.get("name")
-                ing["name"] = learned["corrected_name"]
-                if not _has_specific_portion(ing):
-                    if learned.get("corrected_quantity") is not None:
-                        quantity = learned["corrected_quantity"]
-                    if learned.get("corrected_unit"):
-                        unit = learned["corrected_unit"]
-                name = ing["name"].lower().strip()
-                print(f"   🧠 LEARNED: '{old_name}' → '{ing['name']}' ({learned.get('reason', '')})")
-            else:
-                # Fallback: parsed name may be substring of a learned "actual" (e.g. "wegmans bone broth" → "wegmans organic chicken bone broth")
-                patterns = get_learned_patterns_for_user(user_id) if user_id else []
-                parsed_lower = (ing.get("name") or "").lower()
-                for p in patterns:
-                    actual = (p.get("learned") or "").strip()
-                    if actual and parsed_lower in actual.lower():
-                        ing["name"] = actual
-                        name = actual.lower().strip()
-                        print(f"   🧠 LEARNED (fallback): '{parsed_lower}' → '{actual}'")
-                        break
+            if USE_PANTRY_AND_LEARNED:
+                # Apply learned correction so pantry/USDA see the corrected name and portion (don't overwrite explicit quantity/unit)
+                learned = check_learned_correction(ing.get("name", ""), user_id) if user_id else {}
+                if learned.get("should_correct"):
+                    old_name = ing.get("name")
+                    ing["name"] = learned["corrected_name"]
+                    if not _has_specific_portion(ing):
+                        if learned.get("corrected_quantity") is not None:
+                            quantity = learned["corrected_quantity"]
+                        if learned.get("corrected_unit"):
+                            unit = learned["corrected_unit"]
+                    name = ing["name"].lower().strip()
+                    print(f"   🧠 LEARNED: '{old_name}' → '{ing['name']}' ({learned.get('reason', '')})")
+                else:
+                    # Fallback: parsed name may be substring of a learned "actual" (e.g. "wegmans bone broth" → "wegmans organic chicken bone broth")
+                    patterns = get_learned_patterns_for_user(user_id) if user_id else []
+                    parsed_lower = (ing.get("name") or "").lower()
+                    for p in patterns:
+                        actual = (p.get("learned") or "").strip()
+                        if actual and parsed_lower in actual.lower():
+                            ing["name"] = actual
+                            name = actual.lower().strip()
+                            print(f"   🧠 LEARNED (fallback): '{parsed_lower}' → '{actual}'")
+                            break
             # Prefer nutrition from visible label when GPT read it
             label_nutrition = ing.get("nutritionFromLabel")
             usda = None
@@ -1900,12 +1900,11 @@ def parse_meal(meal_id):
                 label_used = False
             
             if not scaled_nutrition:
-                # Pantry first for recurring items (name is already post-learned correction)
                 usda = None
                 pantry_match = None
-                if user_id:
+                if USE_PANTRY_AND_LEARNED and user_id:
+                    # Pantry first for recurring items (name is already post-learned correction)
                     pantry_match = lookup_pantry_match(user_id, name)
-                    # Use pantry's stored nutrition when available (e.g. from your 20g protein correction)
                     pn = pantry_match.get("nutrition") if pantry_match else None
                     if isinstance(pn, list) and len(pn) > 0 and any(n.get("nutrientName") == "Energy" for n in pn):
                         stored_qty = pantry_match.get("lastQuantity", 1)
@@ -1924,27 +1923,6 @@ def parse_meal(meal_id):
                         usda = usda_lookup_by_fdc_id(pantry_match["usdaCode"])
                         if usda:
                             print(f"   🏪 Pantry match: using USDA for '{pantry_match.get('name', name)}'")
-                if not scaled_nutrition and parse_flow == "gpt_first" and any(ing.get(k) is not None for k in ("calories", "protein", "carbs", "fat")):
-                    # GPT-first: pick USDA candidate that best matches GPT estimate, or use GPT estimate
-                    gpt_cal = float(ing.get("calories") or 0)
-                    gpt_protein = float(ing.get("protein") or 0)
-                    gpt_carbs = float(ing.get("carbs") or 0)
-                    gpt_fat = float(ing.get("fat") or 0)
-                    usda, scaled_nutrition, source_ing = usda_closest_match_to_estimate(
-                        name, quantity, unit, gpt_cal, gpt_protein, gpt_carbs, gpt_fat
-                    )
-                    if source_ing == "gpt":
-                        scaled_nutrition = [
-                            {"nutrientName": "Energy", "unitName": "KCAL", "value": round(gpt_cal, 2)},
-                            {"nutrientName": "Protein", "unitName": "G", "value": round(gpt_protein, 2)},
-                            {"nutrientName": "Carbohydrate, by difference", "unitName": "G", "value": round(gpt_carbs, 2)},
-                            {"nutrientName": "Total lipid (fat)", "unitName": "G", "value": round(gpt_fat, 2)},
-                        ]
-                        portion_grams = None
-                    else:
-                        if usda:
-                            serving_size_g_used = usda.get("serving_size_g", 100)
-                        portion_grams = round(get_grams_for_scaling(name, quantity, unit, usda.get("serving_size_g", 100) if usda else 100), 1)
                 if not scaled_nutrition and not usda:
                     print(f"🔎 Looking up USDA nutrition for: '{name}'")
                     _trace_append(trace, "usda_lookup", f"USDA lookup: {name}")
@@ -2215,7 +2193,7 @@ def parse_meal(meal_id):
                 saved.append(result)
                 _trace_append(trace, "saved_ingredient", f"Saved ingredient: {p['payload']['name']}", {"source": p["source_ing"]})
                 print(f"   ✅ Saved: {p['payload']['name']}")
-                if user_id and (is_branded_or_specific(p["ing"].get("name", "")) or result.get("usdaCode")):
+                if USE_PANTRY_AND_LEARNED and user_id and (is_branded_or_specific(p["ing"].get("name", "")) or result.get("usdaCode")):
                     try:
                         add_to_pantry(
                             user_id,
@@ -2234,6 +2212,7 @@ def parse_meal(meal_id):
             "ingredients": saved,
             "count": len(saved),
             "source": source,
+            "flow": parse_flow,
             "isFood": True,
             "categories": categories,
             "trace": trace,
@@ -3152,8 +3131,8 @@ def regression_golden_import():
 def regression_run_golden():
     """
     Run golden set: for each entry parse input text, compare actual to expected, run production checks.
-    Body (optional): { "tier": "mvp" | "full", "flow": "name_first" | "gpt_first" }.
-    Default tier from env PARSE_FLOW_TIER or "full"; default flow from env PARSE_FLOW or "name_first".
+    Body (optional): { "tier": "mvp" | "full", "flow": "name_first" }.
+    Default tier from env PARSE_FLOW_TIER or "full"; default flow "name_first" (gpt_first archived).
     Returns: { "results": [ { "id", "text", "passed", "failures", "actualIngredients" }, ... ] }
     """
     os.environ["REGRESSION_MODE"] = "true"

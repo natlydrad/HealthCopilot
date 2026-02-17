@@ -6,15 +6,15 @@ Each piece has a unique **3-digit ID** (e.g. `001`, `101`). Hundreds digit: `0` 
 
 ---
 
-## Parse flow variants (PARSE_FLOW)
+## Parse flow variants
 
-**Env:** `PARSE_FLOW` = `name_first` (default) | `gpt_first`.
+**Current:** Only **name_first** is used. The day view and Parse API always use name_first. No flow toggle in the UI.
 
-- **name_first:** Text is parsed with `parse_ingredients` (names/portions only); then per ingredient: pantry → label → USDA lookup → validate → GPT fallback. This is the default and production path.
-- **gpt_first:** Text is parsed with `parse_ingredients_with_nutrition` (one GPT call returns ingredients plus calories/protein/carbs/fat). Per ingredient, `usda_closest_match_to_estimate` picks the USDA candidate whose scaled nutrition best matches the GPT estimate (or keeps GPT estimate if no good USDA fit). Image-only or image+text: image-derived ingredients still use name_first (USDA + GPT fallback); only **text-derived** ingredients use the consolidated GPT + closest-match path. After pending is built, both flows rejoin: merge by USDA / merge by intent → deterministic rules → GPT common_sense (if tier=full) → plausibility → insert.
+**Env:** `USE_PANTRY_AND_LEARNED` = set to `true` to enable learned corrections, pantry lookup, and add-to-pantry in the name-first path. When unset or false, parsing is "vanilla" name-first (USDA lookup + GPT fallback only).
 
-**Golden set:** Run with `PARSE_FLOW=name_first` for baseline, then `PARSE_FLOW=gpt_first` to compare. Example:
-`PARSE_FLOW=gpt_first USE_PARSING_CACHE=false REGRESSION_MODE=true python regression/run_golden.py`. Each run appends a row to `regression/golden_results.jsonl` with a `flow` field (`name_first` or `gpt_first`).
+- **name_first:** Text is parsed with `parse_ingredients` (names/portions only); then per ingredient: (if USE_PANTRY_AND_LEARNED) pantry → label → USDA lookup → validate → GPT fallback; else USDA lookup → validate → GPT fallback directly. This is the only active path.
+
+**Archived (not selectable):** `gpt_first` was archived. Logic preserved in `parse_api_archived_gpt_first.py` for possible future restore. Previously: one GPT call for parse+nutrition, then `usda_closest_match_to_estimate` per ingredient.
 
 ---
 

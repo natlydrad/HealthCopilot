@@ -304,7 +304,7 @@ USE_PARSING_CACHE=false REGRESSION_MODE=true python regression/run_stability.py
 | Run golden set (accuracy check) | `USE_PARSING_CACHE=false REGRESSION_MODE=true python regression/run_golden.py` |
 | Run golden set and tag version for log | `PARSE_PROMPT_VERSION=my-tag USE_PARSING_CACHE=false REGRESSION_MODE=true python regression/run_golden.py` |
 | Run golden set with MVP only | `PARSE_FLOW_TIER=mvp USE_PARSING_CACHE=false REGRESSION_MODE=true python regression/run_golden.py` |
-| Run golden set with GPT-first flow | `PARSE_FLOW=gpt_first USE_PARSING_CACHE=false REGRESSION_MODE=true python regression/run_golden.py` (compare to name_first; see [parse-flow-breakdown.md](parse-flow-breakdown.md#parse-flow-variants-parse_flow)) |
+| Run golden set with pantry/learned enabled | `USE_PANTRY_AND_LEARNED=true USE_PARSING_CACHE=false REGRESSION_MODE=true python regression/run_golden.py` (name_first with learned corrections and pantry; see [parse-flow-breakdown.md](parse-flow-breakdown.md)) |
 | Run stability check | `USE_PARSING_CACHE=false REGRESSION_MODE=true python regression/run_stability.py` |
 | Run regression meals (declarative suite) | `USE_PARSING_CACHE=false REGRESSION_MODE=true python regression/run_regression.py` |
 

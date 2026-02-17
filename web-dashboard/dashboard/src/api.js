@@ -393,23 +393,22 @@ export async function createIngredient(ingredient) {
 }
 
 // Parse and save ingredients for a meal (parse-on-view)
-// options: { flow?: "name_first" | "gpt_first" } — overrides parse path when provided
+// options: { flow?: "name_first" } — always name_first (gpt_first archived)
 export async function parseAndSaveMeal(meal, options = {}) {
   const hasText = meal.text?.trim();
   const hasImage = meal.image;
   if (!hasText && !hasImage) return { ingredients: [], classificationResult: null };
 
-  flowLog.add({ type: "action", message: "Parse requested", detail: { mealId: meal.id, hasImage: !!meal.image, flow: options.flow } });
+  const flow = "name_first";
+  flowLog.add({ type: "action", message: "Parse requested", detail: { mealId: meal.id, hasImage: !!meal.image, flow } });
 
-  // Try Parse API first (supports images + GPT)
+  // Try Parse API first (supports images + GPT). Send flow in URL too so server gets it even if proxy drops body.
   try {
     const useProxy = import.meta.env.DEV && !import.meta.env.VITE_PARSE_API_URL;
-    const url = useProxy ? `/parse-api/parse/${meal.id}` : `${PARSE_API_URL}/parse/${meal.id}`;
+    const base = useProxy ? `/parse-api/parse/${meal.id}` : `${PARSE_API_URL}/parse/${meal.id}`;
+    const url = `${base}?flow=${encodeURIComponent(flow)}`;
     const timezone = typeof Intl !== "undefined" && Intl.DateTimeFormat ? Intl.DateTimeFormat().resolvedOptions().timeZone : "";
-    const body = { ...(timezone ? { timezone } : {}) };
-    if (options.flow && (options.flow === "name_first" || options.flow === "gpt_first")) {
-      body.flow = options.flow;
-    }
+    const body = { flow, ...(timezone ? { timezone } : {}) };
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
@@ -417,6 +416,10 @@ export async function parseAndSaveMeal(meal, options = {}) {
     });
     if (res.ok) {
       const data = await res.json();
+      const usedFlow = data.flow || "(not returned)";
+      if (usedFlow !== flow) {
+        console.warn(`[Parse] Toggle is "${flow}" but API used "${usedFlow}" — check parse API logs.`);
+      }
       if (Array.isArray(data.trace)) {
         for (const t of data.trace) {
           flowLog.add({
@@ -430,9 +433,9 @@ export async function parseAndSaveMeal(meal, options = {}) {
       const count = (data.ingredients || []).length;
       flowLog.add({
         type: "result",
-        message: `Parse done: ${count} ingredients, isFood: ${data.isFood !== false}`,
+        message: `Parse done: ${count} ingredients, isFood: ${data.isFood !== false}, flow: ${usedFlow}`,
         source: "parse-api",
-        detail: { count, isFood: data.isFood, source: data.source },
+        detail: { count, isFood: data.isFood, source: data.source, flow: usedFlow },
       });
       return {
         ingredients: data.ingredients || [],

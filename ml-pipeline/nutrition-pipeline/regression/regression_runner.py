@@ -11,13 +11,12 @@ import os
 
 from lookup_usda import (
     resolve_usda_for_ingredient,
-    usda_closest_match_to_estimate,
     zero_calorie_nutrition_array,
     get_grams_for_scaling,
     get_piece_grams,
     use_piece_grams_for_portion,
 )
-from parser_gpt import parse_ingredients, parse_ingredients_with_nutrition, gpt_estimate_nutrition
+from parser_gpt import parse_ingredients, gpt_estimate_nutrition
 from enrich_common_sense import apply_deterministic_rules
 
 
@@ -179,66 +178,11 @@ def parse_meal_text_to_ingredients(text: str, tier: str | None = None, flow: str
         flow = (os.getenv("PARSE_FLOW") or "name_first").strip().lower()
     if flow not in ("name_first", "gpt_first"):
         flow = "name_first"
-
+    # gpt_first archived; use parse_api_archived_gpt_first.py to restore.
     if flow == "gpt_first":
-        parsed = parse_ingredients_with_nutrition(text, "")
-        if not parsed:
-            return []
-        parsed = _merge_ingredients_by_name(parsed)
-        def _ing_key(ing):
-            n = (ing.get("name") or "").strip().lower()
-            q = float(ing.get("quantity", 1) or 1)
-            u = (ing.get("unit") or "serving").strip().lower()
-            return (n, q, u)
-        seen = set()
-        deduped = []
-        for ing in parsed:
-            k = _ing_key(ing)
-            if k in seen:
-                continue
-            seen.add(k)
-            deduped.append(ing)
-        ingredients = []
-        for ing in deduped:
-            ing = _normalize_quantity(dict(ing))
-            name = (ing.get("name") or "").lower().strip()
-            if len(name) < 2:
-                continue
-            quantity = float(ing.get("quantity", 1) or 1)
-            unit = (ing.get("unit") or "serving").strip()
-            gpt_cal = float(ing.get("calories") or 0)
-            gpt_protein = float(ing.get("protein") or 0)
-            gpt_carbs = float(ing.get("carbs") or 0)
-            gpt_fat = float(ing.get("fat") or 0)
-            usda, scaled_nutrition, source_ing = usda_closest_match_to_estimate(
-                ing.get("name", ""), quantity, unit, gpt_cal, gpt_protein, gpt_carbs, gpt_fat
-            )
-            if source_ing == "gpt":
-                scaled_nutrition = [
-                    {"nutrientName": "Energy", "unitName": "KCAL", "value": round(gpt_cal, 2)},
-                    {"nutrientName": "Protein", "unitName": "G", "value": round(gpt_protein, 2)},
-                    {"nutrientName": "Carbohydrate, by difference", "unitName": "G", "value": round(gpt_carbs, 2)},
-                    {"nutrientName": "Total lipid (fat)", "unitName": "G", "value": round(gpt_fat, 2)},
-                ]
-            serving_size = usda.get("serving_size_g", 100.0) if usda else 100.0
-            piece_g = get_piece_grams(ing.get("name", ""))
-            if use_piece_grams_for_portion(unit.lower(), name, quantity, piece_g) and piece_g is not None:
-                serving_size = piece_g
-            portion_grams = round(get_grams_for_scaling(ing.get("name", ""), quantity, unit, serving_size), 1)
-            fg = ing.get("foodGroupServings") if isinstance(ing.get("foodGroupServings"), dict) else None
-            ing_dict = {
-                "name": ing.get("name", ""),
-                "quantity": quantity,
-                "unit": unit,
-                "source": source_ing,
-                "nutrition": scaled_nutrition,
-                "portionGrams": portion_grams,
-                "foodGroupServings": fg,
-            }
-            if usda and usda.get("name"):
-                ing_dict["usda_matched_name"] = usda.get("name")
-            ingredients.append(ing_dict)
-    else:
+        flow = "name_first"
+
+    if flow == "name_first":
         parsed = parse_ingredients(text, user_context="")
         if not parsed:
             return []

@@ -210,20 +210,6 @@ export default function DayDetail() {
   const [dayRegressionResults, setDayRegressionResults] = useState(null);
   const [dayRegressionExpandedId, setDayRegressionExpandedId] = useState(null);
   const [goldenTagsByMealId, setGoldenTagsByMealId] = useState({});
-  const [parseFlow, setParseFlow] = useState(() => {
-    try {
-      const s = localStorage.getItem("parseFlow");
-      return s === "gpt_first" ? "gpt_first" : "name_first";
-    } catch {
-      return "name_first";
-    }
-  });
-  const setParseFlowAndPersist = (flow) => {
-    setParseFlow(flow);
-    try {
-      localStorage.setItem("parseFlow", flow);
-    } catch {}
-  };
 
   const refreshTotals = () => setTotalsRefreshTrigger((t) => t + 1);
 
@@ -415,7 +401,7 @@ export default function DayDetail() {
         // #region agent log
         fetch('http://127.0.0.1:7242/ingest/b81179ea-362a-4b1e-9962-8572fc6e73fd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DayDetail.jsx:handleParseEverything',message:'Before parse meal',data:{mealId:meal.id,index:completed},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
         // #endregion
-        const result = await parseAndSaveMeal(meal, { flow: parseFlow });
+        const result = await parseAndSaveMeal(meal, { flow: "name_first" });
         completed += 1;
         setParseAllProgress({ current: completed, total: toParse.length });
         // #region agent log
@@ -502,24 +488,6 @@ export default function DayDetail() {
       
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <h1 className="text-2xl font-bold">{date}</h1>
-        <div className="flex items-center gap-1 rounded-lg border border-slate-300 bg-slate-100 p-0.5" role="group" aria-label="Parse path">
-          <button
-            type="button"
-            onClick={() => setParseFlowAndPersist("name_first")}
-            className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${parseFlow === "name_first" ? "bg-white text-slate-800 shadow" : "text-slate-600 hover:text-slate-800"}`}
-            title="Parse names first, then USDA lookup per ingredient"
-          >
-            Name first
-          </button>
-          <button
-            type="button"
-            onClick={() => setParseFlowAndPersist("gpt_first")}
-            className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${parseFlow === "gpt_first" ? "bg-white text-slate-800 shadow" : "text-slate-600 hover:text-slate-800"}`}
-            title="One GPT call for parse + nutrition, then USDA closest-match"
-          >
-            GPT first
-          </button>
-        </div>
         <button
           type="button"
           onClick={handleParseEverything}
@@ -739,7 +707,6 @@ export default function DayDetail() {
           refreshIngredientsTrigger={refreshIngredientsTrigger}
           meal={meal}
           goldenTags={goldenTagsByMealId[meal.id] || []}
-          parseFlow={parseFlow}
           onMealUpdated={(mid, updates) => {
             setMeals((prev) => prev.map((m) => (m.id === mid ? { ...m, ...updates } : m)));
             if (updates.goldenTags !== undefined) {
@@ -968,7 +935,7 @@ const GOLDEN_TAG_LABELS = {
   unique_inputs: "Unique inputs",
 };
 
-function MealCard({ date, refreshIngredientsTrigger, meal, goldenTags = [], parseFlow = "name_first", onMealUpdated, onTotalsRefresh, frameworkAttribution }) {
+function MealCard({ date, refreshIngredientsTrigger, meal, goldenTags = [], onMealUpdated, onTotalsRefresh, frameworkAttribution }) {
   const [ingredients, setIngredients] = useState([]);
   const [correcting, setCorrecting] = useState(null);
   const [parsing, setParsing] = useState(false);
@@ -1112,7 +1079,7 @@ function MealCard({ date, refreshIngredientsTrigger, meal, goldenTags = [], pars
     setEmptyParseReason(null);
     setParseSuccessMessage(null);
     try {
-      const result = await parseAndSaveMeal(meal, { flow: parseFlow });
+      const result = await parseAndSaveMeal(meal, { flow: "name_first" });
       const data = result?.ingredients !== undefined ? result : { ingredients: result, classificationResult: null };
       const ingredientsList = Array.isArray(data.ingredients) ? data.ingredients : [];
       setIngredients(ingredientsList);

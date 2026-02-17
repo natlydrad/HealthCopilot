@@ -86,6 +86,7 @@ def main():
     flow = (os.getenv("PARSE_FLOW") or "name_first").strip().lower()
     if flow not in ("name_first", "gpt_first"):
         flow = "name_first"
+    # gpt_first is archived; regression_runner treats it as name_first (see parse_api_archived_gpt_first.py)
     version = (os.getenv("PARSE_PROMPT_VERSION") or "unknown").strip()
 
     print(f"Running golden set: {len(entries)} entries (tier={tier}, flow={flow}, version={version})")
