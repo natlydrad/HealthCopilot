@@ -45,6 +45,7 @@ from lookup_usda import usda_lookup, usda_lookup_by_fdc_id, usda_lookup_valid_fo
 from log_classifier import classify_log, classify_log_with_image
 from common_sense import common_sense_check
 from plausibility import plausibility_check_one
+from parse_fidelity import parse_fidelity_check
 from enrich_common_sense import apply_deterministic_rules
 import requests
 import os
@@ -1644,6 +1645,8 @@ def parse_meal(meal_id):
                         },
                         "plausibilityStatus": ing.get("plausibilityStatus"),
                         "plausibilityResult": ing.get("plausibilityResult"),
+                        "parseFidelityStatus": ing.get("parseFidelityStatus"),
+                        "parseFidelityResult": ing.get("parseFidelityResult"),
                     }
                     result = insert_ingredient(payload)
                     if result:
@@ -1817,6 +1820,31 @@ def parse_meal(meal_id):
             print(f"   📋 Deduped parsed ingredients: {len(parsed)} -> {len(parsed_deduped)}")
         parsed = parsed_deduped
         _align_quantity_from_meal_text(text, parsed)
+
+        # Parse fidelity: verify each parsed name matches meal text (no wrong product substitution)
+        try:
+            fidelity_results = parse_fidelity_check(text, parsed)
+            n_ok = n_mismatch = n_ambiguous = 0
+            for i, res in enumerate(fidelity_results):
+                if i < len(parsed):
+                    parsed[i]["parseFidelityStatus"] = res.get("status", "ok")
+                    parsed[i]["parseFidelityResult"] = {
+                        "why": res.get("why") or "",
+                        "suggestedName": res.get("suggestedName"),
+                    }
+                    if res.get("status") == "mismatch":
+                        n_mismatch += 1
+                    elif res.get("status") == "ambiguous":
+                        n_ambiguous += 1
+                    else:
+                        n_ok += 1
+            _trace_append(trace, "parse_fidelity", "Parse fidelity check", {"ok": n_ok, "mismatch": n_mismatch, "ambiguous": n_ambiguous})
+        except Exception as e:
+            print(f"   ⚠️ Parse fidelity check failed: {e}")
+            for ing in parsed:
+                ing["parseFidelityStatus"] = None
+                ing["parseFidelityResult"] = None
+            _trace_append(trace, "parse_fidelity", "Parse fidelity check failed", {"error": str(e)})
 
         # Process and save ingredients (collect pending, then common-sense check, then insert)
         saved = []
@@ -2083,7 +2111,9 @@ def parse_meal(meal_id):
                     "partialLabel": partial_label,
                     "foodGroupServings": ing.get("foodGroupServings") if isinstance(ing.get("foodGroupServings"), dict) else None,
                     **({"recipeFor": recipe_for} if recipe_for else {}),
-                }
+                },
+                "parseFidelityStatus": ing.get("parseFidelityStatus"),
+                "parseFidelityResult": ing.get("parseFidelityResult"),
             }
             
             pending.append({
@@ -2186,6 +2216,22 @@ def parse_meal(meal_id):
             for p in pending:
                 p["payload"]["plausibilityStatus"] = None
                 p["payload"]["plausibilityResult"] = None
+
+        # Override plausibility to parse_mismatch when fidelity says wrong product was parsed
+        for p in pending:
+            payload = p["payload"]
+            fid_status = payload.get("parseFidelityStatus")
+            if fid_status in ("mismatch", "ambiguous"):
+                fid_result = payload.get("parseFidelityResult") or {}
+                payload["plausibilityStatus"] = "parse_mismatch"
+                payload["plausibilityResult"] = {
+                    "why": fid_result.get("why") or "Parsed name may not match what you wrote.",
+                    "whatToVerify": [],
+                    "confidence": 0.8 if fid_status == "mismatch" else 0.5,
+                    "suggestedCorrection": fid_result.get("suggestedName"),
+                    "checks": [],
+                }
+                _trace_append(trace, "plausibility", f"Parse mismatch: {payload.get('name')} -> parse_mismatch", {"status": "parse_mismatch"})
         
         for p in pending:
             result = insert_ingredient(p["payload"])

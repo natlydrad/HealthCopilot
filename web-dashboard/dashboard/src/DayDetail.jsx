@@ -1492,16 +1492,20 @@ function MealCard({ date, refreshIngredientsTrigger, meal, goldenTags = [], onMe
               ? "bg-red-50 border-l-4 border-red-400"
               : plausibilityStatus === "suspicious"
                 ? "bg-orange-50 border-l-4 border-orange-400"
-                : lowConf
-                  ? "bg-amber-50 border-l-4 border-amber-400"
-                  : "";
+                : plausibilityStatus === "parse_mismatch"
+                  ? "bg-purple-50 border-l-4 border-purple-400"
+                  : lowConf
+                    ? "bg-amber-50 border-l-4 border-amber-400"
+                    : "";
             const plausibilityHoverClass = plausibilityStatus === "likely_wrong"
               ? "hover:bg-red-100"
               : plausibilityStatus === "suspicious"
                 ? "hover:bg-orange-100"
-                : lowConf
-                  ? "hover:bg-amber-100"
-                  : "hover:bg-gray-50";
+                : plausibilityStatus === "parse_mismatch"
+                  ? "hover:bg-purple-100"
+                  : lowConf
+                    ? "hover:bg-amber-100"
+                    : "hover:bg-gray-50";
 
             return (
               <li 
@@ -1513,12 +1517,18 @@ function MealCard({ date, refreshIngredientsTrigger, meal, goldenTags = [], onMe
                   className={`flex items-center gap-2 p-2 cursor-pointer flex-wrap ${plausibilityHoverClass}`}
                 >
                   {/* Plausibility: Verify badge + visible reasoning */}
-                  {(plausibilityStatus === "suspicious" || plausibilityStatus === "likely_wrong") && (
+                  {(plausibilityStatus === "suspicious" || plausibilityStatus === "likely_wrong" || plausibilityStatus === "parse_mismatch") && (
                     <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${plausibilityStatus === "likely_wrong" ? "bg-red-200 text-red-800" : "bg-orange-200 text-orange-800"}`}
-                      title={plausibilityTooltip || "Macros may be wrong — tap to verify"}
+                      className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${
+                        plausibilityStatus === "parse_mismatch"
+                          ? "bg-purple-200 text-purple-800"
+                          : plausibilityStatus === "likely_wrong"
+                            ? "bg-red-200 text-red-800"
+                            : "bg-orange-200 text-orange-800"
+                      }`}
+                      title={plausibilityTooltip || (plausibilityStatus === "parse_mismatch" ? "Parsed name may not match what you wrote — tap to see suggestion" : "Macros may be wrong — tap to verify")}
                     >
-                      Verify
+                      {plausibilityStatus === "parse_mismatch" ? "Parse mismatch" : "Verify"}
                     </span>
                   )}
                   {/* Low confidence indicator */}
@@ -1643,12 +1653,18 @@ function MealCard({ date, refreshIngredientsTrigger, meal, goldenTags = [], onMe
                   </button>
                 </div>
                 {/* Plausibility: GPT ran checks; show results so user sees what was checked */}
-                {(plausibilityStatus === "suspicious" || plausibilityStatus === "likely_wrong") && plausibilityResult && (
+                {(plausibilityStatus === "suspicious" || plausibilityStatus === "likely_wrong" || plausibilityStatus === "parse_mismatch") && plausibilityResult && (
                   <div
-                    className={`px-2 pb-1.5 pt-0.5 border-t text-[11px] ${plausibilityStatus === "likely_wrong" ? "border-red-200/60 bg-red-50/50" : "border-orange-200/60 bg-orange-50/50"}`}
+                    className={`px-2 pb-1.5 pt-0.5 border-t text-[11px] ${
+                      plausibilityStatus === "parse_mismatch"
+                        ? "border-purple-200/60 bg-purple-50/50"
+                        : plausibilityStatus === "likely_wrong"
+                          ? "border-red-200/60 bg-red-50/50"
+                          : "border-orange-200/60 bg-orange-50/50"
+                    }`}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {(plausibilityResult.checks || []).length > 0 && (
+                    {(plausibilityResult.checks || []).length > 0 && plausibilityStatus !== "parse_mismatch" && (
                       <p className="text-gray-600 mb-1">
                         <span className="font-medium">GPT checked: </span>
                         {(plausibilityResult.checks || []).map((c) => {
@@ -1658,7 +1674,12 @@ function MealCard({ date, refreshIngredientsTrigger, meal, goldenTags = [], onMe
                       </p>
                     )}
                     <p className="text-gray-600 mb-0.5">
-                      {plausibilityStatus === "likely_wrong" ? "Red = macros likely wrong." : "Orange = something may be off."} {plausibilityResult.why}
+                      {plausibilityStatus === "parse_mismatch"
+                        ? "Purple = wrong product parsed."
+                        : plausibilityStatus === "likely_wrong"
+                          ? "Red = macros likely wrong."
+                          : "Orange = something may be off."}{" "}
+                      {plausibilityResult.why}
                     </p>
                     {(plausibilityResult.whatToVerify || []).length > 0 && (
                       <p className="text-gray-500 mb-0.5">

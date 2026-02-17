@@ -12,6 +12,12 @@ Carry context across sessions. At the end of a logical unit of work (or when you
 
 *(Append new entries below with date and a 2–3 line summary.)*
 
+**2026-02-16 — Parse fidelity check**
+
+1. Implemented parse fidelity check per plan: new `parse_fidelity.py` with one batch GPT call (`parse_fidelity_check(meal_text, parsed)`) returning per-ingredient status (ok/mismatch/ambiguous), why, suggestedName. Parse API: run fidelity after merge/dedupe/align; attach results to parsed; add parseFidelityStatus/parseFidelityResult to payload and copy path; after plausibility loop, override to plausibilityStatus "parse_mismatch" when fidelity is mismatch/ambiguous. Dashboard: purple UI for parse_mismatch (badge "Parse mismatch", row and expandable with border-purple / bg-purple-50). docs/parse-flow-breakdown.md: step 216.
+2. None.
+3. N/A
+
 **2026-02-16 — Nutrition examples in parse_ingredients_with_nutrition**
 
 1. Added concrete per-food nutrition examples to the gpt_first parse prompt: new `_NUTRITION_EXAMPLES` constant (10 examples: egg, chicken breast, wings, apple, orange, strawberries, black coffee, cooked rice, cabbage, whole milk) in the same style as gpt_estimate_nutrition. Injected after `_CALIBRATION_HINTS` in the parse_ingredients_with_nutrition prompt so the model has clear numeric targets for stated portions.
