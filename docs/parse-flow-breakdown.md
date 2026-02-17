@@ -91,7 +91,7 @@ USDA sanity checks, drink/tea logic, portion scaling, display name, post-parse c
 | **213** | Merge by same USDA product | `parse_api.py` | `_merge_pending_by_usda(pending)` so "frank's red hot" and "red hot sauce" that map to same USDA become one ingredient. |
 | **214** | Merge by similar name intent | `parse_api.py` | `_merge_pending_by_similar_name_intent(pending)` (e.g. same user phrase → keep sauce, drop pickles). |
 | **215** | Clear before parse / duplicate safety | `parse_api.py` | `_clear_meal_ingredients_internal(meal_id)` before adding (copy or parse); re-check remaining and retry clear once to avoid duplicates. |
-| **216** | Parse fidelity check | `parse_api.py`, `parse_fidelity.py` | After merge/dedupe/align, one GPT call (`parse_fidelity_check(meal_text, parsed)`) to verify each parsed name matches meal text; result attached to each `ing` and stored on ingredient; mismatch/ambiguous override plausibility to `parse_mismatch`. |
+| **216** | Parse fidelity check | `parse_api.py`, `parse_fidelity.py` | After merge/dedupe/align, one GPT call (`parse_fidelity_check(meal_text, parsed, parsed_from_image=...)`) to verify each parsed name matches meal text; when source is image or both, fidelity uses an image-aware rule so caption-only mismatches are not flagged; result attached to each `ing` and stored on ingredient; mismatch/ambiguous override plausibility to `parse_mismatch`. |
 
 ---
 

@@ -12,6 +12,12 @@ Carry context across sessions. At the end of a logical unit of work (or when you
 
 *(Append new entries below with date and a 2–3 line summary.)*
 
+**2026-02-16 — Image-based parse fidelity**
+
+1. Fidelity check now treats image-based parses (source gpt_image or gpt_both) with an image-aware prompt: ingredients are not marked mismatch solely because the caption is generic or empty; only clear hallucinations or wrong-product get mismatch. parse_api.py passes `parsed_from_image=(source in ("gpt_image", "gpt_both"))` into `parse_fidelity_check`; parse_fidelity.py adds `parsed_from_image` param and a second prompt for image mode. docs/parse-flow-breakdown.md step 216 updated.
+2. None.
+3. N/A
+
 **2026-02-16 — Parse fidelity check**
 
 1. Implemented parse fidelity check per plan: new `parse_fidelity.py` with one batch GPT call (`parse_fidelity_check(meal_text, parsed)`) returning per-ingredient status (ok/mismatch/ambiguous), why, suggestedName. Parse API: run fidelity after merge/dedupe/align; attach results to parsed; add parseFidelityStatus/parseFidelityResult to payload and copy path; after plausibility loop, override to plausibilityStatus "parse_mismatch" when fidelity is mismatch/ambiguous. Dashboard: purple UI for parse_mismatch (badge "Parse mismatch", row and expandable with border-purple / bg-purple-50). docs/parse-flow-breakdown.md: step 216.

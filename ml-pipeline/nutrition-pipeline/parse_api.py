@@ -1823,7 +1823,9 @@ def parse_meal(meal_id):
 
         # Parse fidelity: verify each parsed name matches meal text (no wrong product substitution)
         try:
-            fidelity_results = parse_fidelity_check(text, parsed)
+            fidelity_results = parse_fidelity_check(
+                text, parsed, parsed_from_image=(source in ("gpt_image", "gpt_both"))
+            )
             n_ok = n_mismatch = n_ambiguous = 0
             for i, res in enumerate(fidelity_results):
                 if i < len(parsed):

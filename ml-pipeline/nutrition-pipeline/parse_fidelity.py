@@ -33,14 +33,17 @@ def _repair_json_array(raw: str) -> str:
     return s
 
 
-def parse_fidelity_check(meal_text: str, parsed: list) -> list[dict]:
+def parse_fidelity_check(meal_text: str, parsed: list, parsed_from_image: bool = False) -> list[dict]:
     """
     For each parsed ingredient, verify the parsed name is a plausible interpretation
     of the meal text (not a different product). One batch GPT call.
 
     Args:
-        meal_text: Original meal description.
+        meal_text: Original meal description (or caption when parsed_from_image).
         parsed: List of parsed items, each with name, quantity, unit.
+        parsed_from_image: If True, ingredients were parsed from an image (and optionally
+            a caption). Use image-aware rules: do not mark mismatch solely because the
+            caption does not mention the ingredient.
 
     Returns:
         List of dicts, same length and order as parsed. Each dict:
@@ -55,7 +58,27 @@ def parse_fidelity_check(meal_text: str, parsed: list) -> list[dict]:
         for ing in parsed
     )
 
-    prompt = f"""You are a parse fidelity checker. The user wrote a meal description, and a parser produced a list of ingredients. For EACH parsed ingredient, decide whether the PARSED NAME is a reasonable interpretation of what the user wrote—or whether the parser substituted a DIFFERENT product.
+    if parsed_from_image:
+        prompt = f"""You are a parse fidelity checker. The meal was parsed from an image. The caption (if any) may be generic (e.g. "1 serving") or empty.
+
+Caption (optional):
+"{meal_text or '(none)'}"
+
+Parsed ingredients (one per line):
+{ingredients_blob}
+
+Rules:
+- "ok": The parsed name plausibly describes food that could be visible in a photo. Do NOT mark mismatch just because the caption does not mention that ingredient.
+- "mismatch": The ingredient clearly does not belong (e.g. parser hallucination, wrong product that could not be in the photo).
+- "ambiguous": You truly cannot tell whether the ingredient could be in the photo.
+
+When status is "mismatch" or "ambiguous", set "suggestedName" to a better name (or null if unclear). When "ok", set "suggestedName" to null.
+
+Output ONLY a JSON array with exactly {len(parsed)} objects, in the same order as the parsed ingredients. No markdown, no explanation.
+Each object: {{"status": "ok" | "mismatch" | "ambiguous", "why": "one sentence", "suggestedName": "string or null"}}
+"""
+    else:
+        prompt = f"""You are a parse fidelity checker. The user wrote a meal description, and a parser produced a list of ingredients. For EACH parsed ingredient, decide whether the PARSED NAME is a reasonable interpretation of what the user wrote—or whether the parser substituted a DIFFERENT product.
 
 Meal text (what the user wrote):
 "{meal_text}"
