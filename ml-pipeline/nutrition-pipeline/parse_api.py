@@ -2174,12 +2174,47 @@ def parse_meal(meal_id):
         except Exception as e:
             print(f"   ⚠️ Common sense step failed, inserting as-is: {e}")
         
+        # Fidelity on display names: re-check the names we actually show (after USDA/merge) so wrong-product uses display vs meal text
+        try:
+            display_for_fidelity = [
+                {"name": p["payload"]["name"], "quantity": p["payload"]["quantity"], "unit": p["payload"].get("unit") or "serving"}
+                for p in pending
+            ]
+            if display_for_fidelity:
+                display_fidelity_results = parse_fidelity_check(
+                    text, display_for_fidelity, parsed_from_image=(source in ("gpt_image", "gpt_both"))
+                )
+                for i, res in enumerate(display_fidelity_results):
+                    if i < len(pending):
+                        payload = pending[i]["payload"]
+                        display_status = res.get("status", "ok")
+                        # Do not overwrite main fidelity "ok" with display "mismatch"/"ambiguous": display runs on USDA names and can false-positive (e.g. pork shoulder + "cooked, broiled").
+                        if display_status == "ok" or payload.get("parseFidelityStatus") != "ok":
+                            payload["parseFidelityStatus"] = display_status
+                            payload["parseFidelityResult"] = {
+                                "why": res.get("why") or "",
+                                "suggestedName": res.get("suggestedName"),
+                            }
+        except Exception as e:
+            print(f"   ⚠️ Display-name fidelity check failed: {e}")
+            for p in pending:
+                p["payload"]["parseFidelityStatus"] = None
+                p["payload"]["parseFidelityResult"] = None
+
         # Plausibility check: per-ingredient macro smell test (ok / suspicious / likely_wrong)
         # Fidelity first: if wrong product (mismatch/ambiguous), set parse_mismatch and skip macro check
         try:
             for p in pending:
                 payload = p["payload"]
                 fid_status = payload.get("parseFidelityStatus")
+                # #region agent log
+                try:
+                    _branch = "parse_mismatch" if fid_status in ("mismatch", "ambiguous") else "plausibility_check_one"
+                    _log_pl = __import__("json").dumps({"timestamp": __import__("time").time()*1000, "location": "parse_api.py:plausibility_loop", "message": "plausibility_fidelity_branch", "data": {"name": payload.get("name"), "parseFidelityStatus": fid_status, "branch": _branch}, "hypothesisId": "H1"}) + "\n"
+                    open("/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log", "a").write(_log_pl)
+                except Exception:
+                    pass
+                # #endregion
                 if fid_status in ("mismatch", "ambiguous"):
                     fid_result = payload.get("parseFidelityResult") or {}
                     payload["plausibilityStatus"] = "parse_mismatch"

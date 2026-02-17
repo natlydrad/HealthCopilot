@@ -12,6 +12,12 @@ Carry context across sessions. At the end of a logical unit of work (or when you
 
 *(Append new entries below with date and a 2–3 line summary.)*
 
+**2026-02-16 — Parse fidelity: do not overwrite main ok with display mismatch**
+
+1. Display fidelity was overwriting main fidelity: for "3/4 cup pork shoulder" main correctly returned ok (parsed "pork shoulder"), then display fidelity ran on USDA name "Pork, Shoulder breast, ... cooked, broiled" and returned mismatch, so the UI showed Parse mismatch. parse_api.py now only applies display fidelity result when display is "ok" or when main was not "ok", so main "ok" is never overwritten by display "mismatch"/"ambiguous".
+2. N/A
+3. N/A
+
 **2026-02-16 — Parse fidelity: reduce false positives**
 
 1. Updated text-based fidelity prompt in parse_fidelity.py: added explicit "Do NOT flag" rules (cooking state when unspecified, USDA-style normalization, generic→specific same product) and "DO flag" rules (different product type, wrong variety/brand, opposite qualifier when user was explicit); added four example judgments (pork shoulder ok, green tea ok, almond milk mismatch, raw pork mismatch). Restarted parse API.
