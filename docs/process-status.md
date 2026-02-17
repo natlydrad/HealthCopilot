@@ -12,6 +12,12 @@ Carry context across sessions. At the end of a logical unit of work (or when you
 
 *(Append new entries below with date and a 2–3 line summary.)*
 
+**2026-02-16 — Repeat intent: anchor cues, trailing text, food-based source meal**
+
+1. parse_api.py: Rewrote _parse_repeat_intent to use a small anchor set (another, more, same, again, repeat, second, third, same as, like before, like earlier) with trailing text allowed (e.g. "2 more cookies", "another coffee"). Extracts multiplier (digits or number-words) and mentioned_food. Added _pick_source_meal_for_repeat: when food is mentioned, finds most recent meal with matching ingredient; otherwise uses most recent meal. _ingredient_matches_food does flexible substring/token matching. Restarted parse API.
+2. None.
+3. N/A
+
 **2026-02-16 — Always use USDA canonical name when USDA match is used**
 
 1. parse_api.py: when we have a valid USDA match and use its nutrition, we now always set display_name to the USDA canonical name (usda.get("name", ing["name"])). Removed the one-word exception that preferred parsed name over USDA "Word, rest"; _usda_display_name_ok is still used only to reject wrong matches (e.g. pork → Oolong tea). Restarted parse API.

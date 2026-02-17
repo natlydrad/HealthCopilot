@@ -425,34 +425,100 @@ def _usda_display_name_ok(parsed_name: str, usda_name: str) -> bool:
     return any(w in ul for w in significant)
 
 
-def _parse_repeat_intent(raw: str) -> tuple[bool, float]:
+# Anchor cues for repeat-intent. Allow trailing text (e.g. "cookies", "as before").
+_REPEAT_ANCHORS = (
+    "same as", "like before", "like earlier",  # multi-word first
+    "another", "more", "same", "again", "repeat", "second", "third",
+)
+_NON_FOOD_TRAILING = frozenset({"as before", "as breakfast", "like before", "like earlier", "before", "earlier", "one"})
+_NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+                 "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
+
+
+def _parse_repeat_intent(raw: str) -> tuple[bool, float, str | None]:
     """
-    Detect 'repeat previous meal' intent from caption. Returns (is_repeat, multiplier).
-    Pattern-based — no explicit phrase list.
+    Detect 'repeat previous meal' intent from caption.
+    Returns (is_repeat, multiplier, mentioned_food).
+    mentioned_food: food term for source-meal matching (e.g. "cookies"), or None.
     """
     raw = (raw or "").strip().lower()
     if not raw:
-        return False, 1.0
-    # "another N" or "another" / "another one"
-    m = re.match(r"^another\s+(\d+)\s*$", raw)
+        return False, 1.0, None
+    multiplier = 1.0
+    # Try patterns in order: number+more, another+number, anchor alone
+    m = re.match(r"^(\d+)\s+more\b\s*(.*)$", raw)
     if m:
-        return True, float(m.group(1))
-    if re.match(r"^another(\s+one)?\s*$", raw):
-        return True, 1.0
-    # "N more"
-    m = re.match(r"^(\d+)\s+more\s*$", raw)
-    if m:
-        return True, float(m.group(1))
-    # "two more", "three more", etc.
-    m = re.match(r"^(one|two|three|four|five|six|seven|eight|nine|ten)\s+more\s*$", raw)
-    if m:
-        n = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
-             "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}.get(m.group(1), 1)
-        return True, float(n)
-    # Short caption starting with repeat keyword (catches "same", "same as before", "second serving", etc.)
-    if len(raw) <= 25 and re.match(r"^(same|repeat|again|second|third)\b", raw):
-        return True, 1.0
-    return False, 1.0
+        multiplier = float(m.group(1))
+        raw = m.group(2).strip()
+    else:
+        m = re.match(r"^(one|two|three|four|five|six|seven|eight|nine|ten)\s+more\b\s*(.*)$", raw)
+        if m:
+            multiplier = float(_NUMBER_WORDS.get(m.group(1), 1))
+            raw = m.group(2).strip()
+        else:
+            m = re.match(r"^another\s+(\d+)\s*(.*)$", raw)
+            if m:
+                multiplier = float(m.group(1))
+                raw = m.group(2).strip()
+            else:
+                m = re.match(r"^another\s+(one|two|three|four|five|six|seven|eight|nine|ten)\s*(.*)$", raw)
+                if m:
+                    multiplier = float(_NUMBER_WORDS.get(m.group(1), 1))
+                    raw = m.group(2).strip()
+                else:
+                    # No number tied to repeat — check anchor at start
+                    for anchor in _REPEAT_ANCHORS:
+                        if raw == anchor or raw.startswith(anchor + " "):
+                            raw = raw[len(anchor):].strip() if raw.startswith(anchor + " ") else ""
+                            break
+                    else:
+                        return False, 1.0, None
+    trailing = raw.strip()
+    if not trailing or trailing in _NON_FOOD_TRAILING:
+        return True, multiplier, None
+    if trailing.startswith("as ") and trailing[3:].strip() in _NON_FOOD_TRAILING:
+        return True, multiplier, None
+    return True, multiplier, trailing.strip()
+
+
+def _ingredient_matches_food(ingredients: list, food_hint: str) -> bool:
+    """True if any ingredient name matches or clearly refers to food_hint (flexible: substring, token overlap)."""
+    if not ingredients or not food_hint or len(food_hint) < 2:
+        return False
+    hint = food_hint.lower().strip()
+    hint_words = set(re.findall(r"[a-z0-9]{2,}", hint))
+    hint_singular = hint[:-1] if hint.endswith("s") and len(hint) > 2 else hint  # "cookies" -> "cookie"
+    for ing in ingredients:
+        name = (ing.get("name") or "").lower()
+        if not name:
+            continue
+        if hint in name or hint_singular in name:
+            return True
+        if name in hint or name in hint_singular:
+            return True
+        if hint_words and any(w in name for w in hint_words):
+            return True
+    return False
+
+
+def _pick_source_meal_for_repeat(recent_meals: list, mentioned_food: str | None) -> str | None:
+    """
+    Pick which meal to copy from when repeat intent is detected.
+    If food is mentioned: most recent meal with a matching ingredient; else most recent meal.
+    Falls back to most recent if no match.
+    """
+    if not recent_meals:
+        return None
+    if not mentioned_food or not mentioned_food.strip():
+        return recent_meals[0].get("id")
+    for m in recent_meals:
+        mid = m.get("id")
+        if not mid:
+            continue
+        ingredients = fetch_ingredients_by_meal_id(mid)
+        if _ingredient_matches_food(ingredients or [], mentioned_food):
+            return mid
+    return recent_meals[0].get("id")
 
 
 def nutrition_from_label_to_array(label: dict, quantity: float, serving_size_g: float) -> list:
@@ -1515,7 +1581,7 @@ def parse_meal(meal_id):
             text = food_portion
         # If classifier inferred "same as before" from caption, use it — only when no image
         elif is_food and food_portion and food_portion.strip() and use_recent_meal and recent_meals:
-            is_repeat_c, copy_multiplier = _parse_repeat_intent(text or "")
+            is_repeat_c, copy_multiplier, mentioned_food = _parse_repeat_intent(text or "")
             # #region agent log
             try:
                 import time as _t2
@@ -1527,11 +1593,11 @@ def parse_meal(meal_id):
             if is_repeat_c:
                 print(f"   🔀 Using classifier food_portion for parsing: {food_portion}")
                 text = food_portion
-                source_meal_id = recent_meals[0].get("id")
+                source_meal_id = _pick_source_meal_for_repeat(recent_meals, mentioned_food)
         # Fallback: text-only, caption suggests "repeat previous meal" — pattern-based, no phrase list
         elif use_recent_meal and is_food and recent_meals_context:
             raw = (text or "").strip().lower()
-            is_repeat, copy_multiplier = _parse_repeat_intent(raw)
+            is_repeat, copy_multiplier, mentioned_food = _parse_repeat_intent(raw)
             # #region agent log
             try:
                 import time as _t2
@@ -1542,7 +1608,7 @@ def parse_meal(meal_id):
             # #endregion
             if is_repeat:
                 if recent_meals and len(recent_meals) > 0:
-                    source_meal_id = recent_meals[0].get("id")
+                    source_meal_id = _pick_source_meal_for_repeat(recent_meals, mentioned_food)
                 prefix = "Other meals logged today (most recent first): "
                 if recent_meals_context and recent_meals_context.startswith(prefix):
                     rest = recent_meals_context[len(prefix):].strip()
