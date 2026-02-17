@@ -12,6 +12,12 @@ Carry context across sessions. At the end of a logical unit of work (or when you
 
 *(Append new entries below with date and a 2–3 line summary.)*
 
+**2026-02-16 — Repeat intent: copy only matching ingredient, mult as quantity**
+
+1. parse_api.py: When food is mentioned (e.g. "2 more cookies"): copy only the matching ingredient(s), not the whole meal; use multiplier as the quantity (2 cookies = qty 2) instead of multiplying original (2×3 = 6). Added copy_mentioned_food through the flow, filter in copy block, use_mult_as_qty logic for quantity/nutrition scaling. Restarted parse API.
+2. User reported it copied all ingredients and multiplied qty wrong.
+3. Implemented food-specific copy: filter by _single_ingredient_matches_food; when food mentioned, new_qty = mult, scale nutrition by mult/orig_qty.
+
 **2026-02-16 — Repeat intent: anchor cues, trailing text, food-based source meal**
 
 1. parse_api.py: Rewrote _parse_repeat_intent to use a small anchor set (another, more, same, again, repeat, second, third, same as, like before, like earlier) with trailing text allowed (e.g. "2 more cookies", "another coffee"). Extracts multiplier (digits or number-words) and mentioned_food. Added _pick_source_meal_for_repeat: when food is mentioned, finds most recent meal with matching ingredient; otherwise uses most recent meal. _ingredient_matches_food does flexible substring/token matching. Restarted parse API.

@@ -485,19 +485,25 @@ def _ingredient_matches_food(ingredients: list, food_hint: str) -> bool:
     """True if any ingredient name matches or clearly refers to food_hint (flexible: substring, token overlap)."""
     if not ingredients or not food_hint or len(food_hint) < 2:
         return False
+    return any(_single_ingredient_matches_food(ing, food_hint) for ing in ingredients)
+
+
+def _single_ingredient_matches_food(ing: dict, food_hint: str) -> bool:
+    """True if this ingredient's name matches food_hint."""
+    if not ing or not food_hint or len(food_hint) < 2:
+        return False
+    name = (ing.get("name") or "").lower()
+    if not name:
+        return False
     hint = food_hint.lower().strip()
     hint_words = set(re.findall(r"[a-z0-9]{2,}", hint))
-    hint_singular = hint[:-1] if hint.endswith("s") and len(hint) > 2 else hint  # "cookies" -> "cookie"
-    for ing in ingredients:
-        name = (ing.get("name") or "").lower()
-        if not name:
-            continue
-        if hint in name or hint_singular in name:
-            return True
-        if name in hint or name in hint_singular:
-            return True
-        if hint_words and any(w in name for w in hint_words):
-            return True
+    hint_singular = hint[:-1] if hint.endswith("s") and len(hint) > 2 else hint
+    if hint in name or hint_singular in name:
+        return True
+    if name in hint or name in hint_singular:
+        return True
+    if hint_words and any(w in name for w in hint_words):
+        return True
     return False
 
 
@@ -1553,6 +1559,7 @@ def parse_meal(meal_id):
         # Only do this when there is NO image — if there's an image, the image is the source of truth (e.g. chips label, not "same as before").
         source_meal_id = None  # id of the meal we're referencing (same as before)
         copy_multiplier = 1.0  # e.g. "another 2" -> 2x quantities
+        copy_mentioned_food = None  # when set: copy only matching ingredient(s), use multiplier as quantity (not multiply)
         use_recent_meal = not image_field  # never override with recent meal when user sent a photo of something new
         # #region agent log — trace which branch sets source_meal_id
         _log_path = "/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log"
@@ -1594,6 +1601,7 @@ def parse_meal(meal_id):
                 print(f"   🔀 Using classifier food_portion for parsing: {food_portion}")
                 text = food_portion
                 source_meal_id = _pick_source_meal_for_repeat(recent_meals, mentioned_food)
+                copy_mentioned_food = mentioned_food
         # Fallback: text-only, caption suggests "repeat previous meal" — pattern-based, no phrase list
         elif use_recent_meal and is_food and recent_meals_context:
             raw = (text or "").strip().lower()
@@ -1609,6 +1617,7 @@ def parse_meal(meal_id):
             if is_repeat:
                 if recent_meals and len(recent_meals) > 0:
                     source_meal_id = _pick_source_meal_for_repeat(recent_meals, mentioned_food)
+                copy_mentioned_food = mentioned_food
                 prefix = "Other meals logged today (most recent first): "
                 if recent_meals_context and recent_meals_context.startswith(prefix):
                     rest = recent_meals_context[len(prefix):].strip()
@@ -1648,34 +1657,44 @@ def parse_meal(meal_id):
             # #endregion
             existing = fetch_ingredients_by_meal_id(source_meal_id)
             if existing:
-                # #region agent log
-                try:
-                    _log_path = "/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log"
-                    _copy_names = [x.get("name") for x in existing if isinstance(x, dict)]
-                    _line = json.dumps({"timestamp": __import__("time").time()*1000, "location": "parse_api.py:copy_ingredients", "message": "copy_from_previous", "data": {"source_meal_id": source_meal_id, "target_meal_id": meal_id, "copied_names": _copy_names}, "hypothesisId": "H1", "sessionId": "debug-session"}) + "\n"
-                    open(_log_path, "a").write(_line)
-                except Exception:
-                    pass
-                # #endregion
-                mult = copy_multiplier
-                print(f"   📋 Copying {len(existing)} ingredients from previous meal (no re-parse)" + (f" x{mult}" if mult != 1.0 else ""))
-                saved = []
-                for ing in existing:
-                    meta = ing.get("parsingMetadata") or {}
-                    if isinstance(meta, str):
-                        try:
-                            meta = json.loads(meta) if meta else {}
-                        except Exception:
-                            meta = {}
-                    orig_qty = float(ing.get("quantity", 1) or 1)
-                    new_qty = orig_qty * mult
-                    orig_nutrition = ing.get("nutrition") if isinstance(ing.get("nutrition"), list) else []
-                    scaled_nutrition = []
-                    for n in orig_nutrition:
-                        if isinstance(n, dict) and "value" in n:
-                            scaled_nutrition.append({**n, "value": (n["value"] or 0) * mult})
+                # When food mentioned (e.g. "2 more cookies"): copy only matching ingredient(s), use mult as quantity
+                if copy_mentioned_food and copy_mentioned_food.strip():
+                    existing = [ing for ing in existing if _single_ingredient_matches_food(ing, copy_mentioned_food)]
+                if existing:
+                    # #region agent log
+                    try:
+                        _log_path = "/Users/natalieradu/Desktop/HealthCopilot/.cursor/debug.log"
+                        _copy_names = [x.get("name") for x in existing if isinstance(x, dict)]
+                        _line = json.dumps({"timestamp": __import__("time").time()*1000, "location": "parse_api.py:copy_ingredients", "message": "copy_from_previous", "data": {"source_meal_id": source_meal_id, "target_meal_id": meal_id, "copied_names": _copy_names}, "hypothesisId": "H1", "sessionId": "debug-session"}) + "\n"
+                        open(_log_path, "a").write(_line)
+                    except Exception:
+                        pass
+                    # #endregion
+                    mult = copy_multiplier
+                    use_mult_as_qty = bool(copy_mentioned_food and copy_mentioned_food.strip())
+                    print(f"   📋 Copying {len(existing)} ingredients from previous meal (no re-parse)" + (f" x{mult}" if mult != 1.0 and not use_mult_as_qty else (f" qty={mult}" if use_mult_as_qty and mult != 1.0 else "")))
+                    saved = []
+                    for ing in existing:
+                        meta = ing.get("parsingMetadata") or {}
+                        if isinstance(meta, str):
+                            try:
+                                meta = json.loads(meta) if meta else {}
+                            except Exception:
+                                meta = {}
+                        orig_qty = float(ing.get("quantity", 1) or 1)
+                        if use_mult_as_qty:
+                            new_qty = mult
+                            scale = mult / orig_qty if orig_qty else mult
                         else:
-                            scaled_nutrition.append(n)
+                            new_qty = orig_qty * mult
+                            scale = mult
+                        orig_nutrition = ing.get("nutrition") if isinstance(ing.get("nutrition"), list) else []
+                        scaled_nutrition = []
+                        for n in orig_nutrition:
+                            if isinstance(n, dict) and "value" in n:
+                                scaled_nutrition.append({**n, "value": (n["value"] or 0) * scale})
+                            else:
+                                scaled_nutrition.append(n)
                     payload = {
                         "mealId": meal_id,
                         "name": ing.get("name"),
