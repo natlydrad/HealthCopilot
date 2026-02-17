@@ -2040,20 +2040,10 @@ def parse_meal(meal_id):
             # Prepare payload — only send fields that exist on ingredients collection
             # (no parsingSource; use parsingMetadata.parsingSource and parsingStrategy instead)
             recipe_for = ing.get("_recipeFor")
-            # Prefer USDA match name over user's words when we have a USDA match, but reject USDA names with no word overlap (e.g. pork -> Oolong tea)
+            # When we have a valid USDA match (word overlap), always use USDA canonical name for display.
+            # _usda_display_name_ok only rejects wrong matches (e.g. pork -> Oolong tea); when we accept, show USDA name.
             if usda and _usda_display_name_ok(ing["name"], usda.get("name", "")):
-                usda_name = usda.get("name", ing["name"])
-                # Prefer parsed name when it's one word and USDA name is "Word, extra" (e.g. "Egg, creamed" for "egg")
-                parsed_lower = (ing["name"] or "").lower().strip()
-                usda_lower = (usda_name or "").lower()
-                if parsed_lower and "," in usda_lower:
-                    first_usda = usda_lower.split(",")[0].strip()
-                    if first_usda == parsed_lower or first_usda == parsed_lower.rstrip("s") or first_usda + "s" == parsed_lower:
-                        display_name = ing["name"]
-                    else:
-                        display_name = usda_name
-                else:
-                    display_name = usda_name
+                display_name = usda.get("name", ing["name"])
             else:
                 display_name = ing["name"]
                 if usda and usda.get("name") and not _usda_display_name_ok(ing["name"], usda.get("name", "")):

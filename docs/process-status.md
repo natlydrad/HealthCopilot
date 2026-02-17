@@ -12,6 +12,12 @@ Carry context across sessions. At the end of a logical unit of work (or when you
 
 *(Append new entries below with date and a 2–3 line summary.)*
 
+**2026-02-16 — Always use USDA canonical name when USDA match is used**
+
+1. parse_api.py: when we have a valid USDA match and use its nutrition, we now always set display_name to the USDA canonical name (usda.get("name", ing["name"])). Removed the one-word exception that preferred parsed name over USDA "Word, rest"; _usda_display_name_ok is still used only to reject wrong matches (e.g. pork → Oolong tea). Restarted parse API.
+2. None.
+3. N/A
+
 **2026-02-16 — Parse fidelity: do not overwrite main ok with display mismatch**
 
 1. Display fidelity was overwriting main fidelity: for "3/4 cup pork shoulder" main correctly returned ok (parsed "pork shoulder"), then display fidelity ran on USDA name "Pork, Shoulder breast, ... cooked, broiled" and returned mismatch, so the UI showed Parse mismatch. parse_api.py now only applies display fidelity result when display is "ok" or when main was not "ok", so main "ok" is never overwritten by display "mismatch"/"ambiguous".
